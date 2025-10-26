@@ -27,9 +27,9 @@ public class MembersDataProvider implements BUPluginLifecycle {
     }
 
     public interface MemberMapListener {
-        void onUpdate(Member member);
+        void onUpdate(Member member, Member old);
 
-        void onDelete(long accountHash);
+        void onDelete(Member member);
     }
 
     @Inject
@@ -38,7 +38,7 @@ public class MembersDataProvider implements BUPluginLifecycle {
     private KeyValueStoragePort<Long, Member> keyValueStoragePort;
     private KeyValueStoragePort.Listener<Long, Member> storagePortListener;
 
-    private ConcurrentLinkedQueue<MemberMapListener> memberMapListeners = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<MemberMapListener> memberMapListeners = new ConcurrentLinkedQueue<>();
 
     private ConcurrentHashMap<Long, Member> membersMap = new ConcurrentHashMap<>();
 
@@ -65,11 +65,12 @@ public class MembersDataProvider implements BUPluginLifecycle {
                 if (membersMap == null) {
                     return;
                 }
+                Member old = membersMap.get(key);
                 membersMap.put(key, value);
 
                 for (MemberMapListener listener : memberMapListeners) {
                     try {
-                        listener.onUpdate(value);
+                        listener.onUpdate(value, old);
                     } catch (Exception ex) {
                         log.error("membersUpdateListener: onUpdate", ex);
                     }
@@ -81,11 +82,12 @@ public class MembersDataProvider implements BUPluginLifecycle {
                 if (membersMap == null) {
                     return;
                 }
+                Member member = membersMap.get(key);
                 membersMap.remove(key);
 
                 for (MemberMapListener listener : memberMapListeners) {
                     try {
-                        listener.onDelete(key);
+                        listener.onDelete(member);
                     } catch (Exception ex) {
                         log.error("membersDeleteListener: onDelete", ex);
                     }
@@ -117,6 +119,14 @@ public class MembersDataProvider implements BUPluginLifecycle {
 
     public void removeStateListener(Consumer<State> listener) {
         stateListeners.remove(listener);
+    }
+
+    public void addMemberMapListener(MemberMapListener listener) {
+        memberMapListeners.add(listener);
+    }
+
+    public void removeMemberMapListener(MemberMapListener listener) {
+        memberMapListeners.remove(listener);
     }
 
     public CompletableFuture<Void> waitUntilReady(Duration timeout) {

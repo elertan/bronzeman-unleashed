@@ -11,9 +11,11 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.Player;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatMessageBuilder;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 @Slf4j
@@ -27,16 +29,58 @@ public class MemberService implements BUPluginLifecycle {
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private MembersDataProvider membersDataProvider;
+    @Inject
+    private BUChatService buChatService;
+    @Inject
+    private BUPluginConfig buPluginConfig;
+
+    private MembersDataProvider.MemberMapListener memberMapListener;
 
     private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
 
     @Override
     public void startUp() throws Exception {
+        memberMapListener = new MembersDataProvider.MemberMapListener() {
+            @Override
+            public void onUpdate(Member member, Member old) {
+                ChatMessageBuilder builder = new ChatMessageBuilder();
+                if (old == null) {
+                    builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                    builder.append(" has joined your Bronzeman group.");
+                } else {
+                    if (!Objects.equals(member.getName(), old.getName())) {
+                        builder.append(buPluginConfig.chatPlayerNameColor(), old.getName());
+                        builder.append(" has name changed to ");
+                        builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                    }
+                    if (member.getRole() != old.getRole()) {
+                        builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                        builder.append(" has their role has changed from ");
+                        builder.append(buPluginConfig.chatHighlightColor(), old.getRole().toString());
+                        builder.append(" to ");
+                        builder.append(buPluginConfig.chatHighlightColor(), member.getRole().toString());
+                        builder.append(".");
+                    }
+                }
+                buChatService.sendMessage(builder.build());
+            }
+
+            @Override
+            public void onDelete(Member member) {
+                ChatMessageBuilder builder = new ChatMessageBuilder();
+                builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                builder.append(" has left your Bronzeman group.");
+                buChatService.sendMessage(builder.build());
+            }
+        };
+
         accountConfigurationService.addCurrentAccountConfigurationChangeListener(currentAccountConfigurationChangeListener);
+        membersDataProvider.addMemberMapListener(memberMapListener);
     }
 
     @Override
     public void shutDown() throws Exception {
+        membersDataProvider.removeMemberMapListener(memberMapListener);
         accountConfigurationService.removeCurrentAccountConfigurationChangeListener(currentAccountConfigurationChangeListener);
     }
 

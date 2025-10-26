@@ -96,6 +96,11 @@ public interface BUPluginConfig extends Config {
         return new Color(187, 40, 40);
     }
 
+    @ConfigItem(keyName = "chatHighlightColor", name = "Highlight color", description = "The color used to highlight certain things in the chat", section = chatSection)
+    default Color chatHighlightColor() {
+        return new Color(187, 40, 40);
+    }
+
     @ConfigItem(keyName = "chatNPCNameColor", name = "NPC name color", description = "The color used to draw the player NPC in the chat", section = chatSection)
     default Color chatNPCNameColor() {
         return new Color(25, 157, 40);
