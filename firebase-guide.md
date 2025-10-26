@@ -49,14 +49,12 @@ Once the rules are published, return to the **Data** tab. At the top, you will s
 https://your-project-name-default-rtdb.firebaseio.com/
 ```
 
-Copy this URL using the link button on the left. You will need to paste it into the plugin’s configuration later.
-
-Only share this URL with others you trust, as anyone with the URL can read or delete the data.
-
-## Step 8: Final Check  
-Before closing Firebase:  
-- Make sure the rules are published.  
-- Copy your database URL safely.  
-- Confirm that the database type is **Realtime Database** (not Firestore or Storage).
-
+Copy this URL using the link button on the left.
 You’re done! Your Firebase database is now ready to connect to the plugin.
+
+## Step 8: Connect the Plugin to Firebase
+Paste your database URL into the plugin to set up your account.  
+The first person to connect using the URL becomes the **group owner**.
+
+You can share the URL with other trusted members so they can join your group.  
+**Important:** Anyone with this URL can view and modify your database, so share it only with people you trust.
