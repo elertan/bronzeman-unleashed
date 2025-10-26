@@ -20,11 +20,21 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import java.awt.AlphaComposite;
+import java.awt.Composite;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.Shape;
+import java.awt.image.BufferedImage;
+import net.runelite.client.ui.overlay.Overlay;
+import net.runelite.client.ui.overlay.OverlayLayer;
+import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.overlay.OverlayPosition;
+import net.runelite.client.ui.overlay.OverlayPriority;
+
 @Slf4j
 @Singleton
 public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
-    private final static String OVERLAY_CHECKMARK_NAME = "overlayCheckmark";
-
     @Inject
     private Client client;
     @Inject
@@ -36,10 +46,12 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
     @Inject
     private ItemUnlockService itemUnlockService;
 
-    private final GameRulesService gameRulesService;
+    @Inject
+    private OverlayManager overlayManager;
 
-    private final Consumer<UnlockedItem> newUnlockedItemListener = this::newUnlockedItemListener;
-    private final Consumer<Integer> lockUnlockedItemListener = this::lockUnlockedItemListener;
+    private final ShopOverlay shopOverlay = new ShopOverlay();
+
+    private final GameRulesService gameRulesService;
 
     private boolean isShopOpen = false;
 
@@ -52,14 +64,12 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
 
     @Override
     public void startUp() throws Exception {
-        itemUnlockService.addNewUnlockedItemListener(newUnlockedItemListener);
-        itemUnlockService.addLockUnlockedItemListener(lockUnlockedItemListener);
+        overlayManager.add(shopOverlay);
     }
 
     @Override
     public void shutDown() throws Exception {
-        itemUnlockService.removeLockUnlockedItemListener(lockUnlockedItemListener);
-        itemUnlockService.removeNewUnlockedItemListener(newUnlockedItemListener);
+        overlayManager.remove(shopOverlay);
     }
 
     public void onWidgetLoaded(WidgetLoaded event) {
@@ -80,106 +90,99 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
 
     private void onShopOpened() {
         isShopOpen = true;
-
-        clientThread.invokeLater(this::manageUnlockIndicatorInShop);
     }
 
     private void onShopClosed() {
         isShopOpen = false;
     }
 
-    private void newUnlockedItemListener(UnlockedItem unlockedItem) {
-        clientThread.invokeLater(this::manageUnlockIndicatorInShop);
-    }
+    /**
+     * Draws unlocked-item checkmarks over shop items without using sprite IDs or widget children.
+     * Placement, size, and opacity match the previous widget-based approach.
+     */
+    private class ShopOverlay extends Overlay {
+        private static final int CHECKMARK_SIZE = 8;
+        private BufferedImage checkmarkImg;
 
-    private void lockUnlockedItemListener(Integer id) {
-        clientThread.invokeLater(this::manageUnlockIndicatorInShop);
-    }
-
-    private void manageUnlockIndicatorInShop() {
-        if (!isShopOpen) {
-            return;
-        }
-        if (!shouldEnforcePolicies()) {
-            return;
+        private ShopOverlay() {
+            setPosition(OverlayPosition.DYNAMIC);
+            setLayer(OverlayLayer.ABOVE_WIDGETS);
+            setPriority(0);
         }
 
-        List<Widget> shopItemWidgets = getShopItemWidgets();
-        if (shopItemWidgets == null) {
-            return;
-        }
+        @Override
+        public java.awt.Dimension render(Graphics2D g) {
+            // Gate by policy, shop visibility, and user config
+            if (!isShopOpen) {
+                return null;
+            }
+            if (!shouldEnforcePolicies()) {
+                return null;
+            }
+            if (!buPluginConfig.showUnlockedItemsIndicatorInShops()) {
+                return null;
+            }
 
-        Widget itemsContainer = client.getWidget(InterfaceID.Shopmain.ITEMS);
-        if (itemsContainer == null) {
-            log.info("Shop main items widget not found");
-            return;
-        }
+            // Resolve the items container; if absent, nothing to draw
+            Widget itemsContainer = client.getWidget(InterfaceID.Shopmain.ITEMS);
+            if (itemsContainer == null) {
+                return null;
+            }
+            Widget[] children = itemsContainer.getDynamicChildren();
+            if (children == null || children.length == 0) {
+                return null;
+            }
 
-        // Hide previous overlays (on updates)
-        Widget[] children = itemsContainer.getDynamicChildren();
-        if (children != null) {
-            for (Widget w : children) {
-                String n = w.getName();
-                if (n != null && n.equals(OVERLAY_CHECKMARK_NAME)) {
-                    w.setHidden(true);
+            // Lazy-load the checkmark image
+            if (checkmarkImg == null) {
+                try {
+                    checkmarkImg = buResourceService.getCheckmarkIconBufferedImage();
+                } catch (Exception ignored) {
+                    return null;
                 }
             }
-        }
 
-        if (!buPluginConfig.showUnlockedItemsIndicatorInShops()) {
-            return;
-        }
+            // Clip drawings to the scrollable viewport so icons don't bleed while scrolling
+            Shape oldClip = g.getClip();
+            Rectangle viewport = itemsContainer.getBounds();
+            g.setClip(viewport);
 
-        for (Widget shopItemWidget : shopItemWidgets) {
-            int itemId = shopItemWidget.getItemId();
+            // Draw semi-transparent checkmarks in the same bottom-right position as before
+            Composite prev = g.getComposite();
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f)); // opacity 50%
 
-            boolean hasUnlockedItem;
-            try {
-                hasUnlockedItem = itemUnlockService.hasUnlockedItem(itemId);
-            } catch (Exception e) {
-                log.error("Failed to check hasUnlockedItem({}) in onShopOpened", itemId, e);
-                continue;
+            for (Widget w : children) {
+                if (w == null || w.isHidden()) {
+                    continue;
+                }
+                int itemId = w.getItemId();
+                if (itemId <= 0) {
+                    continue;
+                }
+
+                boolean unlocked;
+                try {
+                    unlocked = itemUnlockService.hasUnlockedItem(itemId);
+                } catch (Exception e) {
+                    continue;
+                }
+                if (!unlocked) {
+                    continue;
+                }
+
+                // Use absolute on-canvas bounds which already account for scroll
+                Rectangle b = w.getBounds();
+                int x = b.x + b.width - CHECKMARK_SIZE - 1;
+                int y = b.y + b.height - CHECKMARK_SIZE - 1;
+
+                g.drawImage(checkmarkImg, x, y, CHECKMARK_SIZE, CHECKMARK_SIZE, null);
             }
 
-            if (!hasUnlockedItem) {
-                continue;
-            }
+            // Restore state
+            g.setComposite(prev);
+            g.setClip(oldClip);
 
-            // Checkmark
-            Widget checkmarkOverlay = itemsContainer.createChild(-1, WidgetType.GRAPHIC);
-            int checkmarkSize = 8;
-
-            checkmarkOverlay.setSpriteId(buResourceService.getBuSprites().getCheckmarkId());
-            checkmarkOverlay.setOpacity(50);
-            checkmarkOverlay.setOriginalWidth(checkmarkSize);
-            checkmarkOverlay.setOriginalHeight(checkmarkSize);
-            checkmarkOverlay.setOriginalX(shopItemWidget.getRelativeX() + shopItemWidget.getWidth() - checkmarkSize - 1);
-            checkmarkOverlay.setOriginalY(shopItemWidget.getRelativeY() + shopItemWidget.getHeight() - checkmarkSize - 1);
-            checkmarkOverlay.setXPositionMode(WidgetPositionMode.ABSOLUTE_LEFT);
-            checkmarkOverlay.setYPositionMode(WidgetPositionMode.ABSOLUTE_TOP);
-            checkmarkOverlay.setHidden(false);
-            checkmarkOverlay.setName(OVERLAY_CHECKMARK_NAME);
-
-            checkmarkOverlay.revalidate();
-        }
-
-        itemsContainer.revalidate();
-
-    }
-
-    private List<Widget> getShopItemWidgets() {
-        Widget root = client.getWidget(InterfaceID.Shopmain.ITEMS);
-        if (root == null) {
-            log.error("Shop root widget not found");
             return null;
         }
-
-        Widget[] children = root.getDynamicChildren();
-        if (children == null || children.length == 0) {
-            log.error("Shop root widget has no children");
-            return null;
-        }
-
-        return Arrays.stream(children).filter(c -> c.getItemId() > 0).collect(Collectors.toList());
     }
 }
