@@ -58,6 +58,8 @@ public final class BUPlugin extends Plugin {
     @Inject
     private GameRulesService gameRulesService;
     @Inject
+    private BUPartyService buPartyService;
+    @Inject
     private BUEventService buEventService;
     @Inject
     private ItemUnlockService itemUnlockService;
@@ -102,6 +104,7 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(memberService);
         lifecycleDependencies.add(gameRulesService);
         lifecycleDependencies.add(itemUnlockService);
+        lifecycleDependencies.add(buPartyService);
         lifecycleDependencies.add(buEventService);
         // Policies
         lifecycleDependencies.add(grandExchangePolicy);
@@ -173,6 +176,7 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onGameStateChanged(GameStateChanged event) {
         buChatService.onGameStateChanged(event);
+        buPartyService.onGameStateChanged(event);
 
         if (hasSharedAccountHash) {
             return;

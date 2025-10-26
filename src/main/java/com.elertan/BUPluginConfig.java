@@ -122,7 +122,7 @@ public interface BUPluginConfig extends Config {
     String SHOULD_AUTOMATICALLY_JOIN_PARTY_KEY = "shouldAutomaticallyJoinParty";
 
     @ConfigItem(keyName = SHOULD_AUTOMATICALLY_JOIN_PARTY_KEY, name = "Auto-join party on login", description = "Whether to automatically join the party when you login on a Bronzeman character (when a party password is set)", section = partySection)
-    default boolean shouldAutomaticallyJoinPartyOnStartup() {
+    default boolean shouldAutomaticallyJoinPartyOnLogin() {
         return true;
     }
 
