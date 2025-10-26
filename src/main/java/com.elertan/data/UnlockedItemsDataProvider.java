@@ -29,7 +29,7 @@ public class UnlockedItemsDataProvider implements BUPluginLifecycle {
     public interface UnlockedItemsMapListener {
         void onUpdate(UnlockedItem unlockedItem);
 
-        void onDelete(int itemId);
+        void onDelete(UnlockedItem unlockedItem);
     }
 
     @Inject
@@ -80,11 +80,12 @@ public class UnlockedItemsDataProvider implements BUPluginLifecycle {
                 if (unlockedItemsMap == null) {
                     return;
                 }
+                UnlockedItem unlockedItem = unlockedItemsMap.get(key);
                 unlockedItemsMap.remove(key);
 
                 for (UnlockedItemsMapListener listener : unlockedItemsMapListeners) {
                     try {
-                        listener.onDelete(key);
+                        listener.onDelete(unlockedItem);
                     }  catch (Exception ex) {
                         log.error("unlockedItemDeleteListener: onDelete", ex);
                     }

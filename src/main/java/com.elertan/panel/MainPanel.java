@@ -167,7 +167,7 @@ public class MainPanel extends JPanel implements AutoCloseable {
             }
 
             @Override
-            public void onDelete(int itemId) {
+            public void onDelete(UnlockedItem unlockedItem) {
                 log.info("MainPanel: unlockedItemsListener on delete REFRESH");
                 refresh();
             }

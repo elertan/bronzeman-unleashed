@@ -134,8 +134,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
     @Inject
     private MemberService memberService;
 
-    private ConcurrentLinkedQueue<Consumer<UnlockedItem>> newUnlockedItemListeners = new ConcurrentLinkedQueue<>();
-    private ConcurrentLinkedQueue<Consumer<Integer>> lockUnlockedItemListeners = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<Consumer<UnlockedItem>> newUnlockedItemListeners = new ConcurrentLinkedQueue<>();
 
     private final Consumer<UnlockedItemsDataProvider.State> unlockedItemDataProviderStateListener = this::unlockedItemDataProviderStateListener;
 
@@ -192,16 +191,14 @@ public class ItemUnlockService implements BUPluginLifecycle {
             }
 
             @Override
-            public void onDelete(int itemId) {
+            public void onDelete(UnlockedItem unlockedItem) {
                 // We can consider this re-locking items
-
-                for (Consumer<Integer> listener : lockUnlockedItemListeners) {
-                    try {
-                        listener.accept(itemId);
-                    } catch (Exception ex) {
-                        log.error("unlockedItemListener: onDelete", ex);
-                    }
-                }
+                clientThread.invokeLater(() -> {
+                    ChatMessageBuilder builder = new ChatMessageBuilder();
+                    builder.append(buPluginConfig.chatItemNameColor(), unlockedItem.getName());
+                    builder.append(" has been removed from unlocked items.");
+                    buChatService.sendMessage(builder.build());
+                });
             }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
@@ -255,14 +252,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
     public void removeNewUnlockedItemListener(Consumer<UnlockedItem> consumer) {
         newUnlockedItemListeners.remove(consumer);
-    }
-
-    public void addLockUnlockedItemListener(Consumer<Integer> consumer) {
-        lockUnlockedItemListeners.add(consumer);
-    }
-
-    public void removeLockUnlockedItemListener(Consumer<Integer> consumer) {
-        lockUnlockedItemListeners.remove(consumer);
     }
 
     public boolean hasUnlockedItem(int itemId) throws IllegalStateException {
@@ -391,7 +380,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
         clientThread.invokeLater(() -> {
             Map<Integer, UnlockedItem> map = unlockedItemsDataProvider.getUnlockedItemsMap();
             int unlockedItemsSize = map.size();
-            buChatService.sendMessage(String.format("Loaded with %d unlocked items", unlockedItemsSize));
+            buChatService.sendMessage(String.format("Loaded with %d unlocked items.", unlockedItemsSize));
 
             // This is the first time the unlocked items are ready
             log.info("Unlocked items data provider ready for item unlock service first time, checking inventory");

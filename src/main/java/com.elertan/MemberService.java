@@ -60,6 +60,7 @@ public class MemberService implements BUPluginLifecycle {
                         builder.append(buPluginConfig.chatPlayerNameColor(), old.getName());
                         builder.append(" has name changed to ");
                         builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                        builder.append(".");
                         buChatService.sendMessage(builder.build());
                     }
                     if (member.getRole() != old.getRole()) {
