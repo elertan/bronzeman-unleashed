@@ -25,6 +25,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -52,6 +53,9 @@ public class MainPanel extends JPanel implements AutoCloseable {
     private final ItemManager itemManager;
     private final UnlockedItemsDataProvider unlockedItemsDataProvider;
     private final MembersDataProvider membersDataProvider;
+
+    private final Consumer<UnlockedItemsDataProvider.State> unlockedItemDataProviderStateListener = this::unlockedItemDataProviderStateListener;
+    private final Consumer<MembersDataProvider.State> membersDataProviderStateListener = this::membersDataProviderStateListener;
 
     private final Map<Integer, AsyncBufferedImage> iconCache = new HashMap<>();
 
@@ -169,8 +173,8 @@ public class MainPanel extends JPanel implements AutoCloseable {
             }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsListener);
-        unlockedItemsDataProvider.addStateListener(this::unlockedItemDataProviderStateListener);
-        membersDataProvider.addStateListener(this::membersDataProviderStateListener);
+        unlockedItemsDataProvider.addStateListener(unlockedItemDataProviderStateListener);
+        membersDataProvider.addStateListener(membersDataProviderStateListener);
 
         membersDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
             if (throwable != null) {
@@ -198,8 +202,8 @@ public class MainPanel extends JPanel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        membersDataProvider.removeStateListener(this::membersDataProviderStateListener);
-        unlockedItemsDataProvider.removeStateListener(this::unlockedItemDataProviderStateListener);
+        membersDataProvider.removeStateListener(membersDataProviderStateListener);
+        unlockedItemsDataProvider.removeStateListener(unlockedItemDataProviderStateListener);
         unlockedItemsDataProvider.removeUnlockedItemsMapListener(unlockedItemsListener);
     }
 
@@ -293,94 +297,102 @@ public class MainPanel extends JPanel implements AutoCloseable {
 
     public void refresh() {
         CompletableFuture.supplyAsync(() -> {
-            if (unlockedItemsDataProvider.getState() == UnlockedItemsDataProvider.State.NotReady) {
-                return null;
-            }
-            Map<Integer, UnlockedItem> itemMap = unlockedItemsDataProvider.getUnlockedItemsMap();
-            if (itemMap == null) {
-                return null;
-            }
+                    if (unlockedItemsDataProvider.getState() == UnlockedItemsDataProvider.State.NotReady) {
+                        return null;
+                    }
+                    Map<Integer, UnlockedItem> itemMap = unlockedItemsDataProvider.getUnlockedItemsMap();
+                    if (itemMap == null) {
+                        return null;
+                    }
 
-            Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
-            Set<String> allAcquiredByNames = membersMap.values().stream()
-                    .map(Member::getName)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toCollection(TreeSet::new));
+                    Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
+                    Set<String> allAcquiredByNames = membersMap.values().stream()
+                            .map(Member::getName)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toCollection(TreeSet::new));
 
-            final List<UnlockedItem> items = itemMap.values().stream()
-                    .filter(item -> {
-                        final int itemId = item.getId();
-                        if (excludedItems.contains(itemId)) {
-                            return false;
-                        }
-
-                        if (unlockedBy != null) {
-                            long acquiredByAccountHash = item.getAcquiredByAccountHash();
-                            Member member = membersMap.get(acquiredByAccountHash);
-                            if (member == null || !member.getName().equals(unlockedBy)) {
-                                return false;
-                            }
-                        }
-
-                        if (searchTerm.isEmpty()) {
-                            return true;
-                        }
-
-                        final String itemName = item.getName();
-                        final String lowerCaseItemName = itemName.toLowerCase();
-                        return lowerCaseItemName.contains(searchTerm);
-                    })
-                    .sorted((left, right) -> {
-                        int value = 0;
-
-                        switch (sortedBy) {
-                            case SORT_OPTION_UNLOCKED_AT_ASC:
-                                value = left.getAcquiredAt().getValue().compareTo(right.getAcquiredAt().getValue());
-                                break;
-                            case SORT_OPTION_ALPHABETICAL_ASC:
-                                value = left.getName().compareToIgnoreCase(right.getName());
-                                break;
-                            case SORT_OPTION_PLAYER_ASC: {
-                                Member leftMember = membersMap.get(left.getAcquiredByAccountHash());
-                                Member rightMember = membersMap.get(right.getAcquiredByAccountHash());
-                                if (leftMember != null && rightMember != null) {
-                                    value = leftMember.getName().compareToIgnoreCase(rightMember.getName());
-                                } else if (leftMember == null) {
-                                    value = 1;
-                                } else  {
-                                    value = -1;
+                    final List<UnlockedItem> items = itemMap.values().stream()
+                            .filter(item -> {
+                                final int itemId = item.getId();
+                                if (excludedItems.contains(itemId)) {
+                                    return false;
                                 }
-                                break;
-                            }
-                            case SORT_OPTION_UNLOCKED_AT_DESC:
-                                value = right.getAcquiredAt().getValue().compareTo(left.getAcquiredAt().getValue());
-                                break;
-                            case SORT_OPTION_ALPHABETICAL_DESC:
-                                value = right.getName().compareToIgnoreCase(left.getName());
-                                break;
-                            case SORT_OPTION_PLAYER_DESC: {
-                                Member leftMember = membersMap.get(left.getAcquiredByAccountHash());
-                                Member rightMember = membersMap.get(right.getAcquiredByAccountHash());
-                                if (leftMember != null && rightMember != null) {
-                                    value = rightMember.getName().compareToIgnoreCase(leftMember.getName());
-                                } else if (leftMember == null) {
-                                    value = -1;
-                                } else  {
-                                    value = 1;
-                                }
-                                break;
-                            }
-                        }
-                        if (value == 0) {
-                            // Default to unlocked at descending for consistency when items are equal
-                            return right.getAcquiredAt().getValue().compareTo(left.getAcquiredAt().getValue());
-                        }
-                        return value;
-                    })
-                    .collect(Collectors.toList());
 
-            return new ComputedData(items, allAcquiredByNames);
-        }).thenAccept(data -> SwingUtilities.invokeLater(() -> buildUI(data)));
+                                if (unlockedBy != null) {
+                                    long acquiredByAccountHash = item.getAcquiredByAccountHash();
+                                    Member member = membersMap.get(acquiredByAccountHash);
+                                    if (member == null || !member.getName().equals(unlockedBy)) {
+                                        return false;
+                                    }
+                                }
+
+                                if (searchTerm.isEmpty()) {
+                                    return true;
+                                }
+
+                                final String itemName = item.getName();
+                                final String lowerCaseItemName = itemName.toLowerCase();
+                                return lowerCaseItemName.contains(searchTerm);
+                            })
+                            .sorted((left, right) -> {
+                                int value = 0;
+
+                                switch (sortedBy) {
+                                    case SORT_OPTION_UNLOCKED_AT_ASC:
+                                        value = left.getAcquiredAt().getValue().compareTo(right.getAcquiredAt().getValue());
+                                        break;
+                                    case SORT_OPTION_ALPHABETICAL_ASC:
+                                        value = left.getName().compareToIgnoreCase(right.getName());
+                                        break;
+                                    case SORT_OPTION_PLAYER_ASC: {
+                                        Member leftMember = membersMap.get(left.getAcquiredByAccountHash());
+                                        Member rightMember = membersMap.get(right.getAcquiredByAccountHash());
+                                        if (leftMember != null && rightMember != null) {
+                                            value = leftMember.getName().compareToIgnoreCase(rightMember.getName());
+                                        } else if (leftMember == null) {
+                                            value = 1;
+                                        } else {
+                                            value = -1;
+                                        }
+                                        break;
+                                    }
+                                    case SORT_OPTION_UNLOCKED_AT_DESC:
+                                        value = right.getAcquiredAt().getValue().compareTo(left.getAcquiredAt().getValue());
+                                        break;
+                                    case SORT_OPTION_ALPHABETICAL_DESC:
+                                        value = right.getName().compareToIgnoreCase(left.getName());
+                                        break;
+                                    case SORT_OPTION_PLAYER_DESC: {
+                                        Member leftMember = membersMap.get(left.getAcquiredByAccountHash());
+                                        Member rightMember = membersMap.get(right.getAcquiredByAccountHash());
+                                        if (leftMember != null && rightMember != null) {
+                                            value = rightMember.getName().compareToIgnoreCase(leftMember.getName());
+                                        } else if (leftMember == null) {
+                                            value = -1;
+                                        } else {
+                                            value = 1;
+                                        }
+                                        break;
+                                    }
+                                }
+                                if (value == 0) {
+                                    // Default to unlocked at descending for consistency when items are equal
+                                    return right.getAcquiredAt().getValue().compareTo(left.getAcquiredAt().getValue());
+                                }
+                                return value;
+                            })
+                            .collect(Collectors.toList());
+
+                    return new ComputedData(items, allAcquiredByNames);
+                })
+                .handle((data, throwable) -> {
+                    if (throwable != null) {
+                        log.error("error computing data", throwable);
+                        return null;
+                    }
+                    return data;
+                })
+                .thenAccept(data -> SwingUtilities.invokeLater(() -> buildUI(data)));
     }
 
     private void debounceRefresh() {
@@ -450,7 +462,7 @@ public class MainPanel extends JPanel implements AutoCloseable {
         final Set<String> currentItems = new HashSet<>();
 
         // Remove all items that are not in the list, or is the everyone option
-        for (int i = 0; i < unlockedByBox.getItemCount(); i++) {
+        for (int i = unlockedByBox.getItemCount() - 1; i >= 0; i--) {
             String itemName = unlockedByBox.getItemAt(i);
             if (!allAcquiredByNames.contains(itemName) && !itemName.equals(UNLOCKED_BY_EVERYONE_OPTION)) {
                 unlockedByBox.removeItemAt(i);
@@ -501,7 +513,7 @@ public class MainPanel extends JPanel implements AutoCloseable {
                 // rich tooltip
                 String name = item.getName();
                 Member acquiredByMember = membersMap.get(item.getAcquiredByAccountHash());
-                String acquiredBy = acquiredByMember.getName();
+                String acquiredBy = acquiredByMember == null ? "Unknown" : acquiredByMember.getName();
                 OffsetDateTime now = OffsetDateTime.now();
                 String acquiredAt = item.getAcquiredAt() != null ? formatRelativeTime(now, item.getAcquiredAt().getValue()) : "Unknown";
                 label.setToolTipText(String.format(
