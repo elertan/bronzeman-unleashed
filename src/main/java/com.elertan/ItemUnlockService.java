@@ -260,7 +260,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
         }
 
         if (AUTO_UNLOCKED_ITEMS.contains(itemId)) {
-            log.info("Item with id {} is auto unlocked", itemId);
+//            log.info("Item with id {} is auto unlocked", itemId);
             return true;
         }
 
@@ -320,7 +320,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
         try {
             if (hasUnlockedItem(itemId)) {
-                log.info("Item with id {} is already unlocked", itemId);
+//                log.info("Item with id {} is already unlocked", itemId);
                 future.complete(null);
                 return future;
             }
