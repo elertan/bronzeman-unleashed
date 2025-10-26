@@ -117,6 +117,18 @@ public class BUResourceService implements BUPluginLifecycle {
     }
 
     private void removeModIconsAndSprites() {
-        // TODO: Implement
+        // TODO: Remove mod icons and sprites
+//        Map<Integer, SpritePixels> spriteOverrides = client.getSpriteOverrides();
+//        spriteOverrides.remove(buSprites.getIconId());
+//        spriteOverrides.remove(buSprites.getCheckmarkId());
+//
+//        IndexedSprite[] modIcons = client.getModIcons();
+//        if (modIcons != null && buModIcons != null) {
+//            int idx = buModIcons.getChatIconId();
+//            if (idx >= 0 && idx < modIcons.length) {
+//                IndexedSprite[] trimmed = Arrays.copyOf(modIcons, modIcons.length - 1);
+//                client.setModIcons(trimmed);
+//            }
+//        }
     }
 }

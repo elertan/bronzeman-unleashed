@@ -176,26 +176,25 @@ public class MainPanel extends JPanel implements AutoCloseable {
         unlockedItemsDataProvider.addStateListener(unlockedItemDataProviderStateListener);
         membersDataProvider.addStateListener(membersDataProviderStateListener);
 
-        membersDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
-            if (throwable != null) {
-                log.error("error waiting for members data provider to become ready", throwable);
-                return;
-            }
-            log.info("MainPanel: membersDataProvider wait until ready REFRESH");
-            refresh();
-        });
-
-        unlockedItemsDataProvider
-                .waitUntilReady(null)
-                .whenComplete((__, throwable) -> {
-                    if (throwable != null) {
-                        log.error("error waiting for unlocked item data provider to become ready", throwable);
-                        return;
-                    }
-                    log.info("MainPanel: unlockedItemsDataProvider wait until ready REFRESH");
-                    refresh();
-                });
-
+//        membersDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
+//            if (throwable != null) {
+//                log.error("error waiting for members data provider to become ready", throwable);
+//                return;
+//            }
+//            log.info("MainPanel: membersDataProvider wait until ready REFRESH");
+//            refresh();
+//        });
+//
+//        unlockedItemsDataProvider
+//                .waitUntilReady(null)
+//                .whenComplete((__, throwable) -> {
+//                    if (throwable != null) {
+//                        log.error("error waiting for unlocked item data provider to become ready", throwable);
+//                        return;
+//                    }
+//                    log.info("MainPanel: unlockedItemsDataProvider wait until ready REFRESH");
+//                    refresh();
+//                });
 
         refresh();
     }
