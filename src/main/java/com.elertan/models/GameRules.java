@@ -1,9 +1,21 @@
 package com.elertan.models;
 
+import com.elertan.gson.AccountHashJsonAdapter;
+import com.google.gson.annotations.JsonAdapter;
 import lombok.Getter;
 import lombok.Setter;
 
 public class GameRules {
+    // General
+    @JsonAdapter(AccountHashJsonAdapter.class)
+    @Getter
+    @Setter
+    private Long lastUpdatedByAccountHash;
+
+    @Getter
+    @Setter
+    private ISOOffsetDateTime lastUpdatedAt;
+
     // Trade
     @Getter
     @Setter
@@ -27,7 +39,7 @@ public class GameRules {
     @Setter
     private String partyPassword;
 
-    public static GameRules getDefault() {
+    public static GameRules createWithDefaults(Long lastUpdatedByAccountHash, ISOOffsetDateTime lastUpdatedAt) {
         GameRules rules = new GameRules();
         rules.setPreventTradeOutsideGroup(true);
         rules.setPreventTradeLockedItems(true);

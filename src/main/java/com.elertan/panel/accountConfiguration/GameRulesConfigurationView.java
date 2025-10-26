@@ -1,12 +1,14 @@
 package com.elertan.panel.accountConfiguration;
 
 import com.elertan.models.GameRules;
+import com.elertan.models.ISOOffsetDateTime;
 import net.runelite.client.ui.ColorScheme;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.time.OffsetDateTime;
 import java.util.concurrent.CompletableFuture;
 
 public class GameRulesConfigurationView extends JPanel {
@@ -16,9 +18,10 @@ public class GameRulesConfigurationView extends JPanel {
         CompletableFuture<Void> onSuccess(GameRules rules, boolean isViewOnlyMode);
     }
 
+    private final long accountHash;
     private final Listener listener;
 
-    private GameRules gameRules = GameRules.getDefault();
+    private GameRules gameRules;
     private boolean isSubmitting = false;
     private boolean isViewOnlyMode = false;
 
@@ -41,8 +44,11 @@ public class GameRulesConfigurationView extends JPanel {
     private JCheckBox joinPartyOnLoginCheckBox = new JCheckBox();
     private JTextField partyPasswordTextField = new JTextField(15);
 
-    public GameRulesConfigurationView(Listener listener) {
+    public GameRulesConfigurationView(long accountHash, Listener listener) {
+        this.accountHash = accountHash;
         this.listener = listener;
+
+        this.gameRules = GameRules.createWithDefaults(accountHash, new ISOOffsetDateTime(OffsetDateTime.now()));
 
         setLayout(new BorderLayout(0, 10));
         setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
@@ -117,7 +123,7 @@ public class GameRulesConfigurationView extends JPanel {
 
     public void applyGameRules(GameRules gameRules) {
         if (gameRules == null) {
-            this.gameRules = GameRules.getDefault();
+            this.gameRules = GameRules.createWithDefaults(this.accountHash, new ISOOffsetDateTime(OffsetDateTime.now()));
             // This means we have to configure the rules
             preventTradeOutsideGroupCheckbox.setEnabled(true);
             preventTradeLockedItemsCheckbox.setEnabled(true);

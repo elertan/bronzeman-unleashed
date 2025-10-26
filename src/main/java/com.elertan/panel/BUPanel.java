@@ -92,7 +92,7 @@ public class BUPanel extends PluginPanel implements AutoCloseable {
             case WAIT_FOR_LOGIN:
                 return new WaitForLoginPanel(buResourceService);
             case ACCOUNT_CONFIGURATION:
-                return new AccountConfigurationPanel(httpClient, clientThread, gson, buPanelService, accountConfigurationService, gameRulesDataProvider);
+                return new AccountConfigurationPanel(httpClient, client, clientThread, gson, buPanelService, accountConfigurationService, gameRulesDataProvider);
             case READY:
                 return new MainPanel(buResourceService, itemManager, unlockedItemsDataProvider, membersDataProvider);
         }

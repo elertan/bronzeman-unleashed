@@ -10,6 +10,7 @@ import com.elertan.panel.accountConfiguration.RemoteConfigurationView;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.google.gson.Gson;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
 import net.runelite.client.callback.ClientThread;
 import okhttp3.OkHttpClient;
 
@@ -33,7 +34,7 @@ public class AccountConfigurationPanel extends JPanel {
     private FirebaseRealtimeDatabaseURL firebaseRealtimeDatabaseURL;
     private GameRules gameRules;
 
-    public AccountConfigurationPanel(OkHttpClient httpClient, ClientThread clientThread, Gson gson, BUPanelService buPanelService, AccountConfigurationService accountConfigurationService, GameRulesDataProvider gameRulesDataProvider) {
+    public AccountConfigurationPanel(OkHttpClient httpClient, Client client, ClientThread clientThread, Gson gson, BUPanelService buPanelService, AccountConfigurationService accountConfigurationService, GameRulesDataProvider gameRulesDataProvider) {
         setLayout(new BorderLayout());
 
         JPanel inner = new JPanel();
@@ -59,7 +60,7 @@ public class AccountConfigurationPanel extends JPanel {
 
         inner.add(Box.createVerticalStrut(10));
 
-        GameRulesConfigurationView gameRulesConfigurationView = new GameRulesConfigurationView(new GameRulesConfigurationView.Listener() {
+        GameRulesConfigurationView gameRulesConfigurationView = new GameRulesConfigurationView(client.getAccountHash(), new GameRulesConfigurationView.Listener() {
             @Override
             public void onBack() {
                 setCurrentStep(SetupStep.REMOTE_CONFIGURATION);
