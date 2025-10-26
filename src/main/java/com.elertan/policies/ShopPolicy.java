@@ -1,7 +1,6 @@
 package com.elertan.policies;
 
 import com.elertan.*;
-import com.elertan.models.UnlockedItem;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
@@ -11,14 +10,7 @@ import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetID;
-import net.runelite.api.widgets.WidgetPositionMode;
-import net.runelite.api.widgets.WidgetType;
 import net.runelite.client.callback.ClientThread;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import java.awt.AlphaComposite;
 import java.awt.Composite;
@@ -30,7 +22,6 @@ import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.OverlayPosition;
-import net.runelite.client.ui.overlay.OverlayPriority;
 
 @Slf4j
 @Singleton
@@ -53,7 +44,6 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
 
     private final GameRulesService gameRulesService;
 
-    private boolean isShopOpen = false;
 
     @Inject
     public ShopPolicy(AccountConfigurationService accountConfigurationService, GameRulesService gameRulesService) {
@@ -64,12 +54,10 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
 
     @Override
     public void startUp() throws Exception {
-        overlayManager.add(shopOverlay);
     }
 
     @Override
     public void shutDown() throws Exception {
-        overlayManager.remove(shopOverlay);
     }
 
     public void onWidgetLoaded(WidgetLoaded event) {
@@ -89,11 +77,11 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     private void onShopOpened() {
-        isShopOpen = true;
+        overlayManager.add(shopOverlay);
     }
 
     private void onShopClosed() {
-        isShopOpen = false;
+        overlayManager.remove(shopOverlay);
     }
 
     /**
@@ -102,20 +90,16 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
      */
     private class ShopOverlay extends Overlay {
         private static final int CHECKMARK_SIZE = 8;
-        private BufferedImage checkmarkImg;
 
         private ShopOverlay() {
             setPosition(OverlayPosition.DYNAMIC);
             setLayer(OverlayLayer.ABOVE_WIDGETS);
-            setPriority(0);
+//            setPriority(0);
         }
 
         @Override
         public java.awt.Dimension render(Graphics2D g) {
             // Gate by policy, shop visibility, and user config
-            if (!isShopOpen) {
-                return null;
-            }
             if (!shouldEnforcePolicies()) {
                 return null;
             }
@@ -133,14 +117,7 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
                 return null;
             }
 
-            // Lazy-load the checkmark image
-            if (checkmarkImg == null) {
-                try {
-                    checkmarkImg = buResourceService.getCheckmarkIconBufferedImage();
-                } catch (Exception ignored) {
-                    return null;
-                }
-            }
+            BufferedImage checkmarkImg = buResourceService.getCheckmarkIconBufferedImage();
 
             // Clip drawings to the scrollable viewport so icons don't bleed while scrolling
             Shape oldClip = g.getClip();
