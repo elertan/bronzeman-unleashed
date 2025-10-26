@@ -120,7 +120,7 @@ public class RemoteConfigurationView extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.gridy++;
 
-        final String guideUrl = "https://github.com/elertan/bronzeman-unleashed/firebase-guide.md";
+        final String guideUrl = "https://github.com/elertan/bronzeman-unleashed/blob/main/firebase-guide.md";
         JEditorPane explanationPane = createHtmlInfoPane("<html><div style=\"text-align:left;color:gray;\">"
                 + "Either use the URL your group owner has given you or set up a Firebase Realtime DB using the guide."
                 + "<br><br>"
