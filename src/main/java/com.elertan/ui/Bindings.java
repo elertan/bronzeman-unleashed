@@ -3,9 +3,7 @@ package com.elertan.ui;
 import javax.swing.*;
 import java.awt.*;
 import java.beans.PropertyChangeListener;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -56,19 +54,20 @@ public final class Bindings {
         return () -> property.removeListener(listener);
     }
 
-    public static <E extends Enum<E>> AutoCloseable bindCardLayout(JPanel host, CardLayout cardLayout, Property<E> property, Function<E, JPanel> build) {
-        final Set<E> builtPanels = new HashSet<>();
+    public static <E extends Enum<E>, P extends JPanel> AutoCloseable bindCardLayout(JPanel host, CardLayout cardLayout, Property<E> property, Function<E, P> build) {
+        final Map<E, P> builtPanels = new HashMap<>();
 
-        Consumer<E> valueConsumer = (E value) -> {
-            if (value == null) {
+        Consumer<E> valueConsumer = (E enumValue) -> {
+            if (enumValue == null) {
                 throw new IllegalArgumentException("property must have a non-null value");
             }
 
-            String key = value.name();
+            String key = enumValue.name();
 
-            if (!builtPanels.contains(value)) {
-                builtPanels.add(value);
-                host.add(build.apply(value), key);
+            if (!builtPanels.containsKey(enumValue)) {
+                P panel = build.apply(enumValue);
+                builtPanels.put(enumValue, panel);
+                host.add(panel, key);
             }
 
             cardLayout.show(host, key);
@@ -76,14 +75,21 @@ public final class Bindings {
 
         PropertyChangeListener listener = (event) -> invokeOnEDT(() -> {
             @SuppressWarnings("unchecked")
-            E newValue = (E) event.getNewValue();
-            valueConsumer.accept(newValue);
+            E newEnumValue = (E) event.getNewValue();
+            valueConsumer.accept(newEnumValue);
         });
 
         property.addListener(listener);
         valueConsumer.accept(property.get());
 
-        return () -> property.removeListener(listener);
+        return () -> {
+            property.removeListener(listener);
+
+            // Close all built panels
+//            for (P panel : builtPanels.values()) {
+//                panel.close();
+//            }
+        };
     }
 
     private static void invokeOnEDT(Runnable runnable) {

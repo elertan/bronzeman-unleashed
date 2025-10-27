@@ -1,8 +1,8 @@
-package com.elertan.panel2.screens.setup;
+package com.elertan.panel2.screens;
 
 import com.elertan.ui.Property;
 
-public final class SetupViewModel implements AutoCloseable {
+public final class SetupScreenViewModel implements AutoCloseable {
     public enum Step {
         REMOTE,
         GAME_RULES,

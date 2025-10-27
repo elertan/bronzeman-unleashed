@@ -1,5 +1,6 @@
 package com.elertan.panel2;
 
+import com.elertan.panel2.screens.SetupScreen;
 import com.elertan.panel2.screens.WaitForLoginScreen;
 import com.elertan.ui.Bindings;
 import com.google.inject.Inject;
@@ -12,15 +13,17 @@ import java.awt.*;
 public class BUPanel2 extends PluginPanel implements AutoCloseable {
     private final BUPanelViewModel viewModel;
     private final Provider<WaitForLoginScreen> waitForLoginScreenProvider;
+    private final Provider<SetupScreen> setupScreenProvider;
 
     private final AutoCloseable cardLayoutBinding;
 
     @Inject
-    public BUPanel2(Provider<BUPanelViewModel> viewModelProvider, Provider<WaitForLoginScreen> waitForLoginScreenProvider) {
+    public BUPanel2(Provider<BUPanelViewModel> viewModelProvider, Provider<WaitForLoginScreen> waitForLoginScreenProvider, Provider<SetupScreen> setupScreenProvider) {
         super(false);
 
         viewModel = viewModelProvider.get();
         this.waitForLoginScreenProvider = waitForLoginScreenProvider;
+        this.setupScreenProvider = setupScreenProvider;
 
         CardLayout cardLayout = new CardLayout();
         setLayout(cardLayout);
@@ -39,7 +42,7 @@ public class BUPanel2 extends PluginPanel implements AutoCloseable {
             case WAIT_FOR_LOGIN:
                 return waitForLoginScreenProvider.get();
             case SETUP:
-                return new JPanel();
+                return setupScreenProvider.get();
             case MAIN:
                 return new JPanel();
         }
