@@ -169,10 +169,6 @@ public class RemoteConfigurationView extends JPanel {
         buttonRow.setLayout(new BoxLayout(buttonRow, BoxLayout.X_AXIS));
         buttonRow.setOpaque(false);
 
-//        JButton backButton = new JButton("Go back");
-//        backButton.addActionListener(e -> listener.onBackButtonClicked());
-//        buttonRow.add(backButton);
-
         buttonRow.add(Box.createHorizontalGlue());
 
         continueButton = new JButton("Continue");

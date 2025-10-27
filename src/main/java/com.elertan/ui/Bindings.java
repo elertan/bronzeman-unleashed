@@ -1,6 +1,9 @@
 package com.elertan.ui;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.Document;
 import java.awt.*;
 import java.beans.PropertyChangeListener;
 import java.util.*;
@@ -16,16 +19,41 @@ public final class Bindings {
             component.setEnabled(value);
         };
 
-        PropertyChangeListener listener = (event) -> invokeOnEDT(() -> {
-            @SuppressWarnings("unchecked")
-            Boolean newValue = (Boolean) event.getNewValue();
-            valueConsumer.accept(newValue);
-        });
+        return bind(property, valueConsumer);
+    }
 
-        property.addListener(listener);
-        valueConsumer.accept(property.get());
+    public static AutoCloseable bindVisible(JComponent component, Property<Boolean> property) {
+        Consumer<Boolean> valueConsumer = (Boolean value) -> {
+            if (Objects.equals(component.isVisible(), value)) {
+                return;
+            }
+            component.setVisible(value);
+        };
 
-        return () -> property.removeListener(listener);
+        return bind(property, valueConsumer);
+    }
+
+    public static AutoCloseable bindSelected(AbstractButton component, Property<Boolean> property) {
+        Consumer<Boolean> valueConsumer = (Boolean value) -> {
+            if (Objects.equals(component.isSelected(), value)) {
+                return;
+            }
+            component.setSelected(value);
+        };
+
+        return bind(property, valueConsumer);
+    }
+
+    public static AutoCloseable bindLabelText(JLabel component, Property<String> property) {
+        Consumer<String> valueConsumer = (String value) -> {
+            String textValue = value == null ? "" : value;
+            if (Objects.equals(component.getText(), textValue)) {
+                return;
+            }
+            component.setText(textValue);
+        };
+
+        return bind(property, valueConsumer);
     }
 
     public static AutoCloseable bindTextFieldText(JTextField component, Property<String> property) {
@@ -43,15 +71,33 @@ public final class Bindings {
             component.setCaretPosition(newCaretPosition);
         };
 
-        PropertyChangeListener listener = (event) -> invokeOnEDT(() -> {
-            String newValue = (String) event.getNewValue();
-            valueConsumer.accept(newValue);
-        });
+        DocumentListener documentListener = new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                property.set(component.getText());
+            }
 
-        property.addListener(listener);
-        valueConsumer.accept(property.get());
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                property.set(component.getText());
+            }
 
-        return () -> property.removeListener(listener);
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                property.set(component.getText());
+            }
+        };
+
+        Document document = component.getDocument();
+        document.addDocumentListener(documentListener);
+
+        @SuppressWarnings("resource")
+        AutoCloseable binding = bind(property, valueConsumer);
+
+        return () -> {
+            binding.close();
+            document.removeDocumentListener(documentListener);
+        };
     }
 
     public static <E extends Enum<E>, P extends JPanel> AutoCloseable bindCardLayout(JPanel host, CardLayout cardLayout, Property<E> property, Function<E, P> build) {
@@ -73,23 +119,20 @@ public final class Bindings {
             cardLayout.show(host, key);
         };
 
+        return bind(property, valueConsumer);
+    }
+
+    public static <T> AutoCloseable bind(Property<T> property, Consumer<T> valueConsumer) {
         PropertyChangeListener listener = (event) -> invokeOnEDT(() -> {
             @SuppressWarnings("unchecked")
-            E newEnumValue = (E) event.getNewValue();
-            valueConsumer.accept(newEnumValue);
+            T newValue = (T) event.getNewValue();
+            valueConsumer.accept(newValue);
         });
 
         property.addListener(listener);
         valueConsumer.accept(property.get());
 
-        return () -> {
-            property.removeListener(listener);
-
-            // Close all built panels
-//            for (P panel : builtPanels.values()) {
-//                panel.close();
-//            }
-        };
+        return () -> property.removeListener(listener);
     }
 
     private static void invokeOnEDT(Runnable runnable) {

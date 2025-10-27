@@ -2,7 +2,7 @@ package com.elertan.panel2.screens;
 
 import com.elertan.AccountConfigurationService;
 import com.elertan.BUPanelService;
-import com.elertan.panel2.screens.setup.RemoteStepScreen;
+import com.elertan.panel2.screens.setup.RemoteStepView;
 import com.elertan.ui.Bindings;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
@@ -12,18 +12,18 @@ import java.awt.*;
 
 public class SetupScreen extends JPanel implements AutoCloseable {
     private final SetupScreenViewModel viewModel;
-    private final Provider<RemoteStepScreen> remoteStepScreenProvider;
+    private final Provider<RemoteStepView> remoteStepViewProvider;
     private final AutoCloseable contentCardLayoutBinding;
 
     @Inject
     public SetupScreen(
             Provider<SetupScreenViewModel> viewModelProvider,
-            Provider<RemoteStepScreen> remoteStepScreenProvider,
+            Provider<RemoteStepView> remoteStepViewProvider,
             BUPanelService buPanelService,
             AccountConfigurationService accountConfigurationService
     ) {
         viewModel = viewModelProvider.get();
-        this.remoteStepScreenProvider = remoteStepScreenProvider;
+        this.remoteStepViewProvider = remoteStepViewProvider;
 
         setLayout(new BorderLayout());
 
@@ -52,8 +52,8 @@ public class SetupScreen extends JPanel implements AutoCloseable {
 
         CardLayout contentCardLayout = new CardLayout();
         JPanel contentPanel = new JPanel(contentCardLayout);
-
         contentCardLayoutBinding = Bindings.bindCardLayout(contentPanel, contentCardLayout, viewModel.step, this::buildStep);
+        inner.add(contentPanel);
 
         inner.add(Box.createVerticalGlue());
 
@@ -90,7 +90,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
     private JPanel buildStep(SetupScreenViewModel.Step step) {
         switch (step) {
             case REMOTE:
-                return remoteStepScreenProvider.get();
+                return remoteStepViewProvider.get();
             case GAME_RULES:
                 return new JPanel();
         }
