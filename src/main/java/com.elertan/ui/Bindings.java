@@ -12,7 +12,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 public final class Bindings {
-    public static void bindTextField(Property<String> property, JTextField component) {
+    public static void bindTextFieldText(JTextField component, Property<String> property) {
         property.addListener((event) -> invokeOnEDT(() -> {
             String newValue = (String) event.getNewValue();
             if (Objects.equals(component.getText(), newValue)) {
