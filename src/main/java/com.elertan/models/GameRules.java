@@ -39,15 +39,30 @@ public class GameRules {
     @Setter
     private String partyPassword;
 
+    public GameRules(Long lastUpdatedByAccountHash, ISOOffsetDateTime lastUpdatedAt, boolean preventTradeOutsideGroup, boolean preventTradeLockedItems, boolean preventGrandExchangeBuyOffers, boolean shareAchievementNotifications, String partyPassword) {
+        this.lastUpdatedByAccountHash = lastUpdatedByAccountHash;
+        this.lastUpdatedAt = lastUpdatedAt;
+        this.preventTradeOutsideGroup = preventTradeOutsideGroup;
+        this.preventTradeLockedItems = preventTradeLockedItems;
+        this.preventGrandExchangeBuyOffers = preventGrandExchangeBuyOffers;
+        this.shareAchievementNotifications = shareAchievementNotifications;
+        this.partyPassword = partyPassword;
+    }
+
     public static GameRules createWithDefaults(Long lastUpdatedByAccountHash, ISOOffsetDateTime lastUpdatedAt) {
-        GameRules rules = new GameRules();
-        rules.setLastUpdatedByAccountHash(lastUpdatedByAccountHash);
-        rules.setLastUpdatedAt(lastUpdatedAt);
-        rules.setPreventTradeOutsideGroup(true);
-        rules.setPreventTradeLockedItems(true);
-        rules.setPreventGrandExchangeBuyOffers(true);
-        rules.setShareAchievementNotifications(true);
-        rules.setPartyPassword(null);
-        return rules;
+        return new GameRules(lastUpdatedByAccountHash, lastUpdatedAt, true, true, true, true, null);
+    }
+
+    @Override
+    public String toString() {
+        return "GameRules{" +
+                "lastUpdatedByAccountHash=" + lastUpdatedByAccountHash +
+                ", lastUpdatedAt=" + lastUpdatedAt +
+                ", preventTradeOutsideGroup=" + preventTradeOutsideGroup +
+                ", preventTradeLockedItems=" + preventTradeLockedItems +
+                ", preventGrandExchangeBuyOffers=" + preventGrandExchangeBuyOffers +
+                ", shareAchievementNotifications=" + shareAchievementNotifications +
+                ", partyPassword='" + partyPassword + '\'' +
+                '}';
     }
 }

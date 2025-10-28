@@ -122,7 +122,7 @@ public class MembersDataProvider implements BUPluginLifecycle {
 
     public Map<Long, Member> getMembersMap() {
         if (membersMap == null) {
-            return Collections.emptyMap();
+            return null;
         }
         return Collections.unmodifiableMap(membersMap);
     }

@@ -1,14 +1,31 @@
-package com.elertan.panel;
+package com.elertan.panel.screens.main.unlockedItems;
 
 import com.elertan.BUResourceService;
-import lombok.extern.slf4j.Slf4j;
+import com.google.inject.ImplementedBy;
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
 
 import javax.swing.*;
 import java.awt.*;
 
-@Slf4j
-public class WaitForLoginPanel extends JPanel {
-    public WaitForLoginPanel(BUResourceService buResourceService) {
+public class LoadingScreen extends JPanel {
+    @ImplementedBy(FactoryImpl.class)
+    public interface Factory {
+        LoadingScreen create();
+    }
+
+    @Singleton
+    private static final class FactoryImpl implements Factory {
+        @Inject
+        private BUResourceService buResourceService;
+
+        @Override
+        public LoadingScreen create() {
+            return new LoadingScreen(buResourceService);
+        }
+    }
+
+    private LoadingScreen(BUResourceService buResourceService) {
         setLayout(new BorderLayout());
 
         JPanel inner = new JPanel();
@@ -22,7 +39,7 @@ public class WaitForLoginPanel extends JPanel {
         inner.add(titleLabel);
 
         JLabel subtitleLabel = new JLabel();
-        subtitleLabel.setText("Waiting for account login...");
+        subtitleLabel.setText("Loading...");
         subtitleLabel.setBorder(BorderFactory.createEmptyBorder(20, 15, 0, 15));
         subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
@@ -37,5 +54,6 @@ public class WaitForLoginPanel extends JPanel {
         inner.add(loadingSpinnerLabel);
 
         add(inner, BorderLayout.NORTH);
+
     }
 }

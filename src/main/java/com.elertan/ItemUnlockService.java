@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Singleton
 public class ItemUnlockService implements BUPluginLifecycle {
-    private static final Set<Integer> AUTO_UNLOCKED_ITEMS = ImmutableSet.of(
+    public static final Set<Integer> AUTO_UNLOCKED_ITEMS = ImmutableSet.of(
             // Bond
             ItemID.OSRS_BOND,
             // All variations of coins
@@ -265,6 +265,9 @@ public class ItemUnlockService implements BUPluginLifecycle {
         }
 
         Map<Integer, UnlockedItem> map = unlockedItemsDataProvider.getUnlockedItemsMap();
+        if (map == null) {
+            throw new IllegalStateException("Unlocked items map is null");
+        }
         return map.containsKey(itemId);
     }
 
@@ -379,6 +382,9 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
         clientThread.invokeLater(() -> {
             Map<Integer, UnlockedItem> map = unlockedItemsDataProvider.getUnlockedItemsMap();
+            if (map == null) {
+                throw new IllegalStateException("Unlocked items map is null");
+            }
             int unlockedItemsSize = map.size();
             buChatService.sendMessage(String.format("Loaded with %d unlocked items.", unlockedItemsSize));
 

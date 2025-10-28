@@ -103,7 +103,7 @@ public class MemberService implements BUPluginLifecycle {
             throw new IllegalStateException("Member data provider is not ready");
         }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
-        if (membersMap.isEmpty()) {
+        if (membersMap == null || membersMap.isEmpty()) {
             return null;
         }
         for (Member member : membersMap.values()) {
@@ -120,6 +120,9 @@ public class MemberService implements BUPluginLifecycle {
             throw new IllegalStateException("Member data provider is not ready");
         }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
+        if (membersMap == null) {
+            return null;
+        }
         return membersMap.get(accountHash);
     }
 
@@ -128,7 +131,7 @@ public class MemberService implements BUPluginLifecycle {
             throw new IllegalStateException("Member data provider is not ready");
         }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
-        if (membersMap.isEmpty()) {
+        if (membersMap == null || membersMap.isEmpty()) {
             return true;
         }
         if (membersMap.size() == 1) {

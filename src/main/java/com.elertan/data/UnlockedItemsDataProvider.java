@@ -108,7 +108,7 @@ public class UnlockedItemsDataProvider implements BUPluginLifecycle {
 
     public Map<Integer, UnlockedItem> getUnlockedItemsMap() {
         if (unlockedItemsMap == null) {
-            return Collections.emptyMap();
+            return null;
         }
         return Collections.unmodifiableMap(unlockedItemsMap);
     }
