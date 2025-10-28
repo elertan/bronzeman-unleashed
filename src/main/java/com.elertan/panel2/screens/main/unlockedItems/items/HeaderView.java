@@ -107,21 +107,18 @@ public class HeaderView extends JPanel implements AutoCloseable {
         Property<List<Long>> unlockedByOptions = viewModel
                 .accountHashesFromAllUnlockedItems
                 .derive((list) -> {
-                    List<Long> result = new ArrayList<>(list);
+                    List<Long> result = new ArrayList<>(list.size() + 1);
                     // The "Everyone" option
                     result.add(null);
                     result.addAll(list);
-                    log.info(">>>>>>>>>>>>>>>>>>>unlockedByOptions: derive: {} --- {}", result.size(), result);
                     return result;
                 });
 
         Property<Map<Long, String>> unlockedByValueToStringMapProperty = viewModel
                 .accountHashToMemberNameMap
                 .derive((map) -> {
-                    log.info(">>>>>>>>>>>>>>>>>>>unlockedByValueToStringMapProperty: derive: {} --- {}", map.size(), map);
                     Map<Long, String> result = new HashMap<>(map);
                     result.put(null, "Everyone");
-                    log.info(">>>>>>>>>>>>>>>>>>>unlockedByValueToStringMapProperty: derive result: {} --- {}", result.size(), result);
                     return result;
                 });
 

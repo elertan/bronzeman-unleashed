@@ -13,6 +13,7 @@ import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 @Slf4j
 public class UnlockedItemsScreenViewModel implements AutoCloseable {
@@ -58,27 +59,31 @@ public class UnlockedItemsScreenViewModel implements AutoCloseable {
     private UnlockedItemsScreenViewModel(UnlockedItemsDataProvider unlockedItemsDataProvider) {
         this.unlockedItemsDataProvider = unlockedItemsDataProvider;
 
-        Map<Integer, UnlockedItem> unlockedItemsMap = unlockedItemsDataProvider.getUnlockedItemsMap();
-        allUnlockedItems = new Property<>(new ArrayList<>(unlockedItemsMap.values()));
+        Supplier<List<UnlockedItem>> allUnlockedItemsSupplier = () -> {
+            Map<Integer, UnlockedItem> unlockedItemsMap = unlockedItemsDataProvider.getUnlockedItemsMap();
+            return unlockedItemsMap == null ? null : new ArrayList<>(unlockedItemsMap.values());
+        };
+
+        allUnlockedItems = new Property<>(allUnlockedItemsSupplier.get());
         unlockedItemsMapListener = new UnlockedItemsDataProvider.UnlockedItemsMapListener() {
             @Override
             public void onUpdate(UnlockedItem unlockedItem) {
-                allUnlockedItems.set(new ArrayList<>(unlockedItemsMap.values()));
+                allUnlockedItems.set(allUnlockedItemsSupplier.get());
             }
 
             @Override
             public void onDelete(UnlockedItem unlockedItem) {
-                allUnlockedItems.set(new ArrayList<>(unlockedItemsMap.values()));
+                allUnlockedItems.set(allUnlockedItemsSupplier.get());
             }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
 
-//        unlockedItemsDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
-//            if (throwable != null) {
-//                return;
-//            }
-//            allUnlockedItems.set(new ArrayList<>(unlockedItemsMap.values()));
-//        });
+        unlockedItemsDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
+            if (throwable != null) {
+                return;
+            }
+            allUnlockedItems.set(allUnlockedItemsSupplier.get());
+        });
 
         sortedBy.addListener(sortedByListener);
     }
