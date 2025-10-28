@@ -79,14 +79,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 return;
             }
 
-            GameRules newGameRules = gameRules;
-            if (newGameRules == null) {
-                long accountHash = client.getAccountHash();
-                ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
-                newGameRules = GameRules.createWithDefaults(accountHash, now);
-            }
-
-            this.gameRules.set(newGameRules);
+            this.gameRules.set(gameRules);
 
             step.set(Step.GAME_RULES);
             future.complete(null);
@@ -94,4 +87,14 @@ public final class SetupScreenViewModel implements AutoCloseable {
 
         return future;
     }
+
+    public void onGameRulesStepBack() {
+        step.set(Step.REMOTE);
+        gameRules.set(null);
+    }
+
+    public void onGameRulesStepFinish() {
+        // TODO: Save the game rules to the db etc
+    }
+
 }

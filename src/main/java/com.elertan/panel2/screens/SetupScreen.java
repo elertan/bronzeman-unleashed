@@ -36,15 +36,15 @@ public class SetupScreen extends JPanel implements AutoCloseable {
         public SetupScreen create() {
             SetupScreenViewModel viewModel = viewModelProvider.get();
             RemoteStepViewViewModel remoteStepViewViewModel = remoteStepViewViewModelFactory.create(viewModel::onRemoteStepFinished);
-            GameRulesStepViewViewModel gameRulesStepViewViewModel = gameRulesStepViewViewModelFactory.create(new GameRulesStepViewViewModel.Listener() {
+            GameRulesStepViewViewModel gameRulesStepViewViewModel = gameRulesStepViewViewModelFactory.create(viewModel.gameRules, new GameRulesStepViewViewModel.Listener() {
                 @Override
                 public void onBack() {
-
+                    viewModel.onGameRulesStepBack();
                 }
 
                 @Override
                 public void onFinish() {
-
+                    viewModel.onGameRulesStepFinish();
                 }
             });
             return new SetupScreen(viewModel, remoteStepViewFactory, remoteStepViewViewModel, gameRulesStepViewFactory, gameRulesStepViewViewModel);

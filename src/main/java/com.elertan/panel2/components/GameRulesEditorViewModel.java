@@ -54,7 +54,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
 //    public final Property<Boolean> isValid;
 
 
-    private final Props props;
+    private Props props;
 
     private final PropertyChangeListener preventTradeOutsideGroupListener = this::preventTradeOutsideGroupListener;
     private final PropertyChangeListener preventTradeLockedItemsListener = this::preventTradeLockedItemsListener;
@@ -114,17 +114,23 @@ public class GameRulesEditorViewModel implements AutoCloseable {
         preventTradeOutsideGroup.removeListener(preventTradeOutsideGroupListener);
     }
 
-//    public void setProps(Props props) {
-//        GameRules gameRules = props.getGameRules();
-//
-//        preventTradeOutsideGroup.set(gameRules.isPreventTradeOutsideGroup());
-//        preventTradeLockedItems.set(gameRules.isPreventTradeLockedItems());
-//        preventGrandExchangeBuyOffers.set(gameRules.isPreventGrandExchangeBuyOffers());
-//        shareAchievementNotifications.set(gameRules.isShareAchievementNotifications());
-//        partyPassword.set(gameRules.getPartyPassword());
-//
-//        isDisabled.set(props.isDisabled());
-//    }
+    public void setProps(Props props) {
+        this.props = props;
+
+        GameRules gameRules = props.getGameRules();
+        if (gameRules == null) {
+            ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
+            gameRules = GameRules.createWithDefaults(props.getAccountHash(), now);
+        }
+
+        preventTradeOutsideGroup.set(gameRules.isPreventTradeOutsideGroup());
+        preventTradeLockedItems.set(gameRules.isPreventTradeLockedItems());
+        preventGrandExchangeBuyOffers.set(gameRules.isPreventGrandExchangeBuyOffers());
+        shareAchievementNotifications.set(gameRules.isShareAchievementNotifications());
+        partyPassword.set(gameRules.getPartyPassword());
+
+        isViewOnlyMode.set(props.isViewOnlyMode());
+    }
 
     private void preventTradeOutsideGroupListener(PropertyChangeEvent event) {
         tryUpdateGameRules();

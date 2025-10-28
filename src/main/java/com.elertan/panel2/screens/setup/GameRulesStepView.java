@@ -10,6 +10,7 @@ import net.runelite.api.Client;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.function.Supplier;
 
 public class GameRulesStepView extends JPanel {
     @ImplementedBy(FactoryImpl.class)
@@ -29,15 +30,16 @@ public class GameRulesStepView extends JPanel {
 
         @Override
         public GameRulesStepView create(GameRulesStepViewViewModel viewModel) {
-            GameRulesEditorViewModel.Props props = new GameRulesEditorViewModel.Props(
+            Supplier<GameRulesEditorViewModel.Props> makeProps = () -> new GameRulesEditorViewModel.Props(
                     client.getAccountHash(),
-                    null,
-                    (newGameRules) -> {
-                        log.info("Game rules updated: {}", newGameRules);
-                    },
+                    viewModel.gameRules.get(),
+                    viewModel.gameRules::set,
                     false
             );
-            GameRulesEditorViewModel gameRulesEditorViewModel = gameRulesEditorViewModelFactory.create(props);
+            GameRulesEditorViewModel gameRulesEditorViewModel = gameRulesEditorViewModelFactory.create(makeProps.get());
+
+            viewModel.gameRules.addListener((event) -> gameRulesEditorViewModel.setProps(makeProps.get()));
+
             GameRulesEditor gameRulesEditor = gameRulesEditorFactory.create(gameRulesEditorViewModel);
             return new GameRulesStepView(viewModel, gameRulesEditor);
         }
