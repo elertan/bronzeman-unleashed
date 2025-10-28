@@ -27,4 +27,12 @@ public class MainScreenViewModel {
 
     private MainScreenViewModel() {
     }
+
+    public void onUnlockedItemsNavigateToConfig() {
+        mainScreen.set(MainScreen.CONFIG);
+    }
+
+    public void onConfigNavigateToUnlockedItems() {
+        mainScreen.set(MainScreen.UNLOCKED_ITEMS);
+    }
 }

@@ -1,7 +1,10 @@
 package com.elertan.panel2.screens;
 
+import com.elertan.panel2.screens.main.UnlockedItemsScreen;
+import com.elertan.panel2.screens.main.UnlockedItemsScreenViewModel;
 import com.elertan.ui.Bindings;
 import com.google.inject.ImplementedBy;
+import com.google.inject.Inject;
 import com.google.inject.Singleton;
 
 import javax.swing.*;
@@ -15,15 +18,27 @@ public class MainScreen extends JPanel implements AutoCloseable {
 
     @Singleton
     private static final class FactoryImpl implements Factory {
+        @Inject
+        private UnlockedItemsScreenViewModel.Factory unlockedItemsScreenViewModelFactory;
+        @Inject
+        private UnlockedItemsScreen.Factory unlockedItemsScreenFactory;
+
         @Override
         public MainScreen create(MainScreenViewModel viewModel) {
-            return new MainScreen(viewModel);
+            UnlockedItemsScreenViewModel unlockedItemsScreenViewModel = unlockedItemsScreenViewModelFactory.create();
+
+            return new MainScreen(viewModel, unlockedItemsScreenViewModel, unlockedItemsScreenFactory);
         }
     }
 
+    private final UnlockedItemsScreenViewModel unlockedItemsScreenViewModel;
+    private final UnlockedItemsScreen.Factory unlockedItemsScreenFactory;
     private final AutoCloseable cardLayoutBinding;
 
-    private MainScreen(MainScreenViewModel viewModel) {
+    private MainScreen(MainScreenViewModel viewModel, UnlockedItemsScreenViewModel unlockedItemsScreenViewModel, UnlockedItemsScreen.Factory unlockedItemsScreenFactory) {
+        this.unlockedItemsScreenViewModel = unlockedItemsScreenViewModel;
+        this.unlockedItemsScreenFactory = unlockedItemsScreenFactory;
+
         CardLayout cardLayout = new CardLayout();
         setLayout(cardLayout);
 
@@ -39,7 +54,7 @@ public class MainScreen extends JPanel implements AutoCloseable {
     private JPanel buildScreen(MainScreenViewModel.MainScreen screen) {
         switch (screen) {
             case UNLOCKED_ITEMS:
-                return new JPanel();
+                return unlockedItemsScreenFactory.create(unlockedItemsScreenViewModel);
             case CONFIG:
                 return new JPanel();
         }
