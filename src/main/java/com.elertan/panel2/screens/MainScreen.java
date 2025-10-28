@@ -1,5 +1,7 @@
 package com.elertan.panel2.screens;
 
+import com.elertan.panel2.screens.main.ConfigScreen;
+import com.elertan.panel2.screens.main.ConfigScreenViewModel;
 import com.elertan.panel2.screens.main.UnlockedItemsScreen;
 import com.elertan.panel2.screens.main.UnlockedItemsScreenViewModel;
 import com.elertan.ui.Bindings;
@@ -22,22 +24,37 @@ public class MainScreen extends JPanel implements AutoCloseable {
         private UnlockedItemsScreenViewModel.Factory unlockedItemsScreenViewModelFactory;
         @Inject
         private UnlockedItemsScreen.Factory unlockedItemsScreenFactory;
+        @Inject
+        private ConfigScreenViewModel.Factory configScreenViewModelFactory;
+        @Inject
+        private ConfigScreen.Factory configScreenFactory;
 
         @Override
         public MainScreen create(MainScreenViewModel viewModel) {
             UnlockedItemsScreenViewModel unlockedItemsScreenViewModel = unlockedItemsScreenViewModelFactory.create();
+            ConfigScreenViewModel configScreenViewModel = configScreenViewModelFactory.create();
 
-            return new MainScreen(viewModel, unlockedItemsScreenViewModel, unlockedItemsScreenFactory);
+            return new MainScreen(viewModel, unlockedItemsScreenViewModel, unlockedItemsScreenFactory, configScreenViewModel, configScreenFactory);
         }
     }
 
     private final UnlockedItemsScreenViewModel unlockedItemsScreenViewModel;
     private final UnlockedItemsScreen.Factory unlockedItemsScreenFactory;
+    private final ConfigScreenViewModel configScreenViewModel;
+    private final ConfigScreen.Factory configScreenFactory;
     private final AutoCloseable cardLayoutBinding;
 
-    private MainScreen(MainScreenViewModel viewModel, UnlockedItemsScreenViewModel unlockedItemsScreenViewModel, UnlockedItemsScreen.Factory unlockedItemsScreenFactory) {
+    private MainScreen(
+            MainScreenViewModel viewModel,
+            UnlockedItemsScreenViewModel unlockedItemsScreenViewModel,
+            UnlockedItemsScreen.Factory unlockedItemsScreenFactory,
+            ConfigScreenViewModel configScreenViewModel,
+            ConfigScreen.Factory configScreenFactory
+    ) {
         this.unlockedItemsScreenViewModel = unlockedItemsScreenViewModel;
         this.unlockedItemsScreenFactory = unlockedItemsScreenFactory;
+        this.configScreenViewModel = configScreenViewModel;
+        this.configScreenFactory = configScreenFactory;
 
         CardLayout cardLayout = new CardLayout();
         setLayout(cardLayout);
@@ -56,7 +73,7 @@ public class MainScreen extends JPanel implements AutoCloseable {
             case UNLOCKED_ITEMS:
                 return unlockedItemsScreenFactory.create(unlockedItemsScreenViewModel);
             case CONFIG:
-                return new JPanel();
+                return configScreenFactory.create(configScreenViewModel);
         }
 
         throw new IllegalStateException("Unknown main screen: " + screen);
