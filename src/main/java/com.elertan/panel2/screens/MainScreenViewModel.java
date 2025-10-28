@@ -1,5 +1,6 @@
 package com.elertan.panel2.screens;
 
+import com.elertan.ui.Property;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Singleton;
 
@@ -16,6 +17,13 @@ public class MainScreenViewModel {
             return new MainScreenViewModel();
         }
     }
+
+    public enum MainScreen {
+        UNLOCKED_ITEMS,
+        CONFIG
+    }
+
+    public final Property<MainScreen> mainScreen = new Property<>(MainScreen.UNLOCKED_ITEMS);
 
     private MainScreenViewModel() {
     }
