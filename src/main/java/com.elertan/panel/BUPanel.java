@@ -1,113 +1,90 @@
 package com.elertan.panel;
 
-import com.elertan.AccountConfigurationService;
-import com.elertan.BUPanelService;
-import com.elertan.BUResourceService;
-import com.elertan.data.GameRulesDataProvider;
-import com.elertan.data.MembersDataProvider;
-import com.elertan.data.UnlockedItemsDataProvider;
-import com.elertan.models.AccountConfiguration;
-import com.google.gson.Gson;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.game.ItemManager;
+import com.elertan.panel.screens.*;
+import com.elertan.ui.Bindings;
+import com.google.inject.ImplementedBy;
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import net.runelite.client.ui.PluginPanel;
-import okhttp3.OkHttpClient;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.EnumMap;
-import java.util.Map;
-import java.util.function.Consumer;
 
-@Slf4j
 public class BUPanel extends PluginPanel implements AutoCloseable {
-    private enum ViewState {
-        WAIT_FOR_LOGIN,
-        ACCOUNT_CONFIGURATION,
-        READY
+    @ImplementedBy(FactoryImpl.class)
+    public interface Factory {
+        BUPanel create(BUPanelViewModel viewModel);
     }
 
-    private final BUResourceService buResourceService;
-    private final OkHttpClient httpClient;
-    private final Client client;
-    private final ClientThread clientThread;
-    private final Gson gson;
-    private final ItemManager itemManager;
-    private final BUPanelService buPanelService;
-    private final AccountConfigurationService accountConfigurationService;
-    private final UnlockedItemsDataProvider unlockedItemsDataProvider;
-    private final GameRulesDataProvider gameRulesDataProvider;
-    private final MembersDataProvider membersDataProvider;
+    @Singleton
+    private static final class FactoryImpl implements Factory {
+        @Inject
+        private WaitForLoginScreen.Factory waitForLoginScreenFactory;
+        @Inject
+        private SetupScreenViewModel.Factory setupScreenViewModelFactory;
+        @Inject
+        private SetupScreen.Factory setupScreenFactory;
+        @Inject
+        private MainScreenViewModel.Factory mainScreenViewModelFactory;
+        @Inject
+        private MainScreen.Factory mainScreenFactory;
 
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
+        @Override
+        public BUPanel create(BUPanelViewModel viewModel) {
+            SetupScreenViewModel setupScreenViewModel = setupScreenViewModelFactory.create();
+            MainScreenViewModel mainScreenViewModel = mainScreenViewModelFactory.create();
+            return new BUPanel(viewModel, waitForLoginScreenFactory, setupScreenViewModel, setupScreenFactory, mainScreenViewModel, mainScreenFactory);
+        }
+    }
 
-    private final CardLayout layout = new CardLayout();
-    private final Map<ViewState, JPanel> views = new EnumMap<>(ViewState.class);
+    private final BUPanelViewModel viewModel;
+    private final WaitForLoginScreen.Factory waitForLoginScreenFactory;
+    private final SetupScreenViewModel setupScreenViewModel;
+    private final SetupScreen.Factory setupScreenFactory;
+    private final MainScreenViewModel mainScreenViewModel;
+    private final MainScreen.Factory mainScreenFactory;
 
-    private ViewState viewState;
+    private final AutoCloseable cardLayoutBinding;
 
-    public BUPanel(BUResourceService buResourceService, OkHttpClient httpClient, Client client, ClientThread clientThread, Gson gson, ItemManager itemManager, BUPanelService buPanelService, AccountConfigurationService accountConfigurationService, UnlockedItemsDataProvider unlockedItemsDataProvider, GameRulesDataProvider gameRulesDataProvider, MembersDataProvider membersDataProvider) {
+    private BUPanel(
+            BUPanelViewModel viewModel,
+            WaitForLoginScreen.Factory waitForLoginScreenFactory,
+            SetupScreenViewModel setupScreenViewModel,
+            SetupScreen.Factory setupScreenFactory,
+            MainScreenViewModel mainScreenViewModel,
+            MainScreen.Factory mainScreenFactory
+    ) {
         super(false);
 
-        this.buResourceService = buResourceService;
-        this.httpClient = httpClient;
-        this.client = client;
-        this.clientThread = clientThread;
-        this.gson = gson;
-        this.itemManager = itemManager;
-        this.buPanelService = buPanelService;
-        this.accountConfigurationService = accountConfigurationService;
-        this.unlockedItemsDataProvider = unlockedItemsDataProvider;
-        this.gameRulesDataProvider = gameRulesDataProvider;
-        this.membersDataProvider = membersDataProvider;
+        this.viewModel = viewModel;
+        this.waitForLoginScreenFactory = waitForLoginScreenFactory;
+        this.setupScreenViewModel = setupScreenViewModel;
+        this.setupScreenFactory = setupScreenFactory;
+        this.mainScreenViewModel = mainScreenViewModel;
+        this.mainScreenFactory = mainScreenFactory;
 
-        setLayout(layout);
-        setViewState(ViewState.WAIT_FOR_LOGIN);
+        CardLayout cardLayout = new CardLayout();
+        setLayout(cardLayout);
 
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(currentAccountConfigurationChangeListener);
+        cardLayoutBinding = Bindings.bindCardLayout(this, cardLayout, viewModel.screen, this::buildScreen);
     }
 
     @Override
     public void close() throws Exception {
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(currentAccountConfigurationChangeListener);
+        cardLayoutBinding.close();
+        viewModel.close();
     }
 
-    private void setViewState(ViewState state) {
-        viewState = state;
-
-        JPanel view = views.computeIfAbsent(state, this::buildView); // lazy
-        String key = state.name();
-        if (view.getParent() == null) {
-            add(view, key);
-        }
-        layout.show(this, key);
-        revalidate();
-        repaint();
-    }
-
-    private JPanel buildView(ViewState state) {
-        switch (state) {
+    private JPanel buildScreen(BUPanelViewModel.Screen screen) {
+        switch (screen) {
             case WAIT_FOR_LOGIN:
-                return new WaitForLoginPanel(buResourceService);
-            case ACCOUNT_CONFIGURATION:
-                return new AccountConfigurationPanel(httpClient, client, clientThread, gson, buPanelService, accountConfigurationService, gameRulesDataProvider);
-            case READY:
-                return new MainPanel(buResourceService, itemManager, unlockedItemsDataProvider, membersDataProvider);
+                return waitForLoginScreenFactory.create();
+            case SETUP:
+                return setupScreenFactory.create(setupScreenViewModel);
+            case MAIN:
+                return mainScreenFactory.create(mainScreenViewModel);
         }
 
-        throw new IllegalStateException("Unexpected build view state: " + state);
-    }
-
-    private void currentAccountConfigurationChangeListener(AccountConfiguration accountConfiguration) {
-        if (accountConfiguration == null) {
-            setViewState(ViewState.ACCOUNT_CONFIGURATION);
-            if (accountConfigurationService.isCurrentAccountAutoOpenAccountConfigurationEnabled()) {
-                buPanelService.openPanel();
-            }
-        } else {
-            setViewState(ViewState.READY);
-        }
+        throw new IllegalStateException("Unknown screen: " + screen);
     }
 }
