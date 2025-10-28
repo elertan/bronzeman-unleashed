@@ -36,6 +36,7 @@ public class HeaderView extends JPanel implements AutoCloseable {
         }
     }
 
+    private final AutoCloseable searchFieldBinding;
     private final AutoCloseable sortedByComboBoxBinding;
     private final AutoCloseable unlockedByComboBoxBinding;
 
@@ -49,6 +50,7 @@ public class HeaderView extends JPanel implements AutoCloseable {
         searchField.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         searchField.setHoverBackgroundColor(ColorScheme.DARK_GRAY_HOVER_COLOR);
         searchField.setMinimumSize(new Dimension(0, 30));
+        searchFieldBinding = Bindings.bindIconTextFieldText(searchField, viewModel.searchText);
 
         JButton configButton = new JButton();
         configButton.setIcon(new ImageIcon(buResourceService.getConfigureIconBufferedImage()));
@@ -141,6 +143,7 @@ public class HeaderView extends JPanel implements AutoCloseable {
     public void close() throws Exception {
         unlockedByComboBoxBinding.close();
         sortedByComboBoxBinding.close();
+        searchFieldBinding.close();
     }
 
 }

@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 public class HeaderViewViewModel implements AutoCloseable {
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
-        HeaderViewViewModel create(Property<List<UnlockedItem>> allUnlockedItems, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash);
+        HeaderViewViewModel create(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash);
     }
 
     @Singleton
@@ -24,11 +24,12 @@ public class HeaderViewViewModel implements AutoCloseable {
         private MembersDataProvider membersDataProvider;
 
         @Override
-        public HeaderViewViewModel create(Property<List<UnlockedItem>> allUnlockedItems, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash) {
-            return new HeaderViewViewModel(allUnlockedItems, sortedBy, unlockedByAccountHash, membersDataProvider);
+        public HeaderViewViewModel create(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash) {
+            return new HeaderViewViewModel(allUnlockedItems, searchText, sortedBy, unlockedByAccountHash, membersDataProvider);
         }
     }
 
+    public final Property<String> searchText;
     public final Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy;
     public final Property<Long> unlockedByAccountHash;
     public final Property<List<Long>> accountHashesFromAllUnlockedItems;
@@ -37,9 +38,10 @@ public class HeaderViewViewModel implements AutoCloseable {
     private final MembersDataProvider membersDataProvider;
     private final MembersDataProvider.MemberMapListener memberMapListener;
 
-    private HeaderViewViewModel(Property<List<UnlockedItem>> allUnlockedItems, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash, MembersDataProvider membersDataProvider) {
+    private HeaderViewViewModel(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash, MembersDataProvider membersDataProvider) {
         this.membersDataProvider = membersDataProvider;
 
+        this.searchText = searchText;
         this.sortedBy = sortedBy;
         this.unlockedByAccountHash = unlockedByAccountHash;
 

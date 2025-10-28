@@ -61,7 +61,7 @@ public class UnlockedItemsScreen extends JPanel implements AutoCloseable {
             case LOADING:
                 return loadingScreenFactory.create();
             case ITEMS:
-                return itemsScreenFactory.create(viewModel.allUnlockedItems, viewModel.sortedBy, viewModel.unlockedByAccountHash);
+                return itemsScreenFactory.create(viewModel.allUnlockedItems, viewModel.searchText, viewModel.sortedBy, viewModel.unlockedByAccountHash);
         }
 
         throw new IllegalStateException("Unknown view state: " + screen);

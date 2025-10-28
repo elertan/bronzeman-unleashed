@@ -48,6 +48,7 @@ public class UnlockedItemsScreenViewModel implements AutoCloseable {
     }
 
     public final Property<List<UnlockedItem>> allUnlockedItems;
+    public final Property<String> searchText = new Property<>("");
     public final Property<SortedBy> sortedBy = new Property<>(SortedBy.UNLOCKED_AT_DESC);
     public final Property<Long> unlockedByAccountHash = new Property<>(null);
 

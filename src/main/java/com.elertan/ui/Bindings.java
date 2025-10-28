@@ -1,9 +1,12 @@
 package com.elertan.ui;
 
+import net.runelite.client.ui.components.IconTextField;
+
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.Document;
+import javax.swing.text.JTextComponent;
 import java.awt.*;
 import java.awt.event.ActionListener;
 import java.beans.PropertyChangeListener;
@@ -58,6 +61,43 @@ public final class Bindings {
                 return;
             }
             component.setCaretPosition(newCaretPosition);
+        };
+
+        DocumentListener documentListener = new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                property.set(component.getText());
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                property.set(component.getText());
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                property.set(component.getText());
+            }
+        };
+
+        Document document = component.getDocument();
+        document.addDocumentListener(documentListener);
+
+        @SuppressWarnings("resource")
+        AutoCloseable binding = bind(property, getter, setter);
+
+        return () -> {
+            binding.close();
+            document.removeDocumentListener(documentListener);
+        };
+    }
+
+    public static AutoCloseable bindIconTextFieldText(IconTextField component, Property<String> property) {
+        Supplier<String> getter = component::getText;
+
+        Consumer<String> setter = (String value) -> {
+            String textValue = value == null ? "" : value;
+            component.setText(textValue);
         };
 
         DocumentListener documentListener = new DocumentListener() {

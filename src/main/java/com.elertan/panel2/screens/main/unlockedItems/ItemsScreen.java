@@ -18,7 +18,7 @@ import java.util.List;
 public class ItemsScreen extends JPanel {
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
-        ItemsScreen create(Property<List<UnlockedItem>> allUnlockedItems, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash);
+        ItemsScreen create(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash);
     }
 
     @Singleton
@@ -33,9 +33,9 @@ public class ItemsScreen extends JPanel {
         private MainView.Factory mainViewFactory;
 
         @Override
-        public ItemsScreen create(Property<List<UnlockedItem>> allUnlockedItems, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash) {
-            HeaderViewViewModel headerViewViewModel = headerViewViewModelFactory.create(allUnlockedItems, sortedBy, unlockedByAccountHash);
-            MainViewViewModel mainViewViewModel = mainViewViewModelFactory.create(allUnlockedItems, sortedBy, unlockedByAccountHash);
+        public ItemsScreen create(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash) {
+            HeaderViewViewModel headerViewViewModel = headerViewViewModelFactory.create(allUnlockedItems, searchText, sortedBy, unlockedByAccountHash);
+            MainViewViewModel mainViewViewModel = mainViewViewModelFactory.create(allUnlockedItems, searchText, sortedBy, unlockedByAccountHash);
             return new ItemsScreen(headerViewViewModel, headerViewFactory, mainViewViewModel, mainViewFactory, sortedBy);
         }
     }
