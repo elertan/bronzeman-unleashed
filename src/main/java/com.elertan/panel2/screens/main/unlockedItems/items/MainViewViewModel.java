@@ -24,6 +24,13 @@ public class MainViewViewModel implements AutoCloseable {
         }
     }
 
+    public enum ViewState {
+        LOADING,
+        EMPTY,
+        READY
+    }
+
+    public final Property<ViewState> viewState;
     public final Property<List<UnlockedItem>> unlockedItems;
 
     private MainViewViewModel(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash) {
@@ -56,6 +63,7 @@ public class MainViewViewModel implements AutoCloseable {
                             .collect(Collectors.toList());
                 }
         );
+        viewState = unlockedItems.derive(list -> list == null ? ViewState.LOADING : ViewState.READY);
     }
 
     @Override
