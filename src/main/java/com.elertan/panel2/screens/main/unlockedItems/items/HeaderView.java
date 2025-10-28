@@ -28,7 +28,7 @@ public class HeaderView extends JPanel {
 
     private HeaderView(BUResourceService buResourceService) {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 0, 10));
+        setBorder(BorderFactory.createEmptyBorder(10, 10, 0, 3));
 
         IconTextField searchField = new IconTextField();
         searchField.setIcon(IconTextField.Icon.SEARCH);
@@ -58,6 +58,7 @@ public class HeaderView extends JPanel {
         add(Box.createVerticalStrut(8));
 
         JPanel filterAndSortPanel = new JPanel();
+        filterAndSortPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 7));
         filterAndSortPanel.setLayout(new BoxLayout(filterAndSortPanel, BoxLayout.Y_AXIS));
 
         JPanel sortedByRow = new JPanel(new BorderLayout(5, 0));
