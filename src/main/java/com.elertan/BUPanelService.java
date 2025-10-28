@@ -3,6 +3,7 @@ package com.elertan;
 import com.elertan.data.GameRulesDataProvider;
 import com.elertan.data.MembersDataProvider;
 import com.elertan.data.UnlockedItemsDataProvider;
+import com.elertan.models.AccountConfiguration;
 import com.elertan.panel.BUPanel;
 import com.elertan.panel2.BUPanel2;
 import com.google.gson.Gson;
@@ -18,40 +19,25 @@ import net.runelite.client.ui.NavigationButton;
 import okhttp3.OkHttpClient;
 
 import javax.swing.*;
+import java.util.function.Consumer;
 
 @Slf4j
 @Singleton
 public class BUPanelService implements BUPluginLifecycle {
     @Inject
-    private Client client;
-    @Inject
     private ClientToolbar clientToolbar;
     @Inject
     private BUResourceService buResourceService;
     @Inject
-    private OkHttpClient httpClient;
-    @Inject
-    private ClientThread clientThread;
-    @Inject
-    private Gson gson;
-    @Inject
-    private ItemManager itemManager;
-    @Inject
-    private BUPanelService buPanelService;
-    @Inject
     private AccountConfigurationService accountConfigurationService;
-    @Inject
-    private UnlockedItemsDataProvider unlockedItemsDataProvider;
-    @Inject
-    private GameRulesDataProvider gameRulesDataProvider;
-    @Inject
-    private MembersDataProvider membersDataProvider;
 
     @Inject
     private Provider<BUPanel2> buPanelProvider;
 
     private BUPanel2 buPanel;
     private NavigationButton panelNavigationButton;
+
+    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
 
     @Override
     public void startUp() {
@@ -64,10 +50,14 @@ public class BUPanelService implements BUPluginLifecycle {
                 .panel(buPanel)
                 .build();
         clientToolbar.addNavigation(panelNavigationButton);
+
+        accountConfigurationService.addCurrentAccountConfigurationChangeListener(currentAccountConfigurationChangeListener);
     }
 
     @Override
     public void shutDown() throws Exception {
+        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(currentAccountConfigurationChangeListener);
+
         clientToolbar.removeNavigation(panelNavigationButton);
         panelNavigationButton = null;
         buPanel.close();
@@ -80,5 +70,11 @@ public class BUPanelService implements BUPluginLifecycle {
 
     public void closePanel() {
         SwingUtilities.invokeLater(() -> clientToolbar.openPanel(null));
+    }
+
+    private void currentAccountConfigurationChangeListener(AccountConfiguration accountConfiguration) {
+        if (accountConfiguration == null) {
+            openPanel();
+        }
     }
 }
