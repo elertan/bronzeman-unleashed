@@ -10,6 +10,8 @@ import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -53,14 +55,14 @@ public class HeaderView extends JPanel implements AutoCloseable {
         configButton.setBorderPainted(false);
         configButton.setContentAreaFilled(true);
         configButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        configButton.addMouseListener(new java.awt.event.MouseAdapter() {
+        configButton.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseEntered(java.awt.event.MouseEvent e) {
+            public void mouseEntered(MouseEvent e) {
                 configButton.setBackground(ColorScheme.DARK_GRAY_HOVER_COLOR);
             }
 
             @Override
-            public void mouseExited(java.awt.event.MouseEvent e) {
+            public void mouseExited(MouseEvent e) {
                 configButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
             }
         });
