@@ -22,6 +22,8 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
 
     private final AutoCloseable backButtonEnabledBinding;
     private final AutoCloseable updateGameRulesButtonEnabledBinding;
+    private final AutoCloseable errorMessageLabelVisibleBinding;
+    private final AutoCloseable errorMessageLabelTextBinding;
 
     private ConfigScreen(ConfigScreenViewModel viewModel,
         GameRulesEditorViewModel gameRulesEditorViewModel,
@@ -62,6 +64,29 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         add(gameRulesEditor, gbc);
         gbc.gridy++;
 
+        JLabel errorMessageLabel = new JLabel();
+        errorMessageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        errorMessageLabelVisibleBinding = Bindings.bindVisible(
+            errorMessageLabel,
+            viewModel.errorMessageProperty.derive(errorMessage -> errorMessage != null
+                && !errorMessage.isEmpty())
+        );
+        errorMessageLabelTextBinding = Bindings.bindLabelText(
+            errorMessageLabel, viewModel.errorMessageProperty.derive(errorMessage -> {
+                if (errorMessage == null || errorMessage.isEmpty()) {
+                    return "";
+                }
+
+                String sb = "<html><div style=\"text-align:center;color:red;\">" +
+                    errorMessage +
+                    "</div></html>";
+
+                return sb;
+            })
+        );
+        add(errorMessageLabel, gbc);
+        gbc.gridy++;
+
         gbc.weightx = 0.0;
         JButton updateGameRulesButton = new JButton("Update Game Rules");
         updateGameRulesButton.addActionListener(e -> viewModel.updateGameRulesClick());
@@ -94,6 +119,8 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        errorMessageLabelVisibleBinding.close();
+        errorMessageLabelTextBinding.close();
         updateGameRulesButtonEnabledBinding.close();
         backButtonEnabledBinding.close();
     }
