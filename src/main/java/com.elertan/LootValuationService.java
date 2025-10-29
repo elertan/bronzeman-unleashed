@@ -1,6 +1,7 @@
 package com.elertan;
 
 import com.elertan.event.ValuableLootBUEvent;
+import com.elertan.models.GameRules;
 import com.elertan.models.ISOOffsetDateTime;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -22,6 +23,8 @@ public class LootValuationService implements BUPluginLifecycle {
     private ItemManager itemManager;
     @Inject
     private BUEventService buEventService;
+    @Inject
+    private GameRulesService gameRulesService;
 
     @Override
     public void startUp() throws Exception {
@@ -39,6 +42,14 @@ public class LootValuationService implements BUPluginLifecycle {
         if (itemStacks == null) {
             return;
         }
+        GameRules gameRules = gameRulesService.getGameRules();
+        if (gameRules == null) {
+            return;
+        }
+        Integer valuableLootNotificationThreshold = gameRules.getValuableLootNotificationThreshold();
+        if (valuableLootNotificationThreshold == null || valuableLootNotificationThreshold <= 0) {
+            return;
+        }
 
         for (ItemStack itemStack : itemStacks) {
             int itemId = itemStack.getId();
@@ -46,7 +57,7 @@ public class LootValuationService implements BUPluginLifecycle {
             int price = itemManager.getItemPrice(itemId);
             int totalPrice = price * quantity;
 
-            if (totalPrice > 1) {
+            if (totalPrice >= valuableLootNotificationThreshold) {
                 ValuableLootBUEvent valuableLootBUEvent = new ValuableLootBUEvent(
                     client.getAccountHash(),
                     new ISOOffsetDateTime(OffsetDateTime.now()),
