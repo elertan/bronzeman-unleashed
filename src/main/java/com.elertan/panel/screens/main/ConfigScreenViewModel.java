@@ -25,6 +25,7 @@ public class ConfigScreenViewModel {
 
     private final GameRulesDataProvider gameRulesDataProvider;
     private final Runnable navigateToMainScreen;
+
     private GameRules gameRules;
     private Supplier<GameRulesEditorViewModel.Props> propsSupplier;
 
@@ -45,7 +46,7 @@ public class ConfigScreenViewModel {
             return new GameRulesEditorViewModel.Props(
                 client.getAccountHash(),
                 gameRules,
-                (newGameRules) -> this.gameRules = newGameRules,
+                (newGameRules) -> setGameRules(newGameRules),
                 isViewOnlyMode
             );
         };
@@ -57,6 +58,7 @@ public class ConfigScreenViewModel {
                     log.error("error waiting for game rules to be ready", throwable);
                     return;
                 }
+                setGameRules(gameRulesService.getGameRules());
                 gameRulesEditorViewModelPropsProperty.set(propsSupplier.get());
             });
     }
@@ -101,6 +103,11 @@ public class ConfigScreenViewModel {
                     isSubmittingProperty.set(false);
                 }
             });
+    }
+
+    private void setGameRules(GameRules gameRules) {
+        this.gameRules = gameRules;
+        log.info("config screen set game rules: {}", gameRules);
     }
 
     @ImplementedBy(FactoryImpl.class)

@@ -17,6 +17,10 @@ public class GameRules {
     @Setter
     private ISOOffsetDateTime lastUpdatedAt;
 
+    @Getter
+    @Setter
+    private boolean onlyForTradeableItems;
+
     // Trade
     @Getter
     @Setter
@@ -45,11 +49,13 @@ public class GameRules {
     private String partyPassword;
 
     public GameRules(Long lastUpdatedByAccountHash, ISOOffsetDateTime lastUpdatedAt,
+        boolean onlyForTradeableItems,
         boolean preventTradeOutsideGroup, boolean preventTradeLockedItems,
         boolean preventGrandExchangeBuyOffers, boolean shareAchievementNotifications,
         Integer valuableLootNotificationThreshold, String partyPassword) {
         this.lastUpdatedByAccountHash = lastUpdatedByAccountHash;
         this.lastUpdatedAt = lastUpdatedAt;
+        this.onlyForTradeableItems = onlyForTradeableItems;
         this.preventTradeOutsideGroup = preventTradeOutsideGroup;
         this.preventTradeLockedItems = preventTradeLockedItems;
         this.preventGrandExchangeBuyOffers = preventGrandExchangeBuyOffers;
@@ -67,6 +73,7 @@ public class GameRules {
             true,
             true,
             true,
+            true,
             100_000,
             null
         );
@@ -75,8 +82,10 @@ public class GameRules {
     @Override
     public String toString() {
         return "GameRules{" + "lastUpdatedByAccountHash=" + lastUpdatedByAccountHash
-            + ", lastUpdatedAt=" + lastUpdatedAt + ", preventTradeOutsideGroup="
-            + preventTradeOutsideGroup + ", preventTradeLockedItems=" + preventTradeLockedItems
+            + ", lastUpdatedAt=" + lastUpdatedAt
+            + ", onlyForTradeableItems=" + onlyForTradeableItems
+            + ", preventTradeOutsideGroup=" + preventTradeOutsideGroup +
+            ", preventTradeLockedItems=" + preventTradeLockedItems
             + ", preventGrandExchangeBuyOffers=" + preventGrandExchangeBuyOffers
             + ", shareAchievementNotifications=" + shareAchievementNotifications
             + ", valuableLootNotificationThreshold=" + valuableLootNotificationThreshold

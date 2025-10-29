@@ -55,14 +55,47 @@ public class FirebaseObjectStorageAdapterBase<T> implements ObjectStoragePort<T>
 
     @Override
     public CompletableFuture<T> read() {
-        return db.get(path)
-            .thenApply(this.deserializer);
+        CompletableFuture<T> future = new CompletableFuture<>();
+        db.get(path).whenComplete((jsonElement, throwable) -> {
+            if (throwable != null) {
+                future.completeExceptionally(throwable);
+                return;
+            }
+            boolean isJsonNull = jsonElement.isJsonNull();
+            T value = this.deserializer.apply(jsonElement);
+            if (value == null && !isJsonNull) {
+                Exception ex = new IllegalStateException("deserialisation failed when reading value");
+                log.error("deserialisation failed when reading value: {}", jsonElement, ex);
+                future.completeExceptionally(ex);
+                return;
+            }
+
+            future.complete(value);
+        });
+        return future;
     }
 
     @Override
     public CompletableFuture<Void> update(T value) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
         JsonElement jsonElement = this.serializer.apply(value);
-        return db.put(path, jsonElement).thenApply(__ -> null);
+        if (jsonElement == null || jsonElement.isJsonNull()) {
+            Exception ex = new IllegalArgumentException(
+                "value must not be null, call delete instead. Maybe the value failed to serialize?");
+            future.completeExceptionally(ex);
+            return future;
+        }
+
+        db.put(path, jsonElement).whenComplete((__, throwable) -> {
+            if (throwable != null) {
+                future.completeExceptionally(throwable);
+                return;
+            }
+
+            future.complete(null);
+        });
+
+        return future;
     }
 
     @Override

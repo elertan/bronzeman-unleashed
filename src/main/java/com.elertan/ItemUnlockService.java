@@ -1,6 +1,7 @@
 package com.elertan;
 
 import com.elertan.data.UnlockedItemsDataProvider;
+import com.elertan.models.GameRules;
 import com.elertan.models.ISOOffsetDateTime;
 import com.elertan.models.Member;
 import com.elertan.models.UnlockedItem;
@@ -140,6 +141,9 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private ItemUnlockOverlay itemUnlockOverlay;
     @Inject
     private MemberService memberService;
+    @Inject
+    private GameRulesService gameRulesService;
+
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private boolean hasUnlockedItemDataProviderReadyStateBeenSeen;
     private final Consumer<UnlockedItemsDataProvider.State> unlockedItemDataProviderStateListener = this::unlockedItemDataProviderStateListener;
@@ -372,26 +376,50 @@ public class ItemUnlockService implements BUPluginLifecycle {
             return future;
         }
 
-        long acquiredByAccountHash = client.getAccountHash();
-        ISOOffsetDateTime acquiredAt = new ISOOffsetDateTime(OffsetDateTime.now());
+        final boolean fIsTradeable = itemComposition.isTradeable();
+        final String fItemName = itemComposition.getName();
+        final int fItemId = itemId;
+        gameRulesService
+            .waitUntilGameRulesReady(null)
+            .whenComplete((__, throwable) -> {
+                if (throwable != null) {
+                    future.completeExceptionally(throwable);
+                    return;
+                }
 
-        UnlockedItem unlockedItem = new UnlockedItem(
-            itemId,
-            itemComposition.getName(),
-            acquiredByAccountHash,
-            acquiredAt,
-            droppedByNPCId
-        );
-        log.info("Unlocked item ({}) '{}'", itemId, itemComposition.getName());
-        unlockedItemsDataProvider.addUnlockedItem(unlockedItem).whenComplete((__, throwable) -> {
-            if (throwable != null) {
-                future.completeExceptionally(throwable);
-                return;
-            }
+                GameRules gameRules = gameRulesService.getGameRules();
+                log.info(
+                    "is only for traded items: {} - is tradedable: {}",
+                    gameRules.isOnlyForTradeableItems(),
+                    fIsTradeable
+                );
+                if (gameRules.isOnlyForTradeableItems() && !fIsTradeable) {
+                    future.complete(null);
+                    return;
+                }
 
-            future.complete(null);
-        });
+                long acquiredByAccountHash = client.getAccountHash();
+                ISOOffsetDateTime acquiredAt = new ISOOffsetDateTime(OffsetDateTime.now());
 
+                UnlockedItem unlockedItem = new UnlockedItem(
+                    fItemId,
+                    fItemName,
+                    acquiredByAccountHash,
+                    acquiredAt,
+                    droppedByNPCId
+                );
+                log.info("Unlocked item ({}) '{}'", fItemId, fItemName);
+                unlockedItemsDataProvider.addUnlockedItem(unlockedItem)
+                    .whenComplete((__2, throwable2) -> {
+                        if (throwable2 != null) {
+                            future.completeExceptionally(throwable2);
+                            return;
+                        }
+
+                        future.complete(null);
+                    });
+
+            });
         return future;
     }
 

@@ -10,9 +10,12 @@ import java.beans.PropertyChangeListener;
 import java.time.OffsetDateTime;
 import java.util.function.Consumer;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class GameRulesEditorViewModel implements AutoCloseable {
 
+    public final Property<Boolean> onlyForTradeableItemsProperty;
     public final Property<Boolean> preventTradeOutsideGroupProperty;
     public final Property<Boolean> preventTradeLockedItemsProperty;
     public final Property<Boolean> preventGrandExchangeBuyOffersProperty;
@@ -21,6 +24,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
     public final Property<String> partyPasswordProperty;
     public final Property<Boolean> isViewOnlyModeProperty;
     private Props props;
+    private final PropertyChangeListener onlyForTradeableItemsListener = this::onlyForTradeableItemsListener;
     private final PropertyChangeListener preventTradeOutsideGroupListener = this::preventTradeOutsideGroupListener;
     private final PropertyChangeListener preventTradeLockedItemsListener = this::preventTradeLockedItemsListener;
     //    public final Property<Boolean> isValid;
@@ -38,6 +42,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
             gameRules = GameRules.createWithDefaults(initialProps.getAccountHash(), now);
         }
 
+        onlyForTradeableItemsProperty = new Property<>(gameRules.isOnlyForTradeableItems());
         preventTradeOutsideGroupProperty = new Property<>(gameRules.isPreventTradeOutsideGroup());
         preventTradeLockedItemsProperty = new Property<>(gameRules.isPreventTradeLockedItems());
         preventGrandExchangeBuyOffersProperty = new Property<>(gameRules.isPreventGrandExchangeBuyOffers());
@@ -66,6 +71,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
 //        );
 //        isValid = partyPassword.derive((partyPasswordValue) -> partyPasswordValue == null || partyPasswordValue.length() <= 20);
 
+        onlyForTradeableItemsProperty.addListener(onlyForTradeableItemsListener);
         preventTradeOutsideGroupProperty.addListener(preventTradeOutsideGroupListener);
         preventTradeLockedItemsProperty.addListener(preventTradeLockedItemsListener);
         preventGrandExchangeBuyOffersProperty.addListener(preventGrandExchangeBuyOffersListener);
@@ -84,6 +90,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
         preventGrandExchangeBuyOffersProperty.removeListener(preventGrandExchangeBuyOffersListener);
         preventTradeLockedItemsProperty.removeListener(preventTradeLockedItemsListener);
         preventTradeOutsideGroupProperty.removeListener(preventTradeOutsideGroupListener);
+        onlyForTradeableItemsProperty.removeListener(onlyForTradeableItemsListener);
     }
 
     public void setProps(Props props) {
@@ -95,36 +102,49 @@ public class GameRulesEditorViewModel implements AutoCloseable {
             gameRules = GameRules.createWithDefaults(props.getAccountHash(), now);
         }
 
+        onlyForTradeableItemsProperty.set(gameRules.isOnlyForTradeableItems());
         preventTradeOutsideGroupProperty.set(gameRules.isPreventTradeOutsideGroup());
         preventTradeLockedItemsProperty.set(gameRules.isPreventTradeLockedItems());
         preventGrandExchangeBuyOffersProperty.set(gameRules.isPreventGrandExchangeBuyOffers());
         shareAchievementNotificationsProperty.set(gameRules.isShareAchievementNotifications());
         partyPasswordProperty.set(gameRules.getPartyPassword());
+        valuableLootNotificationThresholdProperty.set(gameRules.getValuableLootNotificationThreshold());
 
         isViewOnlyModeProperty.set(props.isViewOnlyMode());
     }
 
+    private void onlyForTradeableItemsListener(PropertyChangeEvent event) {
+        log.debug("onlyForTradeableItems changed to: {}", event.getNewValue());
+        tryUpdateGameRules();
+    }
+
     private void preventTradeOutsideGroupListener(PropertyChangeEvent event) {
+        log.debug("preventTradeOutsideGroup changed to: {}", event.getNewValue());
         tryUpdateGameRules();
     }
 
     private void preventTradeLockedItemsListener(PropertyChangeEvent event) {
+        log.debug("preventTradeLockedItems changed to: {}", event.getNewValue());
         tryUpdateGameRules();
     }
 
     private void preventGrandExchangeBuyOffersListener(PropertyChangeEvent event) {
+        log.debug("preventGrandExchangeBuyOffers changed to: {}", event.getNewValue());
         tryUpdateGameRules();
     }
 
     private void shareAchievementNotificationsListener(PropertyChangeEvent event) {
+        log.debug("shareAchievementNotifications changed to: {}", event.getNewValue());
         tryUpdateGameRules();
     }
 
     private void valuableLootNotificationThresholdListener(PropertyChangeEvent event) {
+        log.debug("valuableLootNotificationThreshold changed to: {}", event.getNewValue());
         tryUpdateGameRules();
     }
 
     private void partyPasswordListener(PropertyChangeEvent event) {
+        log.debug("partyPassword changed to: {}", event.getNewValue());
         tryUpdateGameRules();
     }
 
@@ -146,6 +166,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
         GameRules newGameRules = new GameRules(
             props.getAccountHash(),
             new ISOOffsetDateTime(OffsetDateTime.now()),
+            onlyForTradeableItemsProperty.get(),
             preventTradeOutsideGroupProperty.get(),
             preventTradeLockedItemsProperty.get(),
             preventGrandExchangeBuyOffersProperty.get(),

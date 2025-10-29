@@ -273,16 +273,15 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
 
         ChatMessageBuilder builder = new ChatMessageBuilder();
         builder.append(config.chatPlayerNameColor(), member.getName());
-        builder.append(" has received a valuable drop from ");
-        builder.append(config.chatNPCNameColor(), npcComposition.getName());
-        builder.append(": ");
+        builder.append(" has received a valuable: ");
         if (e.getQuantity() > 1) {
             builder.append(config.chatItemNameColor(), String.format("%dx ", e.getQuantity()));
         }
         builder.append(config.chatItemNameColor(), itemComposition.getName());
         builder.append(" (");
         builder.append(formattedCoins);
-        builder.append(" coins)");
+        builder.append(" coins) from ");
+        builder.append(config.chatNPCNameColor(), npcComposition.getName());
         builder.append(".");
 
         return builder.build();

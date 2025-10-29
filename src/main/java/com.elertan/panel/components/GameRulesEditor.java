@@ -57,6 +57,9 @@ public class GameRulesEditor extends JPanel {
         add(Box.createVerticalStrut(20), gbc);
         gbc.gridy++;
 
+        add(createSection("General", "General", createGeneralPanel(), true), gbc);
+        gbc.gridy++;
+
         add(createSection("Trade", "Trade settings", createTradePanel(), true), gbc);
         gbc.gridy++;
 
@@ -141,6 +144,40 @@ public class GameRulesEditor extends JPanel {
         String expandedText = "";
         return "<html><div style=\"text-align:left;color:rgb(220,138,0);\">" + expandedText + title
             + "</div></html>";
+    }
+
+
+    private JPanel createGeneralPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setOpaque(false);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        gbc.insets = new Insets(0, 0, 5, 0);
+
+        JCheckBox onlyForTradableItemsCheckBox = new JCheckBox();
+        Bindings.bindSelected(
+            onlyForTradableItemsCheckBox,
+            viewModel.onlyForTradeableItemsProperty
+        );
+        Bindings.bindEnabled(
+            onlyForTradableItemsCheckBox,
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
+        );
+        panel.add(
+            createCheckboxInput(
+                "Only for tradable items",
+                "Whether to only unlock items that are tradable (reduces a lot of clutter for e.g. quest items)",
+                onlyForTradableItemsCheckBox
+            ), gbc
+        );
+        gbc.gridy++;
+
+        return panel;
     }
 
     private JPanel createTradePanel() {

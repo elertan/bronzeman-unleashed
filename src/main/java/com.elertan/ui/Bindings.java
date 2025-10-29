@@ -13,9 +13,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import javax.swing.AbstractButton;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -48,11 +48,22 @@ public final class Bindings {
         return bind(property, getter, setter);
     }
 
-    public static AutoCloseable bindSelected(AbstractButton component, Property<Boolean> property) {
+    public static AutoCloseable bindSelected(JCheckBox component, Property<Boolean> property) {
         Supplier<Boolean> getter = component::isSelected;
         Consumer<Boolean> setter = component::setSelected;
 
-        return bind(property, getter, setter);
+        // Listen for selected changes
+        ChangeListener listener = (ChangeEvent e) -> {
+            property.set(getter.get());
+        };
+        component.addChangeListener(listener);
+        setter.accept(property.get());
+
+        AutoCloseable binding = bind(property, getter, setter);
+        return () -> {
+            binding.close();
+            component.removeChangeListener(listener);
+        };
     }
 
     public static AutoCloseable bindLabelText(JLabel component, Property<String> property) {
