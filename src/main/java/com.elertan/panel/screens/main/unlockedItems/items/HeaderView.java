@@ -60,9 +60,7 @@ public class HeaderView extends JPanel implements AutoCloseable {
         configButton.setBorderPainted(false);
         configButton.setContentAreaFilled(false);
         configButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        configButton.addActionListener(e -> {
-
-        });
+        configButton.addActionListener(e -> viewModel.onOpenConfigurationClick());
 
         JPanel searchbarHeader = new JPanel(new BorderLayout(5, 0));
         searchbarHeader.add(searchField, BorderLayout.CENTER);

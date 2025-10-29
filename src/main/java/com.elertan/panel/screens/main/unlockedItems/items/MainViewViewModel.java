@@ -1,6 +1,6 @@
 package com.elertan.panel.screens.main.unlockedItems.items;
 
-import com.elertan.MemberService;
+import com.elertan.data.MembersDataProvider;
 import com.elertan.models.Member;
 import com.elertan.models.UnlockedItem;
 import com.elertan.panel.screens.main.UnlockedItemsScreenViewModel;
@@ -8,9 +8,16 @@ import com.elertan.ui.Property;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import lombok.Getter;
+import net.runelite.api.Client;
+import net.runelite.api.NPCComposition;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.game.ItemManager;
+import net.runelite.client.util.AsyncBufferedImage;
 
-import java.util.Arrays;
-import java.util.List;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class MainViewViewModel implements AutoCloseable {
@@ -22,11 +29,17 @@ public class MainViewViewModel implements AutoCloseable {
     @Singleton
     private static final class FactoryImpl implements Factory {
         @Inject
-        private MemberService memberService;
+        private MembersDataProvider membersDataProvider;
+        @Inject
+        private ItemManager itemManager;
+        @Inject
+        private ClientThread clientThread;
+        @Inject
+        private Client client;
 
         @Override
         public MainViewViewModel create(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash) {
-            return new MainViewViewModel(allUnlockedItems, searchText, sortedBy, unlockedByAccountHash, memberService);
+            return new MainViewViewModel(allUnlockedItems, searchText, sortedBy, unlockedByAccountHash, membersDataProvider, itemManager, clientThread, client);
         }
     }
 
@@ -36,20 +49,86 @@ public class MainViewViewModel implements AutoCloseable {
         READY
     }
 
-    public final Property<ViewState> viewState;
-    public final Property<List<UnlockedItem>> unlockedItems;
+    public static class ListItem {
+        @Getter
+        private final UnlockedItem item;
+        @Getter
+        private final Member acquiredByMember;
+        @Getter
+        private final AsyncBufferedImage icon;
+        @Getter
+        private final String droppedByNPCName;
 
-    private MainViewViewModel(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash, MemberService memberService) {
-        unlockedItems = Property.deriveManyAsync(
-                Arrays.asList(allUnlockedItems, searchText, sortedBy, unlockedByAccountHash),
+        private ListItem(UnlockedItem item, Member acquiredByMember, AsyncBufferedImage icon, String droppedByNPCName) {
+            this.item = item;
+            this.acquiredByMember = acquiredByMember;
+            this.icon = icon;
+            this.droppedByNPCName = droppedByNPCName;
+        }
+    }
+
+    public final Property<ViewState> viewState;
+    public final Property<List<ListItem>> unlockedItemListItems;
+
+    private final Property<List<UnlockedItem>> allUnlockedItems;
+    private final Property<Map<Long, Member>> membersMap;
+    private final PropertyChangeListener allUnlockedItemsListener = this::allUnlockedItemsListener;
+
+    private final Property<Map<Integer, String>> npcIdToNameMap = new Property<>(null);
+
+    private final Map<Integer, AsyncBufferedImage> iconCache = new HashMap<>();
+
+    private final MembersDataProvider membersDataProvider;
+    private final ClientThread clientThread;
+    private final Client client;
+    private final MembersDataProvider.MemberMapListener memberMapListener;
+    private final ItemManager itemManager;
+
+    private MainViewViewModel(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash, MembersDataProvider membersDataProvider, ItemManager itemManager, ClientThread clientThread, Client client) {
+        this.allUnlockedItems = allUnlockedItems;
+        this.membersDataProvider = membersDataProvider;
+        this.clientThread = clientThread;
+        this.client = client;
+
+        allUnlockedItems.addListener(allUnlockedItemsListener);
+        onNewUnlockedItems(allUnlockedItems.get());
+
+        memberMapListener = new MembersDataProvider.MemberMapListener() {
+            @Override
+            public void onUpdate(Member newMember, Member oldMember) {
+                membersMap.set(membersDataProvider.getMembersMap());
+            }
+
+            @Override
+            public void onDelete(Member member) {
+                membersMap.set(membersDataProvider.getMembersMap());
+            }
+        };
+        this.itemManager = itemManager;
+        membersDataProvider.addMemberMapListener(memberMapListener);
+        membersMap = new Property<>(membersDataProvider.getMembersMap());
+
+        membersDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
+            if (throwable != null) {
+                return;
+            }
+            membersMap.set(membersDataProvider.getMembersMap());
+        });
+
+        unlockedItemListItems = Property.deriveManyAsync(
+                Arrays.asList(allUnlockedItems, membersMap, npcIdToNameMap, searchText, sortedBy, unlockedByAccountHash),
                 (values) -> {
                     @SuppressWarnings("unchecked")
                     List<UnlockedItem> allUnlockedItemsValue = (List<UnlockedItem>) values.get(0);
-                    String searchTextValue = (String) values.get(1);
-                    UnlockedItemsScreenViewModel.SortedBy sortedByValue = (UnlockedItemsScreenViewModel.SortedBy) values.get(2);
-                    Long unlockedByAccountHashValue = (Long) values.get(3);
+                    @SuppressWarnings("unchecked")
+                    Map<Long, Member> membersMapValue = (Map<Long, Member>) values.get(1);
+                    @SuppressWarnings("unchecked")
+                    Map<Integer, String> npcIdToNameMapValue = (Map<Integer, String>) values.get(2);
+                    String searchTextValue = (String) values.get(3);
+                    UnlockedItemsScreenViewModel.SortedBy sortedByValue = (UnlockedItemsScreenViewModel.SortedBy) values.get(4);
+                    Long unlockedByAccountHashValue = (Long) values.get(5);
 
-                    if (allUnlockedItemsValue == null) {
+                    if (allUnlockedItemsValue == null || membersMapValue == null || npcIdToNameMapValue == null) {
                         return null;
                     }
 
@@ -77,14 +156,8 @@ public class MainViewViewModel implements AutoCloseable {
                                         value = left.getName().compareToIgnoreCase(right.getName());
                                         break;
                                     case PLAYER_ASC: {
-                                        Member leftMember = null;
-                                        try {
-                                            leftMember = memberService.getMemberByAccountHash(left.getAcquiredByAccountHash());
-                                        } catch (Exception ignored) {}
-                                        Member rightMember = null;
-                                        try {
-                                            rightMember = memberService.getMemberByAccountHash(right.getAcquiredByAccountHash());
-                                        } catch (Exception ignored) {}
+                                        Member leftMember = membersMapValue.get(left.getAcquiredByAccountHash());
+                                        Member rightMember = membersMapValue.get(right.getAcquiredByAccountHash());
                                         if (leftMember != null && rightMember != null) {
                                             value = leftMember.getName().compareToIgnoreCase(rightMember.getName());
                                         } else if (leftMember == null) {
@@ -101,14 +174,8 @@ public class MainViewViewModel implements AutoCloseable {
                                         value = right.getName().compareToIgnoreCase(left.getName());
                                         break;
                                     case PLAYER_DESC: {
-                                        Member leftMember = null;
-                                        try {
-                                            leftMember = memberService.getMemberByAccountHash(left.getAcquiredByAccountHash());
-                                        } catch (Exception ignored) {}
-                                        Member rightMember = null;
-                                        try {
-                                            rightMember = memberService.getMemberByAccountHash(right.getAcquiredByAccountHash());
-                                        } catch (Exception ignored) {}
+                                        Member leftMember = membersMapValue.get(left.getAcquiredByAccountHash());
+                                        Member rightMember = membersMapValue.get(right.getAcquiredByAccountHash());
                                         if (leftMember != null && rightMember != null) {
                                             value = rightMember.getName().compareToIgnoreCase(leftMember.getName());
                                         } else if (leftMember == null) {
@@ -125,14 +192,50 @@ public class MainViewViewModel implements AutoCloseable {
                                 }
                                 return value;
                             })
+                            .map((unlockedItem) -> {
+                                Member acquiredByMember = membersMapValue.get(unlockedItem.getAcquiredByAccountHash());
+                                AsyncBufferedImage icon = getCachedIcon(unlockedItem.getId());
+                                String droppedByNPCName = npcIdToNameMapValue.get(unlockedItem.getDroppedByNPCId());
+                                return new ListItem(unlockedItem, acquiredByMember, icon, droppedByNPCName);
+                            })
                             .collect(Collectors.toList());
                 }
         );
-        viewState = unlockedItems.derive(list -> list == null ? ViewState.LOADING : ViewState.READY);
+        viewState = unlockedItemListItems.derive(list -> list == null ? ViewState.LOADING : ViewState.READY);
     }
 
     @Override
     public void close() throws Exception {
+        membersDataProvider.removeMemberMapListener(memberMapListener);
+        allUnlockedItems.removeListener(allUnlockedItemsListener);
+    }
 
+    private void allUnlockedItemsListener(PropertyChangeEvent propertyChangeEvent) {
+        List<UnlockedItem> newUnlockedItems = (List<UnlockedItem>) propertyChangeEvent.getNewValue();
+        onNewUnlockedItems(newUnlockedItems);
+    }
+
+    private void onNewUnlockedItems(List<UnlockedItem> newUnlockedItems) {
+        clientThread.invokeLater(() -> {
+            if (newUnlockedItems == null) {
+                npcIdToNameMap.set(null);
+                return;
+            }
+
+            Map<Integer, String> npcIdToNameMapValue = new HashMap<>();
+            for (UnlockedItem unlockedItem : newUnlockedItems) {
+                Integer npcId = unlockedItem.getDroppedByNPCId();
+                if (npcId == null || npcIdToNameMapValue.containsKey(npcId)) {
+                    continue;
+                }
+                NPCComposition npcComposition = client.getNpcDefinition(unlockedItem.getDroppedByNPCId());
+                npcIdToNameMapValue.put(npcId, npcComposition.getName());
+            }
+            npcIdToNameMap.set(npcIdToNameMapValue);
+        });
+    }
+
+    private AsyncBufferedImage getCachedIcon(int id) {
+        return iconCache.computeIfAbsent(id, itemManager::getImage);
     }
 }

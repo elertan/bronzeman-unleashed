@@ -13,32 +13,21 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class HeaderViewViewModel implements AutoCloseable {
-    @ImplementedBy(FactoryImpl.class)
-    public interface Factory {
-        HeaderViewViewModel create(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash);
-    }
-
-    @Singleton
-    private static final class FactoryImpl implements Factory {
-        @Inject
-        private MembersDataProvider membersDataProvider;
-
-        @Override
-        public HeaderViewViewModel create(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash) {
-            return new HeaderViewViewModel(allUnlockedItems, searchText, sortedBy, unlockedByAccountHash, membersDataProvider);
-        }
-    }
-
     public final Property<String> searchText;
     public final Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy;
     public final Property<Long> unlockedByAccountHash;
     public final Property<List<Long>> accountHashesFromAllUnlockedItems;
     public final Property<Map<Long, String>> accountHashToMemberNameMap;
-
     private final MembersDataProvider membersDataProvider;
     private final MembersDataProvider.MemberMapListener memberMapListener;
 
-    private HeaderViewViewModel(Property<List<UnlockedItem>> allUnlockedItems, Property<String> searchText, Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy, Property<Long> unlockedByAccountHash, MembersDataProvider membersDataProvider) {
+    private HeaderViewViewModel(
+            Property<List<UnlockedItem>> allUnlockedItems,
+            Property<String> searchText,
+            Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy,
+            Property<Long> unlockedByAccountHash,
+            MembersDataProvider membersDataProvider
+    ) {
         this.membersDataProvider = membersDataProvider;
 
         this.searchText = searchText;
@@ -50,8 +39,7 @@ public class HeaderViewViewModel implements AutoCloseable {
                 return new ArrayList<>();
             }
 
-            return items.stream()
-                    .map(UnlockedItem::getAcquiredByAccountHash).distinct().collect(Collectors.toList());
+            return items.stream().map(UnlockedItem::getAcquiredByAccountHash).distinct().collect(Collectors.toList());
         });
 
         accountHashToMemberNameMap = new Property<>(buildAccountHashToMemberNameMap());
@@ -82,6 +70,10 @@ public class HeaderViewViewModel implements AutoCloseable {
         membersDataProvider.removeMemberMapListener(memberMapListener);
     }
 
+    public void onOpenConfigurationClick() {
+
+    }
+
     private Map<Long, String> buildAccountHashToMemberNameMap() {
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
         if (membersMap == null) {
@@ -93,5 +85,37 @@ public class HeaderViewViewModel implements AutoCloseable {
             accountHashToMemberNameMap.put(member.getAccountHash(), member.getName());
         }
         return accountHashToMemberNameMap;
+    }
+
+    @ImplementedBy(FactoryImpl.class)
+    public interface Factory {
+        HeaderViewViewModel create(
+                Property<List<UnlockedItem>> allUnlockedItems,
+                Property<String> searchText,
+                Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy,
+                Property<Long> unlockedByAccountHash
+        );
+    }
+
+    @Singleton
+    private static final class FactoryImpl implements Factory {
+        @Inject
+        private MembersDataProvider membersDataProvider;
+
+        @Override
+        public HeaderViewViewModel create(
+                Property<List<UnlockedItem>> allUnlockedItems,
+                Property<String> searchText,
+                Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy,
+                Property<Long> unlockedByAccountHash
+        ) {
+            return new HeaderViewViewModel(
+                    allUnlockedItems,
+                    searchText,
+                    sortedBy,
+                    unlockedByAccountHash,
+                    membersDataProvider
+            );
+        }
     }
 }

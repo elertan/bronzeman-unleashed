@@ -1,29 +1,21 @@
 package com.elertan.panel.screens.main.unlockedItems.items;
 
 import com.elertan.BUResourceService;
-import com.elertan.MemberService;
 import com.elertan.models.Member;
 import com.elertan.models.UnlockedItem;
 import com.elertan.ui.Bindings;
-import com.elertan.ui.Property;
+import com.elertan.utils.OffsetDateTimeUtils;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
-import lombok.Getter;
-import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.util.AsyncBufferedImage;
 
 import javax.swing.*;
 import java.awt.*;
 import java.beans.PropertyChangeListener;
-import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 public class MainView extends JPanel implements AutoCloseable {
     @ImplementedBy(FactoryImpl.class)
@@ -34,30 +26,23 @@ public class MainView extends JPanel implements AutoCloseable {
     private static final class FactoryImpl implements Factory {
         @Inject
         private BUResourceService buResourceService;
-        @Inject
-        private ItemManager itemManager;
-        @Inject
-        private MemberService memberService;
 
         @Override
         public MainView create(MainViewViewModel viewModel) {
-            return new MainView(viewModel, buResourceService, itemManager, memberService);
+            return new MainView(viewModel, buResourceService);
         }
     }
 
     private final MainViewViewModel viewModel;
     private final BUResourceService buResourceService;
-    private final ItemManager itemManager;
-    private final MemberService memberService;
 
     private final AutoCloseable cardLayoutBinding;
     private AutoCloseable listBinding;
+    private Timer relativeTimeUpdateTimer;
 
-    private MainView(MainViewViewModel viewModel, BUResourceService buResourceService, ItemManager itemManager, MemberService memberService) {
+    private MainView(MainViewViewModel viewModel, BUResourceService buResourceService) {
         this.viewModel = viewModel;
         this.buResourceService = buResourceService;
-        this.itemManager = itemManager;
-        this.memberService = memberService;
 
         CardLayout cardLayout = new CardLayout();
         setLayout(cardLayout);
@@ -66,6 +51,9 @@ public class MainView extends JPanel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        if (relativeTimeUpdateTimer != null && relativeTimeUpdateTimer.isRunning()) {
+            relativeTimeUpdateTimer.stop();
+        }
         if (listBinding != null) {
             listBinding.close();
         }
@@ -102,25 +90,10 @@ public class MainView extends JPanel implements AutoCloseable {
         return panel;
     }
 
-    private static class ListItem {
-        @Getter
-        private final UnlockedItem item;
-        @Getter
-        private final Member acquiredByMember;
-        @Getter
-        private final AsyncBufferedImage icon;
-
-        private ListItem(UnlockedItem item, Member acquiredByMember, AsyncBufferedImage icon) {
-            this.item = item;
-            this.acquiredByMember = acquiredByMember;
-            this.icon = icon;
-        }
-    }
-
     private JPanel buildReadyViewState() {
         JPanel panel = new JPanel(new BorderLayout());
 
-        JList<ListItem> list = new JList<>();
+        JList<MainViewViewModel.ListItem> list = new JList<>();
         list.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         list.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
@@ -142,113 +115,71 @@ public class MainView extends JPanel implements AutoCloseable {
             // rich tooltip
             String name = item.getName();
             Member acquiredByMember = listItem.getAcquiredByMember();
-            String acquiredBy = acquiredByMember == null ? "Unknown" : acquiredByMember.getName();
-            OffsetDateTime now = OffsetDateTime.now();
-            String acquiredAt = item.getAcquiredAt() != null ? formatRelativeTime(now, item.getAcquiredAt().getValue()) : "Unknown";
-            label.setToolTipText(String.format(
-                    "<html>"
-                            + "<b>%s</b><br>"
-                            + "<p><font color='gray'>by </font>%s</p>"
-                            + "<font color='gray'>%s</font>"
-                            + "</html>",
-                    name, acquiredBy, acquiredAt
-            ));
+            String acquiredBy = acquiredByMember == null ? null : acquiredByMember.getName();
+
+            String acquiredAt = null;
+            if (item.getAcquiredAt() != null) {
+                OffsetDateTime now = OffsetDateTime.now();
+                acquiredAt = OffsetDateTimeUtils.formatRelativeTime(now, item.getAcquiredAt().getValue());
+            }
+
+            StringBuilder tooltipBuilder = new StringBuilder();
+            tooltipBuilder.append("<html>");
+            tooltipBuilder.append(String.format("<b>%s</b><br>", name));
+            if (acquiredBy != null) {
+                tooltipBuilder.append(String.format("<p><font color='gray'>by </font>%s</p>", acquiredBy));
+            }
+            String droppedByNPCName = listItem.getDroppedByNPCName();
+            if (droppedByNPCName != null) {
+                tooltipBuilder.append(String.format("<p><font color='gray'>drop from </font>%s</p>", droppedByNPCName));
+            }
+            if (acquiredAt != null) {
+                tooltipBuilder.append(String.format("<font color='gray'>%s</font>", acquiredAt));
+            }
+            tooltipBuilder.append("</html>");
+
+            label.setToolTipText(tooltipBuilder.toString());
 
             return label;
         });
 
         scheduleRelativeTimeUpdate(list);
 
-        Property<List<ListItem>> listItems = viewModel.unlockedItems.derive((unlockedItems) -> {
-            if (unlockedItems == null) {
-                return null;
-            }
-
-            return unlockedItems
-                    .stream()
-                    .map((unlockedItem) -> {
-                        Member acquiredByMember = null;
-                        try {
-                            acquiredByMember = memberService.getMemberByAccountHash(unlockedItem.getAcquiredByAccountHash());
-                        } catch (Exception e) {
-                            // ignored
-                        }
-                        AsyncBufferedImage icon = getCachedIcon(unlockedItem.getId());
-                        return new ListItem(unlockedItem, acquiredByMember, icon);
-                    })
-                    .collect(Collectors.toList());
-        });
-
-        Consumer<List<ListItem>> setter = (newListItems) -> {
+        Consumer<List<MainViewViewModel.ListItem>> setter = (newListItems) -> Bindings.invokeOnEDT(() -> {
             if (newListItems == null) {
-                list.setListData(new ListItem[0]);
+                list.setListData(new MainViewViewModel.ListItem[0]);
                 return;
             }
-            list.setListData(newListItems.toArray(new ListItem[0]));
-        };
+            list.setListData(newListItems.toArray(new MainViewViewModel.ListItem[0]));
+        });
 
         PropertyChangeListener listItemsListener = (event) -> {
             @SuppressWarnings("unchecked")
-            List<ListItem> newListItems = (List<ListItem>)event.getNewValue();
+            List<MainViewViewModel.ListItem> newListItems = (List<MainViewViewModel.ListItem>) event.getNewValue();
             setter.accept(newListItems);
         };
-        listItems.addListener(listItemsListener);
-        setter.accept(listItems.get());
+        viewModel.unlockedItemListItems.addListener(listItemsListener);
+        setter.accept(viewModel.unlockedItemListItems.get());
 
         panel.add(new JScrollPane(list), BorderLayout.CENTER);
 
-        listBinding = () -> listItems.removeListener(listItemsListener);
+        listBinding = () -> viewModel.unlockedItemListItems.removeListener(listItemsListener);
 
         return panel;
     }
 
-    private static String formatRelativeTime(OffsetDateTime now, OffsetDateTime time) {
-        if (time == null) return "Unknown";
-
-        Duration d = Duration.between(time, now);
-        long seconds = d.getSeconds();
-
-        if (seconds < 60) return "Just now";
-        if (seconds < 3600) {
-            int minutes = (int) (seconds / 60);
-            if (minutes == 1) {
-                return "1 minute ago";
-            }
-            return minutes + " minutes ago";
-        }
-        if (seconds < 86400) {
-            int hours = (int) (seconds / 3600);
-            if (hours == 1) {
-                return "1 hour ago";
-            }
-            return hours + " hours ago";
-        }
-        if (seconds < 172800) return "Yesterday at " + time.format(DateTimeFormatter.ofPattern("HH:mm"));
-        if (seconds < 604800) {
-            String dayOfWeek = time.format(DateTimeFormatter.ofPattern("EEEE"));
-            return dayOfWeek + " at " + time.format(DateTimeFormatter.ofPattern("HH:mm"));
-        }
-        return time.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-    }
-
-    private final Map<Integer, AsyncBufferedImage> iconCache = new HashMap<>();
-    private AsyncBufferedImage getCachedIcon(int id) {
-        return iconCache.computeIfAbsent(id, itemManager::getImage);
-    }
-
-    private Timer relativeTimeTimer;
     private void scheduleRelativeTimeUpdate(JList<?> list) {
         // cancel previous timer if active
-        if (relativeTimeTimer != null && relativeTimeTimer.isRunning()) {
-            relativeTimeTimer.stop();
+        if (relativeTimeUpdateTimer != null && relativeTimeUpdateTimer.isRunning()) {
+            relativeTimeUpdateTimer.stop();
         }
 
         // start a new 1-minute timer
-        relativeTimeTimer = new Timer(60_000, e -> {
+        relativeTimeUpdateTimer = new Timer(60_000, e -> {
             list.repaint();               // update visible relative times
             scheduleRelativeTimeUpdate(list); // restart countdown
         });
-        relativeTimeTimer.setRepeats(false);
-        relativeTimeTimer.start();
+        relativeTimeUpdateTimer.setRepeats(false);
+        relativeTimeUpdateTimer.start();
     }
 }
