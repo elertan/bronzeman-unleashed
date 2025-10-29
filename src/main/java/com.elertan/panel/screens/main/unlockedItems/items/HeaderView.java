@@ -51,8 +51,19 @@ public class HeaderView extends JPanel implements AutoCloseable {
         configButton.setPreferredSize(new Dimension(30, 30));
         configButton.setFocusable(false);
         configButton.setBorderPainted(false);
-        configButton.setContentAreaFilled(false);
+        configButton.setContentAreaFilled(true);
         configButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        configButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                configButton.setBackground(ColorScheme.DARK_GRAY_HOVER_COLOR);
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                configButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            }
+        });
         configButton.addActionListener(e -> viewModel.onOpenConfigurationClick());
 
         JPanel searchbarHeader = new JPanel(new BorderLayout(5, 0));

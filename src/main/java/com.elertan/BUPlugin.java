@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
-import net.runelite.api.GameState;
 import net.runelite.api.events.AccountHashChanged;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
@@ -26,7 +25,6 @@ import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
-import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -88,7 +86,6 @@ public final class BUPlugin extends Plugin {
 
     private boolean started;
     private List<BUPluginLifecycle> lifecycleDependencies;
-    private boolean hasSharedAccountHash = false;
 
     @Inject
     private void initLifecycleDependencies() {
@@ -186,19 +183,6 @@ public final class BUPlugin extends Plugin {
     public void onGameStateChanged(GameStateChanged event) {
         buChatService.onGameStateChanged(event);
         buPartyService.onGameStateChanged(event);
-
-        if (hasSharedAccountHash) {
-            return;
-        }
-        if (event.getGameState() == GameState.LOGGED_IN) {
-            hasSharedAccountHash = true;
-
-            long accountHash = client.getAccountHash();
-            ChatMessageBuilder builder = new ChatMessageBuilder();
-            builder.append("DEV BUILD: your account hash is ");
-            builder.append(config.chatItemNameColor(), String.valueOf(accountHash));
-            buChatService.sendMessage(builder.build());
-        }
     }
 
     @Subscribe
