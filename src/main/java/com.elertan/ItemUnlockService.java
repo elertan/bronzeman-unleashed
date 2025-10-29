@@ -165,31 +165,50 @@ public class ItemUnlockService implements BUPluginLifecycle {
                 );
 
                 if (buPluginConfig.showItemUnlocksInChat()) {
-                    clientThread.invokeLater(() -> {
-                        ChatMessageBuilder builder = new ChatMessageBuilder();
-                        builder.append("Unlocked item ");
-                        builder.append(buPluginConfig.chatItemNameColor(), unlockedItem.getName());
+                    buChatService.getItemIconTag(
+                        unlockedItem.getId()).whenComplete((itemIconTag, throwable) -> {
+                            if (throwable != null) {
+                                log.error("Failed to get item icon tag", throwable);
+                                return;
+                            }
 
-                        if (client.getAccountHash() != unlockedItem.getAcquiredByAccountHash()) {
-                            Member member = memberService.getMemberByAccountHash(
-                                unlockedItem.getAcquiredByAccountHash());
+                            clientThread.invokeLater(() -> {
+                                ChatMessageBuilder builder = new ChatMessageBuilder();
+                                builder.append("Unlocked item ");
+                                builder.append(buPluginConfig.chatHighlightColor(), itemIconTag);
+                                builder.append(" ");
+                                builder.append(
+                                    buPluginConfig.chatItemNameColor(),
+                                    unlockedItem.getName()
+                                );
 
-                            builder.append(" by ");
-                            builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                                if (client.getAccountHash()
+                                    != unlockedItem.getAcquiredByAccountHash()) {
+                                    Member member = memberService.getMemberByAccountHash(
+                                        unlockedItem.getAcquiredByAccountHash());
+
+                                    builder.append(" by ");
+                                    builder.append(
+                                        buPluginConfig.chatPlayerNameColor(),
+                                        member.getName()
+                                    );
+                                }
+                                Integer droppedByNpcId = unlockedItem.getDroppedByNPCId();
+                                if (droppedByNpcId != null) {
+                                    NPCComposition npcComposition = client.getNpcDefinition(
+                                        droppedByNpcId);
+                                    builder.append(" (drop from ");
+                                    builder.append(
+                                        buPluginConfig.chatNPCNameColor(),
+                                        npcComposition.getName()
+                                    );
+                                    builder.append(")");
+                                }
+
+                                buChatService.sendMessage(builder.build());
+                            });
                         }
-                        Integer droppedByNpcId = unlockedItem.getDroppedByNPCId();
-                        if (droppedByNpcId != null) {
-                            NPCComposition npcComposition = client.getNpcDefinition(droppedByNpcId);
-                            builder.append(" (drop from ");
-                            builder.append(
-                                buPluginConfig.chatNPCNameColor(),
-                                npcComposition.getName()
-                            );
-                            builder.append(")");
-                        }
-
-                        buChatService.sendMessage(builder.build());
-                    });
+                    );
                 }
 
                 for (Consumer<UnlockedItem> listener : newUnlockedItemListeners) {
@@ -204,8 +223,17 @@ public class ItemUnlockService implements BUPluginLifecycle {
             @Override
             public void onDelete(UnlockedItem unlockedItem) {
                 // We can consider this re-locking items
-                clientThread.invokeLater(() -> {
+
+                buChatService.getItemIconTag(
+                    unlockedItem.getId()).whenComplete((itemIconTag, throwable) -> {
+                    if (throwable != null) {
+                        log.error("Failed to get item icon tag", throwable);
+                        return;
+                    }
+
                     ChatMessageBuilder builder = new ChatMessageBuilder();
+                    builder.append(buPluginConfig.chatHighlightColor(), itemIconTag);
+                    builder.append(" ");
                     builder.append(buPluginConfig.chatItemNameColor(), unlockedItem.getName());
                     builder.append(" has been removed from unlocked items.");
                     buChatService.sendMessage(builder.build());
