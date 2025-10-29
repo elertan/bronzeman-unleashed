@@ -46,14 +46,18 @@ public class BUPartyService implements BUPluginLifecycle {
                     GameRules gameRules = gameRulesService.getGameRules();
                     String partyPassword = gameRules.getPartyPassword();
                     if (partyPassword == null || partyPassword.isEmpty()) {
+                        log.info("No party password set, not attempting to join party");
                         return;
                     }
                     String trimmedPartyPassword = partyPassword.trim();
                     if (trimmedPartyPassword.isEmpty()) {
+                        log.info("Party password is empty, not attempting to join party");
                         return;
                     }
 
                     if (!buPluginConfig.shouldAutomaticallyJoinPartyOnLogin()) {
+                        log.info("Plugin is not configured to automatically join the party on login");
+
                         ChatMessageBuilder builder = new ChatMessageBuilder();
                         builder.append(
                             "The bronzeman game rules configuration has a password set, but the plugin is configured to not automatically join the party on login.");
@@ -61,12 +65,15 @@ public class BUPartyService implements BUPluginLifecycle {
                         return;
                     }
 
+                    log.info("Attempting to join party with password {}", trimmedPartyPassword);
                     partyService.changeParty(trimmedPartyPassword);
 
                     ChatMessageBuilder builder = new ChatMessageBuilder();
                     builder.append(
                         "Automatically joined party using bronzeman game rules configuration.");
                     buChatService.sendMessage(builder.build());
+
+                    log.info("Joined party with password {}", trimmedPartyPassword);
                 });
         }
     }

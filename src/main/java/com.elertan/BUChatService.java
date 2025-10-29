@@ -128,6 +128,8 @@ public class BUChatService implements BUPluginLifecycle {
     public void onGameStateChanged(GameStateChanged event) {
         if (event.getGameState() == GameState.LOGGED_IN) {
             setIsChatboxTransparent(client.getVarbitValue(VarbitID.CHATBOX_TRANSPARENCY) == 1);
+        } else if (event.getGameState() == GameState.LOGIN_SCREEN) {
+            setIsChatboxTransparent(null);
         }
     }
 
@@ -216,7 +218,7 @@ public class BUChatService implements BUPluginLifecycle {
         });
     }
 
-    private void setIsChatboxTransparent(boolean isChatboxTransparent) {
+    private void setIsChatboxTransparent(Boolean isChatboxTransparent) {
         if (Objects.equals(this.isChatboxTransparent, isChatboxTransparent)) {
             return;
         }
