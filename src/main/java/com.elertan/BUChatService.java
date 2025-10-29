@@ -127,7 +127,9 @@ public class BUChatService implements BUPluginLifecycle {
 
     public void onGameStateChanged(GameStateChanged event) {
         if (event.getGameState() == GameState.LOGGED_IN) {
-            setIsChatboxTransparent(client.getVarbitValue(VarbitID.CHATBOX_TRANSPARENCY) == 1);
+//            boolean isTransparent = client.getVarbitValue(VarbitID.CHATBOX_TRANSPARENCY) == 1;
+//            log.info("isTransparent after logged in: {}", isTransparent);
+//            setIsChatboxTransparent(isTransparent);
         } else if (event.getGameState() == GameState.LOGIN_SCREEN) {
             setIsChatboxTransparent(null);
         }
@@ -136,7 +138,9 @@ public class BUChatService implements BUPluginLifecycle {
     public void onVarbitChanged(VarbitChanged event) {
         int varbitId = event.getVarbitId();
         if (varbitId == VarbitID.CHATBOX_TRANSPARENCY) {
-            setIsChatboxTransparent(event.getValue() == 1);
+            boolean isTransparent = event.getValue() == 1;
+//            log.info("isTransparent after varbit change: {}", isTransparent);
+            setIsChatboxTransparent(isTransparent);
         }
     }
 
@@ -223,6 +227,7 @@ public class BUChatService implements BUPluginLifecycle {
             return;
         }
         this.isChatboxTransparent = isChatboxTransparent;
+        log.debug("isChatboxTransparent set to {}", isChatboxTransparent);
 
         for (Consumer<Boolean> listener : isChatboxTransparentListeners) {
             try {

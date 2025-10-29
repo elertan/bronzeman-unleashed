@@ -20,6 +20,8 @@ public class BUPartyService implements BUPluginLifecycle {
     @Inject
     private BUChatService buChatService;
 
+    private boolean isWaitingUntilGameRulesReady = false;
+
     @Override
     public void startUp() throws Exception {
     }
@@ -33,30 +35,39 @@ public class BUPartyService implements BUPluginLifecycle {
         if (gameState == GameState.LOGGING_IN) {
             log.info("Player logging in...");
 
+            if (isWaitingUntilGameRulesReady) {
+                log.info("Already waiting for game rules to be ready, not waiting again");
+                return;
+            }
+
+            isWaitingUntilGameRulesReady = true;
             gameRulesService.waitUntilGameRulesReady(null)
                 .whenComplete((__, throwable) -> {
+                    isWaitingUntilGameRulesReady = false;
+
                     if (throwable != null) {
                         log.error("error waiting for game rules to be ready", throwable);
                         return;
                     }
 
-                    log.info(
+                    log.debug(
                         "Waited after login for game rules to be ready, attempting to join party if configured");
 
                     GameRules gameRules = gameRulesService.getGameRules();
                     String partyPassword = gameRules.getPartyPassword();
                     if (partyPassword == null || partyPassword.isEmpty()) {
-                        log.info("No party password set, not attempting to join party");
+                        log.debug("No party password set, not attempting to join party");
                         return;
                     }
                     String trimmedPartyPassword = partyPassword.trim();
                     if (trimmedPartyPassword.isEmpty()) {
-                        log.info("Party password is empty, not attempting to join party");
+                        log.debug("Party password is empty, not attempting to join party");
                         return;
                     }
 
                     if (!buPluginConfig.shouldAutomaticallyJoinPartyOnLogin()) {
-                        log.info("Plugin is not configured to automatically join the party on login");
+                        log.debug(
+                            "Plugin is not configured to automatically join the party on login");
 
                         ChatMessageBuilder builder = new ChatMessageBuilder();
                         builder.append(
@@ -65,7 +76,7 @@ public class BUPartyService implements BUPluginLifecycle {
                         return;
                     }
 
-                    log.info("Attempting to join party with password {}", trimmedPartyPassword);
+                    log.debug("Attempting to join party with password {}", trimmedPartyPassword);
                     partyService.changeParty(trimmedPartyPassword);
 
                     ChatMessageBuilder builder = new ChatMessageBuilder();
@@ -73,7 +84,7 @@ public class BUPartyService implements BUPluginLifecycle {
                         "Automatically joined party using bronzeman game rules configuration.");
                     buChatService.sendMessage(builder.build());
 
-                    log.info("Joined party with password {}", trimmedPartyPassword);
+                    log.debug("Joined party with password {}", trimmedPartyPassword);
                 });
         }
     }
