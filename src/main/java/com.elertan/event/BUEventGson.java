@@ -12,7 +12,7 @@ public class BUEventGson {
         BUEventType.class);
 
     static {
-        REGISTRY.put(BUEventType.LevelUpAchievement, LevelUpAchievementBUEvent.class);
+        REGISTRY.put(BUEventType.SkillLevelUpAchievement, SkillLevelUpAchievementBUEvent.class);
         REGISTRY.put(BUEventType.TotalLevelAchievement, TotalLevelAchievementBUEvent.class);
         REGISTRY.put(BUEventType.CombatTaskAchievement, CombatTaskAchievementBUEvent.class);
         REGISTRY.put(

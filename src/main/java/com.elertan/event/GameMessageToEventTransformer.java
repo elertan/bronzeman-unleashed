@@ -1,10 +1,11 @@
 package com.elertan.event;
 
+import com.elertan.chat.CombatLevelUpParsedGameMessage;
 import com.elertan.chat.CombatTaskParsedGameMessage;
-import com.elertan.chat.LevelUpParsedGameMessage;
 import com.elertan.chat.ParsedGameMessage;
 import com.elertan.chat.ParsedGameMessageType;
 import com.elertan.chat.QuestCompletionParsedGameMessage;
+import com.elertan.chat.SkillLevelUpParsedGameMessage;
 import com.elertan.chat.TotalLevelParsedGameMessage;
 import com.elertan.models.ISOOffsetDateTime;
 import com.google.common.collect.ImmutableSet;
@@ -16,7 +17,7 @@ public class GameMessageToEventTransformer {
 
     private static final EnumMap<ParsedGameMessageType, Transformer> TRANSFORMERS = new EnumMap<>(
         ParsedGameMessageType.class);
-    private static final Set<Integer> SHARE_LEVEL_UP_OF_SET = ImmutableSet.of(
+    private static final Set<Integer> SHARE_SKILL_LEVEL_UP_OF_SET = ImmutableSet.of(
         10,
         20,
         30,
@@ -40,14 +41,41 @@ public class GameMessageToEventTransformer {
         99
     );
 
+    private static final Set<Integer> SHARE_COMBAT_LEVEL_UP_OF_SET = ImmutableSet.of(
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80,
+        90,
+        100,
+        105,
+        110,
+        115,
+        120,
+        121,
+        122,
+        123,
+        124,
+        125,
+        126
+    );
+
     static {
         TRANSFORMERS.put(
-            ParsedGameMessageType.LevelUp,
-            GameMessageToEventTransformer::transformLevelUp
+            ParsedGameMessageType.SkillLevelUp,
+            GameMessageToEventTransformer::transformSkillLevelUp
         );
         TRANSFORMERS.put(
             ParsedGameMessageType.TotalLevel,
             GameMessageToEventTransformer::transformTotalLevel
+        );
+        TRANSFORMERS.put(
+            ParsedGameMessageType.CombatLevelUp,
+            GameMessageToEventTransformer::transformCombatLevelUp
         );
         TRANSFORMERS.put(
             ParsedGameMessageType.CombatTask,
@@ -72,17 +100,22 @@ public class GameMessageToEventTransformer {
         return transformer.apply(gameMessage, dispatchedFromAccountHash);
     }
 
-    private static BUEvent transformLevelUp(ParsedGameMessage gameMessage,
+    private static BUEvent transformSkillLevelUp(ParsedGameMessage gameMessage,
         long dispatchedFromAccountHash) {
-        LevelUpParsedGameMessage m = (LevelUpParsedGameMessage) gameMessage;
+        SkillLevelUpParsedGameMessage m = (SkillLevelUpParsedGameMessage) gameMessage;
 
         int level = m.getLevel();
-        if (!SHARE_LEVEL_UP_OF_SET.contains(level)) {
+        if (!SHARE_SKILL_LEVEL_UP_OF_SET.contains(level)) {
             return null;
         }
 
         ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
-        return new LevelUpAchievementBUEvent(dispatchedFromAccountHash, now, m.getSkill(), level);
+        return new SkillLevelUpAchievementBUEvent(
+            dispatchedFromAccountHash,
+            now,
+            m.getSkill(),
+            level
+        );
     }
 
     private static BUEvent transformTotalLevel(ParsedGameMessage gameMessage,
@@ -90,6 +123,23 @@ public class GameMessageToEventTransformer {
         TotalLevelParsedGameMessage m = (TotalLevelParsedGameMessage) gameMessage;
         ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
         return new TotalLevelAchievementBUEvent(dispatchedFromAccountHash, now, m.getTotalLevel());
+    }
+
+    private static BUEvent transformCombatLevelUp(ParsedGameMessage gameMessage,
+        long dispatchedFromAccountHash) {
+        CombatLevelUpParsedGameMessage m = (CombatLevelUpParsedGameMessage) gameMessage;
+
+        int level = m.getLevel();
+        if (!SHARE_COMBAT_LEVEL_UP_OF_SET.contains(level)) {
+            return null;
+        }
+
+        ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
+        return new CombatLevelUpAchievementBUEvent(
+            dispatchedFromAccountHash,
+            now,
+            level
+        );
     }
 
     private static BUEvent transformCombatTask(ParsedGameMessage gameMessage,

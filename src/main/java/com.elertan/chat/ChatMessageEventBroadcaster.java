@@ -7,10 +7,11 @@ import com.elertan.BUPluginLifecycle;
 import com.elertan.MemberService;
 import com.elertan.event.BUEvent;
 import com.elertan.event.BUEventType;
+import com.elertan.event.CombatLevelUpAchievementBUEvent;
 import com.elertan.event.CombatTaskAchievementBUEvent;
 import com.elertan.event.DiaryCompletionAchievementBUEvent;
-import com.elertan.event.LevelUpAchievementBUEvent;
 import com.elertan.event.QuestCompletionAchievementBUEvent;
+import com.elertan.event.SkillLevelUpAchievementBUEvent;
 import com.elertan.event.TotalLevelAchievementBUEvent;
 import com.elertan.models.Member;
 import com.google.common.collect.ImmutableMap;
@@ -37,13 +38,21 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
     private BUChatService buChatService;
     @Inject
     private MemberService memberService;
-    private final Map<BUEventType, Function<BUEvent, String>> eventToChatMessageTransformers = ImmutableMap.of(
-        BUEventType.LevelUpAchievement, this::transformLevelUpAchievementEvent,
-        BUEventType.TotalLevelAchievement, this::transformTotalLevelAchievementEvent,
-        BUEventType.CombatTaskAchievement, this::transformCombatTaskAchievementEvent,
-        BUEventType.QuestCompletionAchievement, this::transformQuestCompletionAchievementEvent,
-        BUEventType.DiaryCompletionAchievement, this::transformDiaryCompletionAchievementEvent
-    );
+    private final Map<BUEventType, Function<BUEvent, String>> eventToChatMessageTransformers =
+        ImmutableMap.<BUEventType, Function<BUEvent, String>>builder()
+            .put(BUEventType.SkillLevelUpAchievement, this::transformSkillLevelUpAchievementEvent)
+            .put(BUEventType.TotalLevelAchievement, this::transformTotalLevelAchievementEvent)
+            .put(BUEventType.CombatLevelUpAchievement, this::transformCombatLevelUpAchievementEvent)
+            .put(BUEventType.CombatTaskAchievement, this::transformCombatTaskAchievementEvent)
+            .put(
+                BUEventType.QuestCompletionAchievement,
+                this::transformQuestCompletionAchievementEvent
+            )
+            .put(
+                BUEventType.DiaryCompletionAchievement,
+                this::transformDiaryCompletionAchievementEvent
+            )
+            .build();
     private final Consumer<BUEvent> eventListener = this::eventListener;
 
     @Override
@@ -77,12 +86,12 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
         buChatService.sendMessage(message);
     }
 
-    private String transformLevelUpAchievementEvent(BUEvent event) {
-        LevelUpAchievementBUEvent e = (LevelUpAchievementBUEvent) event;
+    private String transformSkillLevelUpAchievementEvent(BUEvent event) {
+        SkillLevelUpAchievementBUEvent e = (SkillLevelUpAchievementBUEvent) event;
         Member member = memberService.getMemberByAccountHash(e.getDispatchedFromAccountHash());
         if (member == null) {
             log.error(
-                "could not find member by hash {} at transformLevelUpAchievementEvent",
+                "could not find member by hash {} at transformSkillLevelUpAchievementEvent",
                 e.getDispatchedFromAccountHash()
             );
             return null;
@@ -124,6 +133,32 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
         builder.append(String.valueOf(e.getTotalLevel()));
         builder.append(".");
 
+        return builder.build();
+    }
+
+    private String transformCombatLevelUpAchievementEvent(BUEvent event) {
+        CombatLevelUpAchievementBUEvent e = (CombatLevelUpAchievementBUEvent) event;
+        Member member = memberService.getMemberByAccountHash(e.getDispatchedFromAccountHash());
+        if (member == null) {
+            log.error(
+                "could not find member by hash {} at transformCombatLevelUpAchievementEvent",
+                e.getDispatchedFromAccountHash()
+            );
+            return null;
+        }
+
+        ChatMessageBuilder builder = new ChatMessageBuilder();
+        builder.append(config.chatPlayerNameColor(), member.getName());
+
+        int level = e.getLevel();
+        if (level == 126) {
+            builder.append(" has reached the highest possible combat level of 126.");
+            return builder.build();
+        }
+
+        builder.append(" has reached combat level ");
+        builder.append(String.valueOf(level));
+        builder.append(".");
         return builder.build();
     }
 

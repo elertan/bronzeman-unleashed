@@ -1,7 +1,8 @@
 package com.elertan.event;
 
 public enum BUEventType {
-    LevelUpAchievement,
+    SkillLevelUpAchievement,
+    CombatLevelUpAchievement,
     TotalLevelAchievement,
     CombatTaskAchievement,
     QuestCompletionAchievement,

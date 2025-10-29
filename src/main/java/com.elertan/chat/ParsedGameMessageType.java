@@ -1,7 +1,8 @@
 package com.elertan.chat;
 
 public enum ParsedGameMessageType {
-    LevelUp,
+    SkillLevelUp,
+    CombatLevelUp,
     TotalLevel,
     CombatTask,
     QuestCompletion

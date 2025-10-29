@@ -40,15 +40,19 @@ public class GameMessageParser {
         return null;
     }
 
-    private static LevelUpParsedGameMessage tryParseLevelUp(String message) {
+    private static ParsedGameMessage tryParseLevelUp(String message) {
         Matcher matcher = LEVEL_UP.matcher(message);
         if (!matcher.find()) {
             return null;
         }
-
         String skill = matcher.group(1);
         int level = Integer.parseInt(matcher.group(2));
-        return new LevelUpParsedGameMessage(skill, level);
+
+        if (skill.equals("combat")) {
+            return new CombatLevelUpParsedGameMessage(level);
+        }
+
+        return new SkillLevelUpParsedGameMessage(skill, level);
     }
 
     private static TotalLevelParsedGameMessage tryParseTotalLevel(String message) {
@@ -82,7 +86,7 @@ public class GameMessageParser {
         return new QuestCompletionParsedGameMessage(name);
     }
 
-    private static LevelUpParsedGameMessage tryParseMaxLevelUp(String message) {
+    private static SkillLevelUpParsedGameMessage tryParseMaxLevelUp(String message) {
         Matcher matcher = MAX_LEVEL_UP.matcher(message);
         if (!matcher.find()) {
             return null;
@@ -90,6 +94,6 @@ public class GameMessageParser {
 
         String skill = matcher.group(1);
         int level = Integer.parseInt(matcher.group(2));
-        return new LevelUpParsedGameMessage(skill, level);
+        return new SkillLevelUpParsedGameMessage(skill, level);
     }
 }
