@@ -21,9 +21,12 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
+import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.ListCellRenderer;
 import javax.swing.SwingUtilities;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.Document;
@@ -60,6 +63,29 @@ public final class Bindings {
         };
 
         return bind(property, getter, setter);
+    }
+
+    public static AutoCloseable bindSpinner(JSpinner component, Property<Integer> property) {
+        Supplier<Integer> getter = () -> {
+            Number number = (Number) component.getValue();
+            return number.intValue();
+        };
+        Consumer<Integer> setter = value -> {
+            int intValue = value == null ? 0 : value;
+            component.setValue(intValue);
+        };
+
+        ChangeListener listener = (ChangeEvent e) -> {
+            property.set(getter.get());
+        };
+        component.addChangeListener(listener);
+
+        AutoCloseable binding = bind(property, getter, setter);
+
+        return () -> {
+            binding.close();
+            component.removeChangeListener(listener);
+        };
     }
 
     public static AutoCloseable bindTextFieldText(JTextField component, Property<String> property) {

@@ -35,44 +35,51 @@ public class GameRules {
     @Setter
     private boolean shareAchievementNotifications;
 
+    @Getter
+    @Setter
+    private Integer valuableLootNotificationThreshold;
+
     // Party
     @Getter
     @Setter
     private String partyPassword;
 
-    public GameRules(
-        Long lastUpdatedByAccountHash,
-        ISOOffsetDateTime lastUpdatedAt,
-        boolean preventTradeOutsideGroup,
-        boolean preventTradeLockedItems,
-        boolean preventGrandExchangeBuyOffers,
-        boolean shareAchievementNotifications,
-        String partyPassword
-    ) {
+    public GameRules(Long lastUpdatedByAccountHash, ISOOffsetDateTime lastUpdatedAt,
+        boolean preventTradeOutsideGroup, boolean preventTradeLockedItems,
+        boolean preventGrandExchangeBuyOffers, boolean shareAchievementNotifications,
+        Integer valuableLootNotificationThreshold, String partyPassword) {
         this.lastUpdatedByAccountHash = lastUpdatedByAccountHash;
         this.lastUpdatedAt = lastUpdatedAt;
         this.preventTradeOutsideGroup = preventTradeOutsideGroup;
         this.preventTradeLockedItems = preventTradeLockedItems;
         this.preventGrandExchangeBuyOffers = preventGrandExchangeBuyOffers;
         this.shareAchievementNotifications = shareAchievementNotifications;
+        this.valuableLootNotificationThreshold = valuableLootNotificationThreshold;
         this.partyPassword = partyPassword;
     }
 
     public static GameRules createWithDefaults(Long lastUpdatedByAccountHash,
         ISOOffsetDateTime lastUpdatedAt) {
-        return new GameRules(lastUpdatedByAccountHash, lastUpdatedAt, true, true, true, true, null);
+        return new GameRules(
+            lastUpdatedByAccountHash,
+            lastUpdatedAt,
+            true,
+            true,
+            true,
+            true,
+            100_000,
+            null
+        );
     }
 
     @Override
     public String toString() {
-        return "GameRules{" +
-            "lastUpdatedByAccountHash=" + lastUpdatedByAccountHash +
-            ", lastUpdatedAt=" + lastUpdatedAt +
-            ", preventTradeOutsideGroup=" + preventTradeOutsideGroup +
-            ", preventTradeLockedItems=" + preventTradeLockedItems +
-            ", preventGrandExchangeBuyOffers=" + preventGrandExchangeBuyOffers +
-            ", shareAchievementNotifications=" + shareAchievementNotifications +
-            ", partyPassword='" + partyPassword + '\'' +
-            '}';
+        return "GameRules{" + "lastUpdatedByAccountHash=" + lastUpdatedByAccountHash
+            + ", lastUpdatedAt=" + lastUpdatedAt + ", preventTradeOutsideGroup="
+            + preventTradeOutsideGroup + ", preventTradeLockedItems=" + preventTradeLockedItems
+            + ", preventGrandExchangeBuyOffers=" + preventGrandExchangeBuyOffers
+            + ", shareAchievementNotifications=" + shareAchievementNotifications
+            + ", valuableLootNotificationThreshold=" + valuableLootNotificationThreshold
+            + ", partyPassword='" + partyPassword + '\'' + '}';
     }
 }

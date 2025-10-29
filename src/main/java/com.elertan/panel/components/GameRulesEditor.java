@@ -10,17 +10,24 @@ import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
+import javax.swing.JFormattedTextField;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
+import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingConstants;
+import javax.swing.text.NumberFormatter;
 import net.runelite.client.ui.ColorScheme;
 
 public class GameRulesEditor extends JPanel {
@@ -43,7 +50,7 @@ public class GameRulesEditor extends JPanel {
             "<html><div style=\"text-align:center;color:gray;\">The game rules are in view-only mode. Only the group owner can modify the rules.</div></html>");
         viewOnlyModeLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        Bindings.bindVisible(viewOnlyModeLabel, viewModel.isViewOnlyMode);
+        Bindings.bindVisible(viewOnlyModeLabel, viewModel.isViewOnlyModeProperty);
         add(viewOnlyModeLabel, gbc);
         gbc.gridy++;
 
@@ -64,7 +71,12 @@ public class GameRulesEditor extends JPanel {
         gbc.gridy++;
 
         add(
-            createSection("Achievements", "Achievements settings", createAchievementsPanel(), true),
+            createSection(
+                "Notifications",
+                "Notification settings",
+                createNotificationsPanel(),
+                true
+            ),
             gbc
         );
         gbc.gridy++;
@@ -144,10 +156,13 @@ public class GameRulesEditor extends JPanel {
         gbc.insets = new Insets(0, 0, 5, 0);
 
         JCheckBox preventTradeOutsideGroupCheckBox = new JCheckBox();
-        Bindings.bindSelected(preventTradeOutsideGroupCheckBox, viewModel.preventTradeOutsideGroup);
+        Bindings.bindSelected(
+            preventTradeOutsideGroupCheckBox,
+            viewModel.preventTradeOutsideGroupProperty
+        );
         Bindings.bindEnabled(
             preventTradeOutsideGroupCheckBox,
-            viewModel.isViewOnlyMode.derive(isViewOnlyMode -> !isViewOnlyMode)
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
         );
         panel.add(
             createCheckboxInput(
@@ -159,10 +174,13 @@ public class GameRulesEditor extends JPanel {
         gbc.gridy++;
 
         JCheckBox preventTradeLockedItemsCheckBox = new JCheckBox();
-        Bindings.bindSelected(preventTradeLockedItemsCheckBox, viewModel.preventTradeLockedItems);
+        Bindings.bindSelected(
+            preventTradeLockedItemsCheckBox,
+            viewModel.preventTradeLockedItemsProperty
+        );
         Bindings.bindEnabled(
             preventTradeLockedItemsCheckBox,
-            viewModel.isViewOnlyMode.derive(isViewOnlyMode -> !isViewOnlyMode)
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
         );
         panel.add(
             createCheckboxInput(
@@ -190,11 +208,11 @@ public class GameRulesEditor extends JPanel {
         JCheckBox preventGrandExchangeBuyOffersCheckbox = new JCheckBox();
         Bindings.bindSelected(
             preventGrandExchangeBuyOffersCheckbox,
-            viewModel.preventGrandExchangeBuyOffers
+            viewModel.preventGrandExchangeBuyOffersProperty
         );
         Bindings.bindEnabled(
             preventGrandExchangeBuyOffersCheckbox,
-            viewModel.isViewOnlyMode.derive(isViewOnlyMode -> !isViewOnlyMode)
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
         );
         panel.add(
             createCheckboxInput(
@@ -207,7 +225,7 @@ public class GameRulesEditor extends JPanel {
         return panel;
     }
 
-    private JPanel createAchievementsPanel() {
+    private JPanel createNotificationsPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setOpaque(false);
 
@@ -220,16 +238,66 @@ public class GameRulesEditor extends JPanel {
         gbc.insets = new Insets(0, 0, 5, 0);
 
         JCheckBox shareAchievementsCheckbox = new JCheckBox();
-        Bindings.bindSelected(shareAchievementsCheckbox, viewModel.shareAchievementNotifications);
+        Bindings.bindSelected(
+            shareAchievementsCheckbox,
+            viewModel.shareAchievementNotificationsProperty
+        );
         Bindings.bindEnabled(
             shareAchievementsCheckbox,
-            viewModel.isViewOnlyMode.derive(isViewOnlyMode -> !isViewOnlyMode)
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
         );
         panel.add(
             createCheckboxInput(
                 "Share achievements",
                 "Whether to share achievements in the chat to other members (level ups, quest completions, combat tasks and more...)",
                 shareAchievementsCheckbox
+            ), gbc
+        );
+        gbc.gridy++;
+
+        // Integer spinner with US comma grouping and loose mid-typing, strict commit
+        JSpinner valuableLootThresholdSpinner = new JSpinner(
+            new SpinnerNumberModel(0, 0, Integer.MAX_VALUE, 100)
+        );
+        valuableLootThresholdSpinner.addChangeListener(e -> {
+
+        });
+
+        // Force US comma formatting and integer-only behavior
+        JSpinner.NumberEditor numberEditor = new JSpinner.NumberEditor(
+            valuableLootThresholdSpinner,
+            "#,##0"
+        );
+        valuableLootThresholdSpinner.setEditor(numberEditor);
+        DecimalFormat df = numberEditor.getFormat();
+        df.setDecimalFormatSymbols(DecimalFormatSymbols.getInstance(Locale.US));
+        df.setGroupingUsed(true);
+
+        // Configure the formatter for loose mid-typing and strict commit
+        JFormattedTextField editorField = numberEditor.getTextField();
+        if (editorField.getFormatter() instanceof NumberFormatter) {
+            NumberFormatter nf = (NumberFormatter) editorField.getFormatter();
+            nf.setValueClass(Integer.class);
+            nf.setAllowsInvalid(true);          // allow temporary invalid edits while typing
+            nf.setCommitsOnValidEdit(true);     // commit and reformat on valid edits
+            nf.setMinimum(0);
+            nf.setMaximum(Integer.MAX_VALUE);
+            nf.setOverwriteMode(false);
+        }
+
+        Bindings.bindEnabled(
+            valuableLootThresholdSpinner,
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
+        );
+        Bindings.bindSpinner(
+            valuableLootThresholdSpinner,
+            viewModel.valuableLootNotificationThresholdProperty
+        );
+        panel.add(
+            createSpinnerInput(
+                "Valuable loot threshold",
+                "Set the coins value threshold for valuable loot to be shared in the chat",
+                valuableLootThresholdSpinner
             ), gbc
         );
 
@@ -249,10 +317,10 @@ public class GameRulesEditor extends JPanel {
         gbc.insets = new Insets(0, 0, 5, 0);
 
         JTextField partyPasswordTextField = new JTextField();
-        Bindings.bindTextFieldText(partyPasswordTextField, viewModel.partyPassword);
+        Bindings.bindTextFieldText(partyPasswordTextField, viewModel.partyPasswordProperty);
         Bindings.bindEnabled(
             partyPasswordTextField,
-            viewModel.isViewOnlyMode.derive(isViewOnlyMode -> !isViewOnlyMode)
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
         );
         panel.add(
             createTextFieldInput(
@@ -288,6 +356,30 @@ public class GameRulesEditor extends JPanel {
 
         inputPanel.add(textField, gbc);
 
+        return inputPanel;
+    }
+
+    private JPanel createSpinnerInput(String labelText, String description, JSpinner spinner) {
+        JPanel inputPanel = new JPanel(new GridBagLayout());
+        inputPanel.setOpaque(false);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.insets = new Insets(0, 0, 5, 0);
+
+        JLabel label = new JLabel(labelText);
+        label.setForeground(Color.WHITE);
+        label.setToolTipText(description);
+        inputPanel.add(label, gbc);
+        gbc.gridy++;
+
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+
+        inputPanel.add(spinner, gbc);
         return inputPanel;
     }
 
