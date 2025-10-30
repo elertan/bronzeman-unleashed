@@ -95,6 +95,8 @@ public class AchievementDiaryService implements BUPluginLifecycle {
                 info(AchievementDiaryArea.Kandarin, AchievementDiaryTier.Elite)
             )
             // Karamja (ATJUN_* are Karamja diary varbits)
+            // Something about these VarbitIDs is not quite right, seems like ATJUN_MED_DONE
+            // is actually the easy diary...?
             .put(
                 VarbitID.ATJUN_EASY_DONE,
                 info(AchievementDiaryArea.Karamja, AchievementDiaryTier.Easy)
