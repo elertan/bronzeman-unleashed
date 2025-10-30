@@ -48,7 +48,7 @@ public class GameMessageParser {
         String skill = matcher.group(1);
         int level = Integer.parseInt(matcher.group(2));
 
-        if (skill.equals("combat")) {
+        if (skill.equalsIgnoreCase("combat")) {
             return new CombatLevelUpParsedGameMessage(level);
         }
 
