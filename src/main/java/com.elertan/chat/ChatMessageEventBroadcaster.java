@@ -262,12 +262,72 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
                 return null;
             }
 
+            String tierText;
+            switch (e.getTier()) {
+                case Easy:
+                    tierText = "Easy";
+                    break;
+                case Medium:
+                    tierText = "Medium";
+                    break;
+                case Hard:
+                    tierText = "Hard";
+                    break;
+                case Elite:
+                    tierText = "Elite";
+                    break;
+                default:
+                    throw new IllegalStateException("Unexpected tier value: " + e.getTier());
+            }
+
+            String areaText;
+            switch (e.getArea()) {
+                case Ardougne:
+                    areaText = "Ardougne";
+                    break;
+                case Desert:
+                    areaText = "Desert";
+                    break;
+                case Falador:
+                    areaText = "Falador";
+                    break;
+                case Kandarin:
+                    areaText = "Kandarin";
+                    break;
+                case Karamja:
+                    areaText = "Karamja";
+                    break;
+                case Kourend:
+                    areaText = "Kourend & Kebos";
+                    break;
+                case Lumbridge:
+                    areaText = "Lumbridge & Draynor";
+                    break;
+                case Morytania:
+                    areaText = "Morytania";
+                    break;
+                case Varrock:
+                    areaText = "Varrock";
+                    break;
+                case Western:
+                    areaText = "Western Provinces";
+                    break;
+                case Wilderness:
+                    areaText = "Wilderness";
+                    break;
+                case Fremennik:
+                    areaText = "Fremennik Province";
+                    break;
+                default:
+                    throw new IllegalStateException("Unexpected area value: " + e.getArea());
+            }
+
             ChatMessageBuilder builder = new ChatMessageBuilder();
             builder.append(config.chatPlayerNameColor(), member.getName());
             builder.append(" has completed the ");
-            builder.append(e.getTier());
+            builder.append(tierText);
             builder.append(" tier of the ");
-            builder.append(e.getArea());
+            builder.append(areaText);
             builder.append(" diary.");
 
             return builder.build();

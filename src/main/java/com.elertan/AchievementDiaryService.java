@@ -1,10 +1,13 @@
 package com.elertan;
 
+import com.elertan.event.DiaryCompletionAchievementBUEvent;
 import com.elertan.models.AchievementDiaryArea;
 import com.elertan.models.AchievementDiaryTier;
+import com.elertan.models.ISOOffsetDateTime;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.inject.Inject;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.AllArgsConstructor;
@@ -16,7 +19,6 @@ import net.runelite.api.GameState;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.VarbitID;
-import net.runelite.client.callback.ClientThread;
 
 @Slf4j
 public class AchievementDiaryService implements BUPluginLifecycle {
@@ -230,17 +232,18 @@ public class AchievementDiaryService implements BUPluginLifecycle {
             )
             .build();
 
-    private static AchievementDiaryVarbitInfo info(AchievementDiaryArea area,
-        AchievementDiaryTier tier) {
-        return new AchievementDiaryVarbitInfo(area, tier);
-    }
+    private Map<Integer, Boolean> diaryCompletedMap = buildDiaryCompletedMap();
+    private long gameTickSinceLogin = -1;
 
     @Inject
     private Client client;
     @Inject
-    private ClientThread clientThread;
+    private BUEventService buEventService;
 
-    private Map<Integer, Boolean> diaryCompletedMap;
+    private static AchievementDiaryVarbitInfo info(AchievementDiaryArea area,
+        AchievementDiaryTier tier) {
+        return new AchievementDiaryVarbitInfo(area, tier);
+    }
 
     @Override
     public void startUp() throws Exception {
@@ -263,30 +266,42 @@ public class AchievementDiaryService implements BUPluginLifecycle {
         if (previousCompleted == completed) {
             return;
         }
-        log.info("{} {} diary value changed to {}", info.tier, info.area, value);
+        log.info("{} {} diary value changed to {}", info.tier, info.area, completed);
         diaryCompletedMap.put(varbitId, completed);
+
+        long minTicksRequired = 8;
+        boolean hasPassedVarbitInitializationWindow =
+            client.getTickCount() - gameTickSinceLogin >= minTicksRequired;
+        if (!hasPassedVarbitInitializationWindow) {
+            log.info(
+                "skipping diary completion event due to varbit initialization window not passed");
+            return;
+        }
+
+        DiaryCompletionAchievementBUEvent buEvent = new DiaryCompletionAchievementBUEvent(
+            client.getAccountHash(),
+            new ISOOffsetDateTime(OffsetDateTime.now()),
+            info.tier,
+            info.area
+        );
+        buEventService.publishEvent(buEvent);
     }
 
     public void onGameStateChanged(GameStateChanged event) {
-        if (event.getGameState() != GameState.LOGGED_IN) {
-            return;
+        if (event.getGameState() == GameState.LOGIN_SCREEN) {
+            gameTickSinceLogin = -1;
+            buildDiaryCompletedMap();
+        } else if (event.getGameState() == GameState.LOGGED_IN) {
+            gameTickSinceLogin = client.getTickCount();
         }
-        initializeDiaryCompletedMap();
     }
 
-    private void initializeDiaryCompletedMap() {
-        clientThread.invokeLater(() -> {
-            Map<Integer, Boolean> map = new HashMap<>();
-            for (Integer varbitId : ACHIEVEMENT_DIARY_VARBIT_INFO_MAP.keySet()) {
-                AchievementDiaryVarbitInfo info = getAchievementDiaryInfoForVarbit(varbitId);
-                int value = client.getVarbitValue(varbitId);
-                boolean completed = value == 1;
-
-                log.info("init: {} {} diary value is {}", info.tier, info.area, completed);
-                map.put(varbitId, completed);
-            }
-            this.diaryCompletedMap = map;
-        });
+    private Map<Integer, Boolean> buildDiaryCompletedMap() {
+        Map<Integer, Boolean> map = new HashMap<>();
+        for (Integer varbitId : ACHIEVEMENT_DIARY_VARBIT_INFO_MAP.keySet()) {
+            map.put(varbitId, false);
+        }
+        return diaryCompletedMap = map;
     }
 
     private AchievementDiaryVarbitInfo getAchievementDiaryInfoForVarbit(int varbitId) {
