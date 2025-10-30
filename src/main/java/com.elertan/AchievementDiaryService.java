@@ -4,12 +4,19 @@ import com.elertan.models.AchievementDiaryArea;
 import com.elertan.models.AchievementDiaryTier;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.ImmutableBiMap;
+import com.google.inject.Inject;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
+import net.runelite.api.GameState;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.VarbitID;
+import net.runelite.client.callback.ClientThread;
 
 @Slf4j
 public class AchievementDiaryService implements BUPluginLifecycle {
@@ -228,19 +235,15 @@ public class AchievementDiaryService implements BUPluginLifecycle {
         return new AchievementDiaryVarbitInfo(area, tier);
     }
 
-    private AchievementDiaryVarbitInfo getAchievementDiaryInfoForVarbit(int varbitId) {
-        return ACHIEVEMENT_DIARY_VARBIT_INFO_MAP.get(varbitId);
-    }
+    @Inject
+    private Client client;
+    @Inject
+    private ClientThread clientThread;
 
-    private Integer getVarbitFromAchievementDiaryInfo(AchievementDiaryArea area,
-        AchievementDiaryTier tier) {
-        BiMap<AchievementDiaryVarbitInfo, Integer> inverse = ACHIEVEMENT_DIARY_VARBIT_INFO_MAP.inverse();
-        return inverse.get(new AchievementDiaryVarbitInfo(area, tier));
-    }
+    private Map<Integer, Boolean> diaryCompletedMap;
 
     @Override
     public void startUp() throws Exception {
-
     }
 
     @Override
@@ -254,10 +257,46 @@ public class AchievementDiaryService implements BUPluginLifecycle {
         if (info == null) {
             return;
         }
-
         int value = event.getValue();
-
+        boolean completed = value == 1;
+        boolean previousCompleted = diaryCompletedMap.getOrDefault(varbitId, false);
+        if (previousCompleted == completed) {
+            return;
+        }
         log.info("{} {} diary value changed to {}", info.tier, info.area, value);
+        diaryCompletedMap.put(varbitId, completed);
+    }
+
+    public void onGameStateChanged(GameStateChanged event) {
+        if (event.getGameState() != GameState.LOGGED_IN) {
+            return;
+        }
+        initializeDiaryCompletedMap();
+    }
+
+    private void initializeDiaryCompletedMap() {
+        clientThread.invokeLater(() -> {
+            Map<Integer, Boolean> map = new HashMap<>();
+            for (Integer varbitId : ACHIEVEMENT_DIARY_VARBIT_INFO_MAP.keySet()) {
+                AchievementDiaryVarbitInfo info = getAchievementDiaryInfoForVarbit(varbitId);
+                int value = client.getVarbitValue(varbitId);
+                boolean completed = value == 1;
+
+                log.info("init: {} {} diary value is {}", info.tier, info.area, completed);
+                map.put(varbitId, completed);
+            }
+            this.diaryCompletedMap = map;
+        });
+    }
+
+    private AchievementDiaryVarbitInfo getAchievementDiaryInfoForVarbit(int varbitId) {
+        return ACHIEVEMENT_DIARY_VARBIT_INFO_MAP.get(varbitId);
+    }
+
+    private Integer getVarbitFromAchievementDiaryInfo(AchievementDiaryArea area,
+        AchievementDiaryTier tier) {
+        BiMap<AchievementDiaryVarbitInfo, Integer> inverse = ACHIEVEMENT_DIARY_VARBIT_INFO_MAP.inverse();
+        return inverse.get(new AchievementDiaryVarbitInfo(area, tier));
     }
 
     @AllArgsConstructor
