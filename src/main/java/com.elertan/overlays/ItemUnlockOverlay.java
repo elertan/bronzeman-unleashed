@@ -74,7 +74,7 @@ public class ItemUnlockOverlay extends Overlay {
     @Inject
     private ItemUnlockOverlay() {
         setPosition(OverlayPosition.TOP_CENTER);
-        setLayer(OverlayLayer.ABOVE_WIDGETS);
+        setLayer(OverlayLayer.UNDER_WIDGETS);
     }
 
     private static float progress(long now, long t0, int durationMs) {
