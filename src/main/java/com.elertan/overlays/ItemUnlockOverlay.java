@@ -399,7 +399,7 @@ public class ItemUnlockOverlay extends Overlay {
 
             Member acquiredByMember = memberService.getMemberByAccountHash(toast.acquiredByAccountHash);
 
-            final String label = "acquired by";
+            final String label = "unlocked by";
             final String name = acquiredByMember.getName();
 
             int labelW = fmSmall.stringWidth(label);
