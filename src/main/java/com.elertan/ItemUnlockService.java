@@ -416,7 +416,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
                 }
 
                 GameRules gameRules = gameRulesService.getGameRules();
-                log.info(
+                log.debug(
                     "is only for traded items: {} - is tradedable: {}",
                     gameRules.isOnlyForTradeableItems(),
                     fIsTradeable
