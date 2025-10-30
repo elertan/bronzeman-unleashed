@@ -44,6 +44,11 @@ public class FirebaseSSEStream {
     @Getter
     private volatile boolean isRunning = false;
 
+    // Watchdog: reconnect if no successful read for this long
+    private static final long WATCHDOG_IDLE_NANOS = TimeUnit.MINUTES.toNanos(5);
+    // Tracks last successful line read time for watchdog
+    private volatile long lastReadNano = System.nanoTime();
+
     public FirebaseSSEStream(OkHttpClient httpClient, Gson gson,
         FirebaseRealtimeDatabaseURL databaseURL) {
         this.gson = gson;
@@ -61,6 +66,21 @@ public class FirebaseSSEStream {
             t.setUncaughtExceptionHandler((thr, ex) -> log.error("{} uncaught", threadName, ex));
             return t;
         });
+    }
+
+    private synchronized ExecutorService ensureReadExecutor() {
+        if (readExecutor == null || readExecutor.isShutdown()) {
+            readExecutor = newSingleThreadExecutor("firebase-sse-read");
+        }
+        return readExecutor;
+    }
+
+    private synchronized void recreateReadExecutor() {
+        if (readExecutor != null) {
+            readExecutor.shutdownNow();
+        }
+        readExecutor = newSingleThreadExecutor("firebase-sse-read");
+        log.warn("Firebase read executor recreated");
     }
 
     private void sleepWithJitterSeconds(int baseSeconds) {
@@ -101,9 +121,7 @@ public class FirebaseSSEStream {
         if (streamExecutor == null || streamExecutor.isShutdown()) {
             streamExecutor = newSingleThreadExecutor("firebase-sse-stream");
         }
-        if (readExecutor == null || readExecutor.isShutdown()) {
-            readExecutor = newSingleThreadExecutor("firebase-sse-read");
-        }
+        ensureReadExecutor();
         setIsRunning(true);
         streamExecutor.submit(this::loop);
     }
@@ -112,11 +130,11 @@ public class FirebaseSSEStream {
         if (!isRunning) {
             return;
         }
+        setIsRunning(false);
         Call call = currentCall;
         if (call != null) {
             call.cancel();
         }
-        setIsRunning(false);
         if (streamExecutor != null) {
             streamExecutor.shutdownNow();
             streamExecutor = null;
@@ -187,6 +205,8 @@ public class FirebaseSSEStream {
                         continue;
                     }
 
+                    lastReadNano = System.nanoTime();
+
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(body.byteStream()))) {
                         // read loop; timeouts are treated as keep-alives
                         readStream(reader);
@@ -211,6 +231,7 @@ public class FirebaseSSEStream {
 
     private void readStream(BufferedReader reader) throws Exception {
         FirebaseSSEType eventType = null;
+        int consecutiveTimeouts = 0;
 
         while (isRunning) {
             try {
@@ -219,6 +240,10 @@ public class FirebaseSSEStream {
                     log.warn("Firebase stream closed by server");
                     break;
                 }
+
+                // successful read
+                consecutiveTimeouts = 0;
+                lastReadNano = System.nanoTime();
 
                 if (line.startsWith(EVENT_PREFIX)) {
                     eventType = parseEventType(line);
@@ -232,15 +257,48 @@ public class FirebaseSSEStream {
                     handleDataLine(line, eventType);
                 }
             } catch (TimeoutException te) {
+                consecutiveTimeouts++;
                 // expected idle timeout; treat as liveness check
                 log.debug("Firebase stream read timeout; continuing");
+
+                // Watchdog: if no successful read for too long, force reconnect
+                long idle = System.nanoTime() - lastReadNano;
+                if (idle > WATCHDOG_IDLE_NANOS) {
+                    log.warn(
+                        "Firebase stream watchdog tripped after {} ms idle; reconnecting",
+                        TimeUnit.NANOSECONDS.toMillis(idle)
+                    );
+                    Call call = currentCall;
+                    if (call != null) {
+                        call.cancel();
+                    }
+                    break; // exit read loop to allow outer loop to reconnect
+                }
+
+                // Harden: if the read executor is misbehaving, recreate it
+                if (consecutiveTimeouts >= 4) { // ~6 minutes with 90s timeouts
+                    log.warn(
+                        "Firebase read timeouts consecutive={} – recreating read executor",
+                        consecutiveTimeouts
+                    );
+                    recreateReadExecutor();
+                    consecutiveTimeouts = 0;
+                }
                 continue;
             }
         }
     }
 
     private String readLineWithTimeout(BufferedReader reader, int timeoutSeconds) throws Exception {
-        Future<String> futureLine = readExecutor.submit(reader::readLine);
+        ExecutorService exec = ensureReadExecutor();
+        Future<String> futureLine;
+        try {
+            futureLine = exec.submit(reader::readLine);
+        } catch (java.util.concurrent.RejectedExecutionException rex) {
+            log.warn("Firebase read executor rejected task; recreating and retrying once");
+            recreateReadExecutor();
+            futureLine = readExecutor.submit(reader::readLine);
+        }
         try {
             return futureLine.get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
