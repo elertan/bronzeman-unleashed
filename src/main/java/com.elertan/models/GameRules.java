@@ -21,6 +21,11 @@ public class GameRules {
     @Setter
     private boolean onlyForTradeableItems;
 
+    // Ground items
+    @Getter
+    @Setter
+    private boolean restrictGroundItems;
+
     // Trade
     @Getter
     @Setter
@@ -50,12 +55,14 @@ public class GameRules {
 
     public GameRules(Long lastUpdatedByAccountHash, ISOOffsetDateTime lastUpdatedAt,
         boolean onlyForTradeableItems,
+        boolean restrictGroundItems,
         boolean preventTradeOutsideGroup, boolean preventTradeLockedItems,
         boolean preventGrandExchangeBuyOffers, boolean shareAchievementNotifications,
         Integer valuableLootNotificationThreshold, String partyPassword) {
         this.lastUpdatedByAccountHash = lastUpdatedByAccountHash;
         this.lastUpdatedAt = lastUpdatedAt;
         this.onlyForTradeableItems = onlyForTradeableItems;
+        this.restrictGroundItems = restrictGroundItems;
         this.preventTradeOutsideGroup = preventTradeOutsideGroup;
         this.preventTradeLockedItems = preventTradeLockedItems;
         this.preventGrandExchangeBuyOffers = preventGrandExchangeBuyOffers;
@@ -74,6 +81,7 @@ public class GameRules {
             true,
             true,
             true,
+            true,
             100_000,
             null
         );
@@ -84,6 +92,7 @@ public class GameRules {
         return "GameRules{" + "lastUpdatedByAccountHash=" + lastUpdatedByAccountHash
             + ", lastUpdatedAt=" + lastUpdatedAt
             + ", onlyForTradeableItems=" + onlyForTradeableItems
+            + ", restrictGroundItems=" + restrictGroundItems
             + ", preventTradeOutsideGroup=" + preventTradeOutsideGroup +
             ", preventTradeLockedItems=" + preventTradeLockedItems
             + ", preventGrandExchangeBuyOffers=" + preventGrandExchangeBuyOffers
