@@ -1,13 +1,16 @@
 package com.elertan;
 
 import com.elertan.models.AccountConfiguration;
+import com.elertan.utils.ListenerUtils;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
@@ -154,6 +157,35 @@ public class AccountConfigurationService implements BUPluginLifecycle {
 
     public boolean isReady() {
         return accountConfigurationMap != null;
+    }
+
+    public CompletableFuture<Void> waitUntilCurrentAccountConfigurationReady(
+        Duration timeout) {
+        return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
+            private Consumer<AccountConfiguration> listener;
+
+            @Override
+            public boolean isReady() {
+                return accountConfigurationMap != null;
+            }
+
+            @Override
+            public void addListener(Runnable notify) {
+                listener = accountConfiguration -> notify.run();
+                addCurrentAccountConfigurationChangeListener(listener);
+            }
+
+            @Override
+            public void removeListener() {
+                removeCurrentAccountConfigurationChangeListener(listener);
+                listener = null;
+            }
+
+            @Override
+            public Duration getTimeout() {
+                return timeout;
+            }
+        });
     }
 
     private void notifyCurrentAccountConfigurationChange(

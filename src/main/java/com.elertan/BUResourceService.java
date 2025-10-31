@@ -110,7 +110,7 @@ public class BUResourceService implements BUPluginLifecycle {
                 );
                 IndexedSprite sprite = ImageUtil.getImageIndexedSprite(resized, client);
                 sprite.setOffsetX(1);
-                sprite.setOffsetY(3);
+                sprite.setOffsetY(2);
                 IndexedSprite[] modIcons = client.getModIcons();
                 int lastIdx = modIcons.length;
                 IndexedSprite[] newModIcons = Arrays.copyOf(

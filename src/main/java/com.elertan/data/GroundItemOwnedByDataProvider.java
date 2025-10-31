@@ -5,9 +5,10 @@ import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.RemoteStorageService;
-import com.elertan.remote.RemoteStorageService.State;
+import com.elertan.utils.ListenerUtils;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -21,14 +22,17 @@ import lombok.extern.slf4j.Slf4j;
 @Singleton
 public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
 
-    private final ConcurrentLinkedQueue<Listener> listeners = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<Listener> maplisteners = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<Consumer<State>> stateListeners = new ConcurrentLinkedQueue<>();
     @Inject
     private RemoteStorageService remoteStorageService;
     private KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> storagePort;
     private KeyValueStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData> storagePortListener;
     @Getter
+    private State state = State.NotReady;
+    @Getter
     private ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap;
-    private final Consumer<State> remoteStorageServiceStateListener = this::remoteStorageServiceStateListener;
+    private final Consumer<RemoteStorageService.State> remoteStorageServiceStateListener = this::remoteStorageServiceStateListener;
 
     @Override
     public void startUp() throws Exception {
@@ -41,7 +45,7 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
 
                 Map<GroundItemOwnedByKey, GroundItemOwnedByData> unmodifiableMap = Collections.unmodifiableMap(
                     map);
-                for (Listener listener : listeners) {
+                for (Listener listener : maplisteners) {
                     try {
                         listener.onReadAll(unmodifiableMap);
                     } catch (Exception e) {
@@ -65,7 +69,7 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
                     groundItemOwnedByMap.put(key, value);
                 }
 
-                for (Listener listener : listeners) {
+                for (Listener listener : maplisteners) {
                     try {
                         listener.onUpdate(key, value);
                     } catch (Exception e) {
@@ -83,7 +87,7 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
                     return;
                 }
                 groundItemOwnedByMap.remove(key);
-                for (Listener listener : listeners) {
+                for (Listener listener : maplisteners) {
                     try {
                         listener.onDelete(key);
                     } catch (Exception e) {
@@ -112,12 +116,49 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
         }
     }
 
-    public void addListener(Listener listener) {
-        listeners.add(listener);
+    public void addMapListener(Listener listener) {
+        maplisteners.add(listener);
     }
 
-    public void removeListener(Listener listener) {
-        listeners.remove(listener);
+    public void removeMapListener(Listener listener) {
+        maplisteners.remove(listener);
+    }
+
+    public void addStateListener(Consumer<State> listener) {
+        stateListeners.add(listener);
+    }
+
+    public void removeStateListener(Consumer<State> listener) {
+        stateListeners.remove(listener);
+    }
+
+    public CompletableFuture<Void> waitUntilReady(Duration timeout) {
+
+        return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
+            Consumer<State> listener;
+
+            @Override
+            public boolean isReady() {
+                return state == State.Ready;
+            }
+
+            @Override
+            public void addListener(Runnable notify) {
+                listener = state -> notify.run();
+                stateListeners.add(listener);
+            }
+
+            @Override
+            public void removeListener() {
+                stateListeners.remove(listener);
+                listener = null;
+            }
+
+            @Override
+            public Duration getTimeout() {
+                return timeout;
+            }
+        });
     }
 
     private void tryInitialize() throws Exception {
@@ -136,10 +177,13 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
             }
 
             groundItemOwnedByMap = new ConcurrentHashMap<>(map);
+            setState(State.Ready);
         });
     }
 
     private void deinitialize() throws Exception {
+        setState(State.NotReady);
+
         if (storagePort != null) {
             storagePort.removeListener(storagePortListener);
             storagePort.close();
@@ -178,6 +222,26 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
         }
 
         return storagePort.delete(key);
+    }
+
+    public enum State {
+        NotReady,
+        Ready
+    }
+
+    private void setState(State state) {
+        if (state == this.state) {
+            return;
+        }
+        this.state = state;
+
+        for (Consumer<State> listener : stateListeners) {
+            try {
+                listener.accept(state);
+            } catch (Exception e) {
+                log.error("set state listener GroundItemOwnedByDataProvider error", e);
+            }
+        }
     }
 
     public interface Listener {

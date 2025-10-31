@@ -36,7 +36,6 @@ import net.runelite.api.events.MenuOptionClicked;
 @Slf4j
 public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
-    private ScheduledExecutorService scheduler;
     @Inject
     private Client client;
     @Inject
@@ -44,8 +43,12 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     @Inject
     private BUChatService buChatService;
     @Inject
+    private AccountConfigurationService accountConfigurationService;
+    @Inject
     private GroundItemOwnedByDataProvider groundItemOwnedByDataProvider;
+
     private GroundItemOwnedByDataProvider.Listener groundItemOwnedByDataProviderListener;
+    private ScheduledExecutorService scheduler;
 
     @Inject
     public GroundItemsPolicy(AccountConfigurationService accountConfigurationService,
@@ -71,15 +74,24 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
             }
         };
-        groundItemOwnedByDataProvider.addListener(groundItemOwnedByDataProviderListener);
+        groundItemOwnedByDataProvider.addMapListener(groundItemOwnedByDataProviderListener);
 
         scheduler = Executors.newSingleThreadScheduledExecutor();
-        scheduler.scheduleAtFixedRate(this::cleanupExpiredGroundItems, 0, 10, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this::cleanupExpiredGroundItems, 10, 10, TimeUnit.SECONDS);
+
+        groundItemOwnedByDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
+            if (throwable != null) {
+                log.error("GroundItemOwnedByDataProvider waitUntilReady failed", throwable);
+                return;
+            }
+
+            cleanupExpiredGroundItemsForEveryone();
+        });
     }
 
     @Override
     public void shutDown() throws Exception {
-        groundItemOwnedByDataProvider.removeListener(groundItemOwnedByDataProviderListener);
+        groundItemOwnedByDataProvider.removeMapListener(groundItemOwnedByDataProviderListener);
 
         scheduler.shutdownNow();
     }
@@ -306,6 +318,39 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             }
 
             log.info("Cleaning up expired ground item {}", key);
+
+            groundItemOwnedByDataProvider.delete(key).whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    log.error("Failed to clean up expired ground item {}", key, throwable);
+                }
+            });
+        }
+    }
+
+
+    private void cleanupExpiredGroundItemsForEveryone() {
+        log.info("Cleaning up expired ground items for everyone");
+
+        ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
+        if (map == null || map.isEmpty()) {
+            log.info("Ground item owned by map is empty, nothing to clean up");
+            return;
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        for (Map.Entry<GroundItemOwnedByKey, GroundItemOwnedByData> entry : map.entrySet()) {
+            GroundItemOwnedByKey key = entry.getKey();
+            GroundItemOwnedByData data = entry.getValue();
+            if (data.getDespawnsAt().getValue().isAfter(now)) {
+                continue;
+            }
+
+            log.info(
+                "Cleaning up expired ground item {} for account hash: {}",
+                key,
+                data.getAccountHash()
+            );
 
             groundItemOwnedByDataProvider.delete(key).whenComplete((result, throwable) -> {
                 if (throwable != null) {
