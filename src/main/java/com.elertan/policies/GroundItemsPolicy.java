@@ -100,6 +100,12 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     public void onItemSpawned(ItemSpawned event) {
+        PolicyContext context = createContext();
+        GameRules gameRules = context.getGameRules();
+        if (gameRules == null || !gameRules.isRestrictGroundItems()) {
+            return;
+        }
+
         TileItem tileItem = event.getItem();
         if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF
             && tileItem.getOwnership() != TileItem.OWNERSHIP_GROUP) {
@@ -179,7 +185,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
-            log.warn("Ground item despawned for me but groundItemOwnedByMap is null");
             return;
         }
 

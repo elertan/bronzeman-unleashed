@@ -14,9 +14,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class PolicyBase {
 
-    private final AccountConfigurationService accountConfigurationService;
-    private final GameRulesService gameRulesService;
-    private final PolicyService policyService;
+    protected final AccountConfigurationService accountConfigurationService;
+    protected final GameRulesService gameRulesService;
+    protected final PolicyService policyService;
 
     public PolicyBase(AccountConfigurationService accountConfigurationService,
         GameRulesService gameRulesService, PolicyService policyService) {
