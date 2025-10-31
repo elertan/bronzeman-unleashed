@@ -2,6 +2,7 @@ package com.elertan;
 
 import com.elertan.chat.ChatMessageEventBroadcaster;
 import com.elertan.data.GameRulesDataProvider;
+import com.elertan.data.GroundItemOwnedByDataProvider;
 import com.elertan.data.LastEventDataProvider;
 import com.elertan.data.MembersDataProvider;
 import com.elertan.data.UnlockedItemsDataProvider;
@@ -55,6 +56,8 @@ public final class BUPlugin extends Plugin {
     private UnlockedItemsDataProvider unlockedItemsDataProvider;
     @Inject
     private LastEventDataProvider lastEventDataProvider;
+    @Inject
+    private GroundItemOwnedByDataProvider groundItemOwnedByDataProvider;
     @Inject
     private BUPanelService buPanelService;
     @Inject
@@ -115,6 +118,7 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(gameRulesDataProvider);
         lifecycleDependencies.add(unlockedItemsDataProvider);
         lifecycleDependencies.add(lastEventDataProvider);
+        lifecycleDependencies.add(groundItemOwnedByDataProvider);
         // Services
         lifecycleDependencies.add(buPanelService);
         lifecycleDependencies.add(buOverlayService);

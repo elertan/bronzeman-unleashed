@@ -6,9 +6,13 @@ import com.elertan.BUPluginLifecycle;
 import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
 import com.elertan.PolicyService;
+import com.elertan.data.GroundItemOwnedByDataProvider;
+import com.elertan.models.AccountHash;
 import com.elertan.models.GameRules;
 import com.elertan.models.GroundItemOwnedByKey;
 import com.google.inject.Inject;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
@@ -31,6 +35,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private BUSoundHelper buSoundHelper;
     @Inject
     private BUChatService buChatService;
+    @Inject
+    private GroundItemOwnedByDataProvider groundItemOwnedByDataProvider;
+
+    private GroundItemOwnedByDataProvider.Listener groundItemOwnedByDataProviderListener;
 
     @Inject
     public GroundItemsPolicy(AccountConfigurationService accountConfigurationService,
@@ -40,12 +48,28 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     @Override
     public void startUp() throws Exception {
+        groundItemOwnedByDataProviderListener = new GroundItemOwnedByDataProvider.Listener() {
+            @Override
+            public void onReadAll(Map<GroundItemOwnedByKey, AccountHash> map) {
 
+            }
+
+            @Override
+            public void onUpdate(GroundItemOwnedByKey key, AccountHash value) {
+
+            }
+
+            @Override
+            public void onDelete(GroundItemOwnedByKey key) {
+
+            }
+        };
+        groundItemOwnedByDataProvider.addListener(groundItemOwnedByDataProviderListener);
     }
 
     @Override
     public void shutDown() throws Exception {
-
+        groundItemOwnedByDataProvider.removeListener(groundItemOwnedByDataProviderListener);
     }
 
     public void onItemSpawned(ItemSpawned event) {
@@ -73,10 +97,70 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             .worldY(worldPoint.getY())
             .build();
 
-        log.info("Item spawned owned by me: {}", key);
+        ConcurrentHashMap<GroundItemOwnedByKey, AccountHash> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
+        if (groundItemOwnedByMap == null) {
+            log.warn("Ground item spawned for me but groundItemOwnedByMap is null");
+            return;
+        }
+
+        AccountHash accountHash = groundItemOwnedByMap.get(key);
+        if (accountHash != null && accountHash.getValue() == client.getAccountHash()) {
+            log.info("gi {} already in groundItemOwnedByMap for me, ignore", key);
+            return;
+        }
+        AccountHash newAccountHash = new AccountHash(client.getAccountHash());
+
+        groundItemOwnedByDataProvider.update(key, newAccountHash)
+            .whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    log.error("GroundItemOwnedByDataProvider update failed", throwable);
+                }
+            });
     }
 
     public void onItemDespawned(ItemDespawned event) {
+        TileItem tileItem = event.getItem();
+        if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF
+            && tileItem.getOwnership() != TileItem.OWNERSHIP_GROUP) {
+            // item does not belong to me, ignore it
+            return;
+        }
+        Tile tile = event.getTile();
+
+        WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
+        WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
+
+        int itemId = tileItem.getId();
+        int world = client.getWorld();
+        int plane = worldPoint.getPlane();
+
+        GroundItemOwnedByKey key = GroundItemOwnedByKey.builder()
+            .itemId(itemId)
+            .world(world)
+            .worldViewId(worldView.getId())
+            .plane(plane)
+            .worldX(worldPoint.getX())
+            .worldY(worldPoint.getY())
+            .build();
+
+        ConcurrentHashMap<GroundItemOwnedByKey, AccountHash> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
+        if (groundItemOwnedByMap == null) {
+            log.warn("Ground item despawned for me but groundItemOwnedByMap is null");
+            return;
+        }
+
+        AccountHash accountHash = groundItemOwnedByMap.get(key);
+        if (accountHash == null) {
+            log.info("gi {} already deleted, ignore", key);
+            return;
+        }
+
+        groundItemOwnedByDataProvider.delete(key)
+            .whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    log.error("GroundItemOwnedByDataProvider delete failed", throwable);
+                }
+            });
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {

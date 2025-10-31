@@ -14,7 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 @Builder
 @AllArgsConstructor
 @JsonAdapter(GroundItemOwnedByKey.Adapter.class)
-public class GroundItemOwnedByKey {
+public class GroundItemOwnedByKey implements Comparable<GroundItemOwnedByKey> {
 
     @Getter
     private final int itemId;
@@ -83,6 +83,34 @@ public class GroundItemOwnedByKey {
         sb.append('}');
         return sb.toString();
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        GroundItemOwnedByKey that = (GroundItemOwnedByKey) o;
+        return itemId == that.itemId &&
+            world == that.world &&
+            worldViewId == that.worldViewId &&
+            plane == that.plane &&
+            worldX == that.worldX &&
+            worldY == that.worldY;
+    }
+
+    @Override
+    public int hashCode() {
+        return toKey().hashCode();
+    }
+
+    @Override
+    public int compareTo(GroundItemOwnedByKey o) {
+        return toKey().compareTo(o.toKey());
+    }
+
 
     public static final class Adapter extends TypeAdapter<GroundItemOwnedByKey> {
 

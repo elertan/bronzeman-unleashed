@@ -15,6 +15,13 @@ public class AccountHash {
     @Getter
     private long value;
 
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof AccountHash) {
+            return ((AccountHash) obj).value == value;
+        }
+        return false;
+    }
 
     public static final class Adapter extends TypeAdapter<AccountHash> {
 

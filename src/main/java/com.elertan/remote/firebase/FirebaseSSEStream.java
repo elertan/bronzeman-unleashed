@@ -55,6 +55,8 @@ public class FirebaseSSEStream {
         this.databaseURL = databaseURL;
         this.sseClient = httpClient.newBuilder()
             .retryOnConnectionFailure(true)
+            // Keep the TCP/TLS connection alive and detect dead HTTP/2 sockets after sleep
+            .pingInterval(Duration.ofSeconds(30))
             .readTimeout(Duration.ZERO)
             .build();
     }
@@ -173,6 +175,7 @@ public class FirebaseSSEStream {
             Request request = FirebaseRealtimeDatabase.getRequestBuilder(url)
                 .header("Accept", "text/event-stream")
                 .header("Connection", "keep-alive")
+                .header("Cache-Control", "no-cache")
                 .build();
 
             try {
@@ -184,6 +187,8 @@ public class FirebaseSSEStream {
                         if (!isRunning) {
                             break;
                         }
+                        // Drop any potentially stale sockets after sleep/wake
+                        sseClient.connectionPool().evictAll();
                         sleepWithJitterSeconds(backoffSeconds);
                         backoffSeconds = Math.min(backoffSeconds * 2, maxBackoffSeconds);
                         continue;
@@ -200,6 +205,7 @@ public class FirebaseSSEStream {
                         if (!isRunning) {
                             break;
                         }
+                        sseClient.connectionPool().evictAll();
                         sleepWithJitterSeconds(backoffSeconds);
                         backoffSeconds = Math.min(backoffSeconds * 2, maxBackoffSeconds);
                         continue;
@@ -220,6 +226,8 @@ public class FirebaseSSEStream {
                     break;
                 }
                 log.warn("Firebase stream error. Will retry.", e);
+                // After sleep, TLS sockets in the pool may be invalid. Clear them.
+                sseClient.connectionPool().evictAll();
                 sleepWithJitterSeconds(backoffSeconds);
                 backoffSeconds = Math.min(backoffSeconds * 2, maxBackoffSeconds);
             } finally {
@@ -272,6 +280,8 @@ public class FirebaseSSEStream {
                     if (call != null) {
                         call.cancel();
                     }
+                    // Ensure we do not reuse a stale connection after system sleep
+                    sseClient.connectionPool().evictAll();
                     break; // exit read loop to allow outer loop to reconnect
                 }
 

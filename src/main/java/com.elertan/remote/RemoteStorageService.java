@@ -4,13 +4,16 @@ import com.elertan.AccountConfigurationService;
 import com.elertan.BUPluginLifecycle;
 import com.elertan.event.BUEvent;
 import com.elertan.models.AccountConfiguration;
+import com.elertan.models.AccountHash;
 import com.elertan.models.GameRules;
+import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.Member;
 import com.elertan.models.UnlockedItem;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabase;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.remote.firebase.FirebaseSSEStream;
 import com.elertan.remote.firebase.storageAdapters.GameRulesFirebaseObjectStorageAdapter;
+import com.elertan.remote.firebase.storageAdapters.GroundItemOwnedByKeyValueStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.LastEventFirebaseObjectStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.MembersFirebaseKeyValueStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.UnlockedItemsFirebaseKeyValueStorageAdapter;
@@ -45,6 +48,8 @@ public class RemoteStorageService implements BUPluginLifecycle {
     private ObjectStoragePort<GameRules> gameRulesStoragePort;
     @Getter
     private ObjectStoragePort<BUEvent> lastEventStoragePort;
+    @Getter
+    private KeyValueStoragePort<GroundItemOwnedByKey, AccountHash> groundItemOwnedByStoragePort;
     private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
 
     @Override
@@ -103,6 +108,10 @@ public class RemoteStorageService implements BUPluginLifecycle {
     private void clearCurrentDataport() throws Exception {
         setState(State.NotReady);
 
+        if (groundItemOwnedByStoragePort != null) {
+            groundItemOwnedByStoragePort.close();
+            groundItemOwnedByStoragePort = null;
+        }
         if (lastEventStoragePort != null) {
             lastEventStoragePort.close();
             lastEventStoragePort = null;
@@ -133,6 +142,10 @@ public class RemoteStorageService implements BUPluginLifecycle {
     private void configureFromFirebaseRealtimeDatabase(FirebaseRealtimeDatabaseURL url) {
         firebaseRealtimeDatabase = new FirebaseRealtimeDatabase(httpClient, gson, url);
 
+        groundItemOwnedByStoragePort = new GroundItemOwnedByKeyValueStorageAdapter(
+            firebaseRealtimeDatabase,
+            gson
+        );
         lastEventStoragePort = new LastEventFirebaseObjectStorageAdapter(
             firebaseRealtimeDatabase,
             gson
