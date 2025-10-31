@@ -29,31 +29,36 @@ public class GroundItemOwnedByKey {
     @Getter
     private final int worldY;
 
-    public static GroundItemOwnedByKey fromKey(String key) throws IllegalArgumentException {
-        String[] parts = key.split("_");
-        String itemIdStr = parts[0];
-        String worldStr = parts[1];
-        String worldViewIdStr = parts[2];
-        String planeStr = parts[3];
-        String worldXStr = parts[4];
-        String worldYStr = parts[5];
+    public static GroundItemOwnedByKey fromKey(String key) {
+        if (key == null) {
+            throw new IllegalArgumentException("Key is null");
+        }
+        String k = key;
+        if (k.startsWith("{") && k.endsWith("}")) {
+            k = k.substring(1, k.length() - 1);
+        }
+        String[] parts = k.split("_", -1);
+        if (parts.length != 6) {
+            throw new IllegalArgumentException("Invalid key format: " + key);
+        }
         try {
-            int itemId = Integer.parseInt(itemIdStr);
-            int world = Integer.parseInt(worldStr);
-            int worldViewId = Integer.parseInt(worldViewIdStr);
-            int plane = Integer.parseInt(planeStr);
-            int worldX = Integer.parseInt(worldXStr);
-            int worldY = Integer.parseInt(worldYStr);
+            int itemId = Integer.parseInt(parts[0]);
+            int world = Integer.parseInt(parts[1]);
+            int worldViewId = Integer.parseInt(parts[2]);
+            int plane = Integer.parseInt(parts[3]);
+            int worldX = Integer.parseInt(parts[4]);
+            int worldY = Integer.parseInt(parts[5]);
             return new GroundItemOwnedByKey(itemId, world, worldViewId, plane, worldX, worldY);
         } catch (NumberFormatException e) {
             log.error("Invalid key format: {}", key, e);
-            throw new IllegalArgumentException("Invalid key format: " + key);
+            throw new IllegalArgumentException("Invalid key format: " + key, e);
         }
     }
 
     public String toKey() {
+        // Emit the raw form used by fromKey(); add braces only for display if desired
         return String.format(
-            "{%d_%d_%d_%d_%d_%d}",
+            "%d_%d_%d_%d_%d_%d",
             itemId,
             world,
             worldViewId,
@@ -87,15 +92,16 @@ public class GroundItemOwnedByKey {
                 out.nullValue();
                 return;
             }
-            out.value(val.toKey());
+            out.value(val.toKey()); // raw key only
         }
 
         @Override
         public GroundItemOwnedByKey read(JsonReader in) throws IOException {
-            String text = in.nextString();
-            if (text == null) {
+            if (in.peek() == com.google.gson.stream.JsonToken.NULL) {
+                in.nextNull();
                 return null;
             }
+            String text = in.nextString();
             return GroundItemOwnedByKey.fromKey(text);
         }
     }
