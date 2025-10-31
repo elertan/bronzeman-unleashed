@@ -216,15 +216,20 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     private void enforceItemTakePolicy(MenuOptionClicked event) {
         MenuAction menuAction = event.getMenuAction();
+        String menuOption = event.getMenuOption();
+        log.info("Menu option clicked: {} - ({})", menuOption, menuAction);
         boolean isGroundItemMenuAction =
             menuAction.ordinal() >= MenuAction.GROUND_ITEM_FIRST_OPTION.ordinal()
                 && menuAction.ordinal() <= MenuAction.GROUND_ITEM_FIFTH_OPTION.ordinal();
-        if (!isGroundItemMenuAction) {
+        boolean isWidgetTargetOnGroundItemAction =
+            menuAction.ordinal() == MenuAction.WIDGET_TARGET_ON_GROUND_ITEM.ordinal();
+        if (!isGroundItemMenuAction && !isWidgetTargetOnGroundItemAction) {
+            log.info("Not a ground item menu action nor is widget target, ignore");
             return;
         }
 
-        String menuOption = event.getMenuOption();
-        if (!menuOption.equals("Take")) {
+        if (!menuOption.equals("Take") && !menuOption.equals("Cast")) {
+            log.info("Not a take or cast menu option, ignore");
             return;
         }
         int itemId = event.getId();
@@ -286,9 +291,15 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
 
+        log.info(">>>>>>>>>>>>10");
         event.consume();
-        buChatService.sendMessage(
-            "You're a Bronzeman with ground item restrictions, so you can't take that.");
+        if (isWidgetTargetOnGroundItemAction) {
+            buChatService.sendMessage(
+                "You're a Bronzeman with ground item restrictions, so you can't cast that spell on that.");
+        } else {
+            buChatService.sendMessage(
+                "You're a Bronzeman with ground item restrictions, so you can't take that.");
+        }
     }
 
     private GetClickedTileItemOutput getClickedTileItem(MenuOptionClicked event) {
