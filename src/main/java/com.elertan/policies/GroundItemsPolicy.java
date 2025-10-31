@@ -217,19 +217,16 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private void enforceItemTakePolicy(MenuOptionClicked event) {
         MenuAction menuAction = event.getMenuAction();
         String menuOption = event.getMenuOption();
-        log.info("Menu option clicked: {} - ({})", menuOption, menuAction);
         boolean isGroundItemMenuAction =
             menuAction.ordinal() >= MenuAction.GROUND_ITEM_FIRST_OPTION.ordinal()
                 && menuAction.ordinal() <= MenuAction.GROUND_ITEM_FIFTH_OPTION.ordinal();
         boolean isWidgetTargetOnGroundItemAction =
             menuAction.ordinal() == MenuAction.WIDGET_TARGET_ON_GROUND_ITEM.ordinal();
         if (!isGroundItemMenuAction && !isWidgetTargetOnGroundItemAction) {
-            log.info("Not a ground item menu action nor is widget target, ignore");
             return;
         }
 
         if (!menuOption.equals("Take") && !menuOption.equals("Cast")) {
-            log.info("Not a take or cast menu option, ignore");
             return;
         }
         int itemId = event.getId();
@@ -254,11 +251,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         int ownership = tileItem.getOwnership();
         if (ownership == TileItem.OWNERSHIP_NONE) {
-            log.info("Item '{}' is not owned by anyone, allow take", itemComposition.getName());
+            log.debug("Item '{}' is not owned by anyone, allow take", itemComposition.getName());
             return;
         }
         if (ownership == TileItem.OWNERSHIP_SELF) {
-            log.info("Item '{}' is owned by me, allow take", itemComposition.getName());
+            log.debug("Item '{}' is owned by me, allow take", itemComposition.getName());
             return;
         }
 
