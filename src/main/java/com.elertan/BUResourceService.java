@@ -22,28 +22,41 @@ import net.runelite.client.util.ImageUtil;
 @Singleton
 public class BUResourceService implements BUPluginLifecycle {
 
-    private static final String ICON_FILE_PATH = "/bu-icon.png";
-    private static final String CHECKMARK_ICON_FILE_PATH = "/checkmark-icon.png";
-    private static final String CONFIGURE_ICON_FILE_PATH = "/configure-icon.png";
-    private static final String LOADING_SPINNER_FILE_PATH = "/loading-spinner.gif";
+    private static final String ICON_FILE_PATH = "/icons/bu-icon.png";
+    private static final String CHECKMARK_ICON_FILE_PATH = "/icons/bu-checkmark-icon.png";
+    private static final String CONFIGURE_ICON_FILE_PATH = "/icons/bu-configure-icon.png";
+    private static final String LOADING_SPINNER_FILE_PATH = "/icons/bu-loading-spinner.gif";
+
+//    static {
+//        URL u1 = BUPlugin.class.getResource(ICON_FILE_PATH);
+//        URL u2 = BUPlugin.class.getResource(CHECKMARK_ICON_FILE_PATH);
+//        URL u3 = BUPlugin.class.getResource(CONFIGURE_ICON_FILE_PATH);
+//        URL u4 = BUPlugin.class.getResource(LOADING_SPINNER_FILE_PATH);
+//        log.info("BU icons resolved: icon={} check={} cfg={} spin={}", u1, u2, u3, u4);
+//        if (u1 == null || u2 == null || u3 == null || u4 == null) {
+//            throw new IllegalStateException(
+//                "BUResourceService: icon resource not found relative to com/elertan");
+//        }
+//    }
+
     @Getter
     private final BufferedImage iconBufferedImage = ImageUtil.loadImageResource(
-        BUResourceService.class,
+        BUPlugin.class,
         ICON_FILE_PATH
     );
     @Getter
     private final BufferedImage checkmarkIconBufferedImage = ImageUtil.loadImageResource(
-        BUResourceService.class,
+        BUPlugin.class,
         CHECKMARK_ICON_FILE_PATH
     );
     @Getter
     private final BufferedImage configureIconBufferedImage = ImageUtil.loadImageResource(
-        BUResourceService.class,
+        BUPlugin.class,
         CONFIGURE_ICON_FILE_PATH
     );
     @Getter
     private final ImageIcon loadingSpinnerImageIcon = new ImageIcon(Objects.requireNonNull(
-        BUResourceService.class.getResource(
+        BUPlugin.class.getResource(
             LOADING_SPINNER_FILE_PATH)));
     private final ConcurrentHashMap<Integer, Integer> itemImageModIconIdCache = new ConcurrentHashMap<>();
     @Inject
