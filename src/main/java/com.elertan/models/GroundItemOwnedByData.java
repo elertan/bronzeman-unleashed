@@ -10,14 +10,13 @@ import lombok.Setter;
 @AllArgsConstructor
 public class GroundItemOwnedByData {
 
-    @Setter
     @Getter
+    @Setter
     @JsonAdapter(AccountHashJsonAdapter.class)
     private long accountHash;
 
-    @Setter
     @Getter
+    @Setter
     @NonNull
     private ISOOffsetDateTime despawnsAt;
-
 }
