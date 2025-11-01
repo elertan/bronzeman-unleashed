@@ -95,7 +95,7 @@ public interface BUPluginConfig extends Config {
 
     @ConfigItem(keyName = "chatPlayerNameColor", name = "Player name color", description = "The color used for a player name in the chat", section = chatSection)
     default Color chatPlayerNameColor() {
-        return new Color(105, 116, 242);
+        return new Color(124, 133, 247);
     }
 
     @ConfigItem(keyName = "chatItemNameColor", name = "Item name color", description = "The color used for a item name in the chat", section = chatSection)
@@ -110,7 +110,7 @@ public interface BUPluginConfig extends Config {
 
     @ConfigItem(keyName = "chatNPCNameColor", name = "NPC name color", description = "The color used for a NPC in the chat", section = chatSection)
     default Color chatNPCNameColor() {
-        return new Color(25, 157, 40);
+        return new Color(52, 165, 65);
     }
 
     @ConfigItem(keyName = "combatTaskColor", name = "Combat task color", description = "The color used for a combat task in the chat", section = chatSection)
