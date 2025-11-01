@@ -335,8 +335,8 @@ public class GameRulesEditor extends JPanel {
         );
         panel.add(
             createCheckboxInput(
-                "Prevent POH usage",
-                "Prevent using a POH that isn't yours or a group member's",
+                "Restrict POH usage",
+                "Restrict using a POH that isn't yours or a group member's",
                 preventPlayerOwnedHouseCheckbox
             ), gbc
         );

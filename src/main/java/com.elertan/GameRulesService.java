@@ -197,7 +197,7 @@ public class GameRulesService implements BUPluginLifecycle {
         }
         if (oldGameRules.isPreventPlayedOwnedHouse() != newGameRules.isPreventPlayedOwnedHouse()) {
             differences.put(
-                "Prevent played owned house",
+                "Restrict played owned house",
                 booleanFormatter.apply(newGameRules.isPreventPlayedOwnedHouse())
             );
         }
