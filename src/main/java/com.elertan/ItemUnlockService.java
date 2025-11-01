@@ -99,6 +99,11 @@ public class ItemUnlockService implements BUPluginLifecycle {
         put("Clue scroll (hard)", ItemID.TRAIL_CLUE_HARD_EMOTE001);
         put("Clue scroll (elite)", ItemID.TRAIL_CLUE_ELITE_MUSIC001);
         put("Clue scroll (master)", ItemID.TRAIL_CLUE_MASTER);
+
+        // Same for clue challenge scrolls
+        put("Challenge scroll (medium)", ItemID.TRAIL_CLUE_MEDIUM_ANAGRAM001_CHALLENGE);
+        put("Challenge scroll (hard)", ItemID.TRAIL_CLUE_HARD_ANAGRAM001_CHALLENGE);
+        put("Challenge scroll (elite)", ItemID.TRAIL_ELITE_SKILL_CHALLENGE);
     }};
     private static final Set<Integer> INCLUDED_CONTAINER_IDS = ImmutableSet.of(
         InventoryID.INV, // inventory
