@@ -39,6 +39,11 @@ public class GameRules {
     @Setter
     private boolean preventGrandExchangeBuyOffers;
 
+    // Played Owned House
+    @Getter
+    @Setter
+    private boolean preventPlayedOwnedHouse;
+
     // Notifications
     @Getter
     @Setter
@@ -56,8 +61,11 @@ public class GameRules {
     public GameRules(Long lastUpdatedByAccountHash, ISOOffsetDateTime lastUpdatedAt,
         boolean onlyForTradeableItems,
         boolean restrictGroundItems,
-        boolean preventTradeOutsideGroup, boolean preventTradeLockedItems,
-        boolean preventGrandExchangeBuyOffers, boolean shareAchievementNotifications,
+        boolean preventTradeOutsideGroup,
+        boolean preventTradeLockedItems,
+        boolean preventGrandExchangeBuyOffers,
+        boolean preventPlayedOwnedHouse,
+        boolean shareAchievementNotifications,
         Integer valuableLootNotificationThreshold, String partyPassword) {
         this.lastUpdatedByAccountHash = lastUpdatedByAccountHash;
         this.lastUpdatedAt = lastUpdatedAt;
@@ -66,6 +74,7 @@ public class GameRules {
         this.preventTradeOutsideGroup = preventTradeOutsideGroup;
         this.preventTradeLockedItems = preventTradeLockedItems;
         this.preventGrandExchangeBuyOffers = preventGrandExchangeBuyOffers;
+        this.preventPlayedOwnedHouse = preventPlayedOwnedHouse;
         this.shareAchievementNotifications = shareAchievementNotifications;
         this.valuableLootNotificationThreshold = valuableLootNotificationThreshold;
         this.partyPassword = partyPassword;
@@ -76,6 +85,7 @@ public class GameRules {
         return new GameRules(
             lastUpdatedByAccountHash,
             lastUpdatedAt,
+            true,
             true,
             true,
             true,
@@ -96,6 +106,7 @@ public class GameRules {
             + ", preventTradeOutsideGroup=" + preventTradeOutsideGroup +
             ", preventTradeLockedItems=" + preventTradeLockedItems
             + ", preventGrandExchangeBuyOffers=" + preventGrandExchangeBuyOffers
+            + ", preventPlayedOwnedHouse=" + preventPlayedOwnedHouse
             + ", shareAchievementNotifications=" + shareAchievementNotifications
             + ", valuableLootNotificationThreshold=" + valuableLootNotificationThreshold
             + ", partyPassword='" + partyPassword + '\'' + '}';
