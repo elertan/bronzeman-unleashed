@@ -362,7 +362,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 continue;
             }
 
-            log.info("Cleaning up expired ground item {}", key);
+            log.debug("Cleaning up expired ground item {}", key);
 
             groundItemOwnedByDataProvider.delete(key).whenComplete((result, throwable) -> {
                 if (throwable != null) {
@@ -373,11 +373,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     private void cleanupExpiredGroundItemsForEveryone() {
-        log.info("Cleaning up expired ground items for everyone");
+        log.debug("Cleaning up expired ground items for everyone");
 
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (map == null || map.isEmpty()) {
-            log.info("Ground item owned by map is empty, nothing to clean up");
+            log.debug("Ground item owned by map is empty, nothing to clean up");
             return;
         }
 
@@ -390,7 +390,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 continue;
             }
 
-            log.info(
+            log.debug(
                 "Cleaning up expired ground item {} for account hash: {}",
                 key,
                 data.getAccountHash()
