@@ -96,7 +96,6 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
         private ShopmainOverlay() {
             setPosition(OverlayPosition.DYNAMIC);
             setLayer(OverlayLayer.ABOVE_WIDGETS);
-//            setPriority(0);
         }
 
         @Override
