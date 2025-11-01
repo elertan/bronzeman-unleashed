@@ -27,6 +27,7 @@ import net.runelite.api.events.ItemSpawned;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
@@ -257,13 +258,11 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded event) {
         shopPolicy.onWidgetLoaded(event);
-        playerOwnedHousePolicy.onWidgetLoaded(event);
     }
 
     @Subscribe
     public void onWidgetClosed(WidgetClosed event) {
         shopPolicy.onWidgetClosed(event);
-        playerOwnedHousePolicy.onWidgetClosed(event);
     }
 
     @Subscribe
@@ -274,5 +273,10 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onItemDespawned(ItemDespawned event) {
         groundItemsPolicy.onItemDespawned(event);
+    }
+
+    @Subscribe
+    public void onScriptPreFired(ScriptPreFired event) {
+        playerOwnedHousePolicy.onScriptPreFired(event);
     }
 }

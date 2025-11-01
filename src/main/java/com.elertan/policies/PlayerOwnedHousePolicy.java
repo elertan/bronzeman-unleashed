@@ -14,21 +14,27 @@ import com.elertan.models.Member;
 import com.elertan.utils.TextUtils;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import java.awt.event.KeyEvent;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.ScriptEvent;
 import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.api.events.WidgetClosed;
-import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.input.KeyListener;
+import net.runelite.client.input.KeyManager;
 
 @Slf4j
 @Singleton
 public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecycle {
+
+    private static final int CHATBOX_INPUT_SCRIPT_ID = 112;
+    private static final int CHATBOX_INPUT_CLOSE_SCRIPT_ID = 138;
 
     @Inject
     private Client client;
@@ -42,9 +48,12 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
     private ChatMessageProvider chatMessageProvider;
     @Inject
     private BUSoundHelper buSoundHelper;
-    private volatile boolean shouldRecheckFriendsHouseInput = false;
-    private String lastFriendsHouseEnteredName = null;
+    @Inject
+    private KeyManager keyManager;
+
     private volatile boolean isStarted = false;
+    private volatile boolean isReadFriendsHouseChatboxInputLoopRunning = false;
+    private String lastFriendsHouseEnteredName = null;
 
     @Inject
     public PlayerOwnedHousePolicy(AccountConfigurationService accountConfigurationService,
@@ -55,6 +64,47 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
     @Override
     public void startUp() throws Exception {
         isStarted = true;
+
+        keyManager.registerKeyListener(new KeyListener() {
+            @Override
+            public void keyTyped(KeyEvent e) {
+                if (e.getKeyChar() == '\n') {
+                    if (lastFriendsHouseEnteredName != null
+                        && !lastFriendsHouseEnteredName.isEmpty()) {
+                        e.consume();
+                    }
+                }
+            }
+
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    if (lastFriendsHouseEnteredName != null
+                        && !lastFriendsHouseEnteredName.isEmpty()) {
+                        PolicyContext policyContext = createContext();
+                        if (policyContext.isMustEnforceStrictPolicies()) {
+                            enforcePolicyEnterKeyPressedOnFriendsHouseName(e);
+                            return;
+                        }
+                        GameRules gameRules = policyContext.getGameRules();
+                        if (gameRules == null || !gameRules.isPreventPlayedOwnedHouse()) {
+                            return;
+                        }
+                        enforcePolicyEnterKeyPressedOnFriendsHouseName(e);
+                    }
+                }
+            }
+
+            @Override
+            public void keyReleased(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    if (lastFriendsHouseEnteredName != null
+                        && !lastFriendsHouseEnteredName.isEmpty()) {
+                        e.consume();
+                    }
+                }
+            }
+        });
     }
 
     @Override
@@ -107,24 +157,11 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
             log.error("Poh name widget text is null played owned house policy");
             return;
         }
-        String playerName = TextUtils.sanitizePlayerName(pohNameWidgetText);
-        Member member;
-        try {
-            member = memberService.getMemberByName(playerName);
-        } catch (Exception ex) {
-            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT));
+
+        boolean couldEnter = tryEnterHouseForPlayer(pohNameWidgetText);
+        if (!couldEnter) {
             event.consume();
-            buSoundHelper.playDisabledSound();
-            return;
         }
-
-        if (member != null) {
-            return;
-        }
-
-        buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.POH_ENTER_RESTRICTION));
-        event.consume();
-        buSoundHelper.playDisabledSound();
     }
 
     private void enforcePolicyViewHouseMenuOptionClicked(MenuOptionClicked event) {
@@ -183,8 +220,6 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
         return mesTextWidgetText.equalsIgnoreCase("enter name:");
     }
 
-    private volatile boolean isReadFriendsHouseChatboxInputLoopRunning = false;
-
     private void startReadFriendsHouseChatboxInputLoop() {
         if (isReadFriendsHouseChatboxInputLoopRunning) {
             return;
@@ -203,44 +238,89 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
                 isReadFriendsHouseChatboxInputLoopRunning = false;
                 return;
             }
-            Widget mesText2Widget = client.getWidget(InterfaceID.Chatbox.MES_TEXT2);
-            String mesText2WidgetText = mesText2Widget.getText();
-            // Remove '*' from input
-            String enteredName = mesText2WidgetText.replace("*", "");
-            if (Objects.equals(enteredName, lastFriendsHouseEnteredName)) {
-                clientThread.invokeLater(monitorLoopRef.get());
-                return;
-            }
-            lastFriendsHouseEnteredName = enteredName;
-            log.info("Friend's house entered name: {}", enteredName);
-
             clientThread.invokeLater(monitorLoopRef.get());
         };
         monitorLoopRef.set(monitorLoop);
         clientThread.invokeLater(monitorLoopRef.get());
     }
 
-    public void onWidgetLoaded(WidgetLoaded event) {
-//        int groupId = event.getGroupId();
-//        if (groupId != InterfaceID.CHATBOX) {
-//            return;
-//        }
-//        log.info("Chatbox loaded");
-//        Widget mesTextWidget = client.getWidget(InterfaceID.Chatbox.MES_TEXT);
-//        if (mesTextWidget != null) {
-//            log.info("mes text: {}", mesTextWidget.getText());
-//        }
-//        Widget mesText2Widget = client.getWidget(InterfaceID.Chatbox.MES_TEXT2);
-//        if (mesText2Widget != null) {
-//            log.info("mes text2: {}", mesText2Widget.getText());
-//        }
+    public void onScriptPreFired(ScriptPreFired event) {
+        if (event.getScriptId() == CHATBOX_INPUT_SCRIPT_ID) {
+            // 112 is chatbox enter text
+
+            ScriptEvent scriptEvent = event.getScriptEvent();
+            int typedChar = scriptEvent.getTypedKeyChar();
+            if (typedChar == 0) {
+                return;
+            }
+            if (typedChar == 8) {
+                // 'Backspace'
+                if (lastFriendsHouseEnteredName != null && !lastFriendsHouseEnteredName.isEmpty()) {
+                    String newName = lastFriendsHouseEnteredName.substring(
+                        0,
+                        lastFriendsHouseEnteredName.length() - 1
+                    );
+                    if (newName.isEmpty()) {
+                        newName = null;
+                    }
+                    setLastFriendsHouseEnteredName(newName);
+                }
+                return;
+            }
+            if (typedChar == 10) {
+                // 'Enter'
+                if (lastFriendsHouseEnteredName == null || lastFriendsHouseEnteredName.isEmpty()) {
+                    return;
+                }
+                log.info("submitted name: {}", lastFriendsHouseEnteredName);
+                return;
+            }
+            char typedCharChar = (char) typedChar;
+            String newName =
+                lastFriendsHouseEnteredName == null ? "" : lastFriendsHouseEnteredName;
+            newName += typedCharChar;
+            setLastFriendsHouseEnteredName(newName);
+        } else if (event.getScriptId() == CHATBOX_INPUT_CLOSE_SCRIPT_ID) {
+            isReadFriendsHouseChatboxInputLoopRunning = false;
+
+            log.info("chatbox close");
+            lastFriendsHouseEnteredName = null;
+        }
     }
 
-    public void onWidgetClosed(WidgetClosed event) {
-//        int groupId = event.getGroupId();
-//        if (groupId != InterfaceID.CHATBOX) {
-//            return;
-//        }
-//        log.info("Chatbox close");
+    private void setLastFriendsHouseEnteredName(String name) {
+        if (Objects.equals(lastFriendsHouseEnteredName, name)) {
+            return;
+        }
+        lastFriendsHouseEnteredName = name;
+    }
+
+    private void enforcePolicyEnterKeyPressedOnFriendsHouseName(KeyEvent e) {
+        boolean couldEnter = tryEnterHouseForPlayer(lastFriendsHouseEnteredName);
+        if (!couldEnter) {
+            e.consume();
+            clientThread.invoke(() -> client.runScript(
+                CHATBOX_INPUT_CLOSE_SCRIPT_ID));
+        }
+    }
+
+    private boolean tryEnterHouseForPlayer(String inputName) {
+        String playerName = TextUtils.sanitizePlayerName(inputName);
+        Member member;
+        try {
+            member = memberService.getMemberByName(playerName);
+        } catch (Exception ex) {
+            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT));
+            buSoundHelper.playDisabledSound();
+            return false;
+        }
+
+        if (member == null) {
+            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.POH_ENTER_RESTRICTION));
+            buSoundHelper.playDisabledSound();
+            return false;
+        }
+
+        return true;
     }
 }

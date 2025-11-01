@@ -3,6 +3,7 @@ package com.elertan;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Client;
+import net.runelite.client.callback.ClientThread;
 
 @Singleton
 public class BUSoundHelper {
@@ -11,8 +12,12 @@ public class BUSoundHelper {
 
     @Inject
     private Client client;
+    @Inject
+    private ClientThread clientThread;
 
     public void playDisabledSound() {
-        client.playSoundEffect(DISABLED_SOUND_EFFECT_ID);
+        clientThread.invoke(() -> {
+            client.playSoundEffect(DISABLED_SOUND_EFFECT_ID);
+        });
     }
 }

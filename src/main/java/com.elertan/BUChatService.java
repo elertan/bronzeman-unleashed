@@ -158,7 +158,7 @@ public class BUChatService implements BUPluginLifecycle {
                     return;
                 }
 
-                clientThread.invokeLater(() -> {
+                clientThread.invoke(() -> {
                     String messageChatIcon = getMessageChatIconTag();
 
                     if (messageChatIcon == null) {
