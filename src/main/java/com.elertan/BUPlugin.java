@@ -257,11 +257,13 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded event) {
         shopPolicy.onWidgetLoaded(event);
+        playerOwnedHousePolicy.onWidgetLoaded(event);
     }
 
     @Subscribe
     public void onWidgetClosed(WidgetClosed event) {
         shopPolicy.onWidgetClosed(event);
+        playerOwnedHousePolicy.onWidgetClosed(event);
     }
 
     @Subscribe
