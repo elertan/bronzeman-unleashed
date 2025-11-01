@@ -7,6 +7,7 @@ import com.elertan.ui.Property;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
@@ -17,6 +18,8 @@ import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.ScrollPaneConstants;
 
 public class ConfigScreen extends JPanel implements AutoCloseable {
 
@@ -60,8 +63,22 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         gbc.gridy++;
 
         gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.fill = GridBagConstraints.BOTH;
         GameRulesEditor gameRulesEditor = gameRulesEditorFactory.create(gameRulesEditorViewModel);
-        add(gameRulesEditor, gbc);
+
+        JPanel viewportWrapper = new JPanel(new BorderLayout());
+        viewportWrapper.add(gameRulesEditor, BorderLayout.NORTH);
+
+        JScrollPane scrollPane = new JScrollPane(viewportWrapper);
+        scrollPane.setBorder(null);
+        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+
+        add(scrollPane, gbc);
+
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weighty = 0.0;
         gbc.gridy++;
 
         JLabel errorMessageLabel = new JLabel();
@@ -112,9 +129,6 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         add(updateGameRulesButton, gbc);
         gbc.gridy++;
 
-        gbc.weighty = 1.0;
-        gbc.fill = GridBagConstraints.BOTH;
-        add(Box.createVerticalGlue(), gbc);
     }
 
     @Override
