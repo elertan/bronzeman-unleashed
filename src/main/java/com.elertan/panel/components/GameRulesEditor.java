@@ -165,20 +165,20 @@ public class GameRulesEditor extends JPanel {
         gbc.weightx = 1.0;
         gbc.insets = new Insets(0, 0, 5, 0);
 
-        JCheckBox onlyForTradableItemsCheckBox = new JCheckBox();
+        JCheckBox onlyForTradeableItemsCheckBox = new JCheckBox();
         Bindings.bindSelected(
-            onlyForTradableItemsCheckBox,
+            onlyForTradeableItemsCheckBox,
             viewModel.onlyForTradeableItemsProperty
         );
         Bindings.bindEnabled(
-            onlyForTradableItemsCheckBox,
+            onlyForTradeableItemsCheckBox,
             viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
         );
         panel.add(
             createCheckboxInput(
-                "Only for tradable items",
-                "Whether to only unlock items that are tradable (reduces a lot of clutter for e.g. quest items)",
-                onlyForTradableItemsCheckBox
+                "Only for tradeable items",
+                "Whether to only unlock items that are tradeable (reduces a lot of clutter for e.g. quest items)",
+                onlyForTradeableItemsCheckBox
             ), gbc
         );
         gbc.gridy++;
@@ -249,22 +249,23 @@ public class GameRulesEditor extends JPanel {
         );
         gbc.gridy++;
 
-        JCheckBox preventTradeLockedItemsCheckBox = new JCheckBox();
-        Bindings.bindSelected(
-            preventTradeLockedItemsCheckBox,
-            viewModel.preventTradeLockedItemsProperty
-        );
-        Bindings.bindEnabled(
-            preventTradeLockedItemsCheckBox,
-            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
-        );
-        panel.add(
-            createCheckboxInput(
-                "Prevent locked items",
-                "Whether to prevent trading when the other player offers item(s) that are still locked",
-                preventTradeLockedItemsCheckBox
-            ), gbc
-        );
+        // Temporarily disabled, not implemented yet
+//        JCheckBox preventTradeLockedItemsCheckBox = new JCheckBox();
+//        Bindings.bindSelected(
+//            preventTradeLockedItemsCheckBox,
+//            viewModel.preventTradeLockedItemsProperty
+//        );
+//        Bindings.bindEnabled(
+//            preventTradeLockedItemsCheckBox,
+//            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
+//        );
+//        panel.add(
+//            createCheckboxInput(
+//                "Prevent locked items",
+//                "Whether to prevent trading when the other player offers item(s) that are still locked",
+//                preventTradeLockedItemsCheckBox
+//            ), gbc
+//        );
 
         return panel;
     }
