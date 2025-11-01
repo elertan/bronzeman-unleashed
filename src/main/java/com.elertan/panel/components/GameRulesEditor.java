@@ -81,6 +81,16 @@ public class GameRulesEditor extends JPanel {
 
         add(
             createSection(
+                "Player Owned House (POH)",
+                "Player Owned House settings",
+                createPlayerOwnedHousePanel(),
+                true
+            ), gbc
+        );
+        gbc.gridy++;
+
+        add(
+            createSection(
                 "Notifications",
                 "Notification settings",
                 createNotificationsPanel(),
@@ -296,6 +306,38 @@ public class GameRulesEditor extends JPanel {
                 "Prevent buy offers",
                 "Whether to prevent buying items on the Grand Exchange that are still locked",
                 preventGrandExchangeBuyOffersCheckbox
+            ), gbc
+        );
+
+        return panel;
+    }
+
+    private JPanel createPlayerOwnedHousePanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setOpaque(false);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        gbc.insets = new Insets(0, 0, 5, 0);
+
+        JCheckBox preventPlayerOwnedHouseCheckbox = new JCheckBox();
+        Bindings.bindSelected(
+            preventPlayerOwnedHouseCheckbox,
+            viewModel.preventPlayedOwnedHousePropery
+        );
+        Bindings.bindEnabled(
+            preventPlayerOwnedHouseCheckbox,
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
+        );
+        panel.add(
+            createCheckboxInput(
+                "Prevent POH usage",
+                "Prevent using a POH that isn't yours or a group member's",
+                preventPlayerOwnedHouseCheckbox
             ), gbc
         );
 

@@ -245,6 +245,7 @@ public final class BUPlugin extends Plugin {
     public void onMenuOptionClicked(MenuOptionClicked event) {
         tradePolicy.onMenuOptionClicked(event);
         groundItemsPolicy.onMenuOptionClicked(event);
+        playerOwnedHousePolicy.onMenuOptionClicked(event);
     }
 
     @Subscribe

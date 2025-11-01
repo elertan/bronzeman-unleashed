@@ -268,14 +268,14 @@ public class AchievementDiaryService implements BUPluginLifecycle {
         if (previousCompleted == completed) {
             return;
         }
-        log.info("{} {} diary value changed to {}", info.tier, info.area, completed);
+        log.debug("{} {} diary value changed to {}", info.tier, info.area, completed);
         diaryCompletedMap.put(varbitId, completed);
 
         long minTicksRequired = 8;
         boolean hasPassedVarbitInitializationWindow =
             client.getTickCount() - gameTickSinceLogin >= minTicksRequired;
         if (!hasPassedVarbitInitializationWindow) {
-            log.info(
+            log.debug(
                 "skipping diary completion event due to varbit initialization window not passed");
             return;
         }
