@@ -2,6 +2,7 @@ package com.elertan.policies;
 
 import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
+import com.elertan.BUPluginConfig;
 import com.elertan.BUPluginLifecycle;
 import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
@@ -37,12 +38,15 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ItemDespawned;
 import net.runelite.api.events.ItemSpawned;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.client.chat.ChatMessageBuilder;
 
 @Slf4j
 public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     @Inject
     private Client client;
+    @Inject
+    private BUPluginConfig buPluginConfig;
     @Inject
     private BUSoundHelper buSoundHelper;
     @Inject
@@ -281,7 +285,12 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
             event.consume();
-            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT));
+            ChatMessageBuilder builder = new ChatMessageBuilder();
+            builder.append(
+                buPluginConfig.chatErrorColor(),
+                chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT)
+            );
+            buChatService.sendMessage(builder.build());
             return;
         }
         GroundItemOwnedByData groundItemOwnedByData = groundItemOwnedByMap.get(key);
@@ -292,11 +301,19 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         event.consume();
+        ChatMessageBuilder builder = new ChatMessageBuilder();
         if (isWidgetTargetOnGroundItemAction) {
-            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_CAST_RESTRICTION));
+            builder.append(
+                buPluginConfig.chatRestrictionColor(),
+                chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_CAST_RESTRICTION)
+            );
         } else {
-            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_TAKE_RESTRICTION));
+            builder.append(
+                buPluginConfig.chatRestrictionColor(),
+                chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_TAKE_RESTRICTION)
+            );
         }
+        buChatService.sendMessage(builder.build());
     }
 
     private GetClickedTileItemOutput getClickedTileItem(MenuOptionClicked event) {

@@ -2,6 +2,7 @@ package com.elertan.policies;
 
 import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
+import com.elertan.BUPluginConfig;
 import com.elertan.BUPluginLifecycle;
 import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
@@ -27,6 +28,7 @@ import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.input.KeyListener;
 import net.runelite.client.input.KeyManager;
 
@@ -41,6 +43,8 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
     private Client client;
     @Inject
     private ClientThread clientThread;
+    @Inject
+    private BUPluginConfig buPluginConfig;
     @Inject
     private MemberService memberService;
     @Inject
@@ -340,13 +344,23 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
         try {
             member = memberService.getMemberByName(playerName);
         } catch (Exception ex) {
-            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT));
+            ChatMessageBuilder builder = new ChatMessageBuilder();
+            builder.append(
+                buPluginConfig.chatErrorColor(),
+                chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT)
+            );
+            buChatService.sendMessage(builder.build());
             buSoundHelper.playDisabledSound();
             return false;
         }
 
         if (member == null) {
-            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.POH_ENTER_RESTRICTION));
+            ChatMessageBuilder builder = new ChatMessageBuilder();
+            builder.append(
+                buPluginConfig.chatRestrictionColor(),
+                chatMessageProvider.messageFor(MessageKey.POH_ENTER_RESTRICTION)
+            );
+            buChatService.sendMessage(builder.build());
             buSoundHelper.playDisabledSound();
             return false;
         }

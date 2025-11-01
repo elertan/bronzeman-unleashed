@@ -93,12 +93,12 @@ public interface BUPluginConfig extends Config {
         return new Color(213, 155, 106);
     }
 
-    @ConfigItem(keyName = "chatPlayerNameColor", name = "Player name color", description = "The color used to draw the player name in the chat", section = chatSection)
+    @ConfigItem(keyName = "chatPlayerNameColor", name = "Player name color", description = "The color used for a player name in the chat", section = chatSection)
     default Color chatPlayerNameColor() {
         return new Color(105, 116, 242);
     }
 
-    @ConfigItem(keyName = "chatItemNameColor", name = "Item name color", description = "The color used to draw the item name in the chat", section = chatSection)
+    @ConfigItem(keyName = "chatItemNameColor", name = "Item name color", description = "The color used for a item name in the chat", section = chatSection)
     default Color chatItemNameColor() {
         return new Color(187, 40, 40);
     }
@@ -108,19 +108,29 @@ public interface BUPluginConfig extends Config {
         return new Color(187, 40, 40);
     }
 
-    @ConfigItem(keyName = "chatNPCNameColor", name = "NPC name color", description = "The color used to draw the player NPC in the chat", section = chatSection)
+    @ConfigItem(keyName = "chatNPCNameColor", name = "NPC name color", description = "The color used for a NPC in the chat", section = chatSection)
     default Color chatNPCNameColor() {
         return new Color(25, 157, 40);
     }
 
-    @ConfigItem(keyName = "combatTaskColor", name = "Combat task color", description = "The color used to draw the combat task in the chat", section = chatSection)
+    @ConfigItem(keyName = "combatTaskColor", name = "Combat task color", description = "The color used for a combat task in the chat", section = chatSection)
     default Color chatCombatTaskColor() {
         return new Color(25, 157, 40);
     }
 
-    @ConfigItem(keyName = "chatQuestNameNameColor", name = "Quest name color", description = "The color used to draw the quest name in the chat", section = chatSection)
+    @ConfigItem(keyName = "chatQuestNameNameColor", name = "Quest name color", description = "The color used for a quest name in the chat", section = chatSection)
     default Color chatQuestNameColor() {
         return new Color(13, 172, 242);
+    }
+
+    @ConfigItem(keyName = "chatRestrictionColor", name = "Restriction color", description = "The color used to notify you of a restriction that is in palce in the chat", section = chatSection)
+    default Color chatRestrictionColor() {
+        return new Color(255, 107, 104);
+    }
+
+    @ConfigItem(keyName = "chatErrorColor", name = "Error color", description = "The color used for an error in the chat", section = chatSection)
+    default Color chatErrorColor() {
+        return new Color(255, 107, 104);
     }
 
     @ConfigItem(keyName = "useItemIconsInChat", name = "Use item icons", description = "Whether to prepend item icons before the item name in the chat", section = chatSection)

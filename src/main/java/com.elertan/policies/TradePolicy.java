@@ -2,6 +2,7 @@ package com.elertan.policies;
 
 import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
+import com.elertan.BUPluginConfig;
 import com.elertan.BUPluginLifecycle;
 import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
@@ -21,6 +22,7 @@ import net.runelite.api.MenuAction;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
+import net.runelite.client.chat.ChatMessageBuilder;
 
 @Slf4j
 @Singleton
@@ -28,6 +30,8 @@ public class TradePolicy extends PolicyBase implements BUPluginLifecycle {
 
     @Inject
     private Client client;
+    @Inject
+    private BUPluginConfig buPluginConfig;
     @Inject
     private ItemUnlockService itemUnlockService;
     @Inject
@@ -142,7 +146,12 @@ public class TradePolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     private void tradeRestrictionError() {
-        buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.TRADE_RESTRICTION));
+        ChatMessageBuilder builder = new ChatMessageBuilder();
+        builder.append(
+            buPluginConfig.chatRestrictionColor(),
+            chatMessageProvider.messageFor(MessageKey.TRADE_RESTRICTION)
+        );
+        buChatService.sendMessage(builder.build());
         buSoundHelper.playDisabledSound();
     }
 }
