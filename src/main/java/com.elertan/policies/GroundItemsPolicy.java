@@ -6,6 +6,7 @@ import com.elertan.BUPluginConfig;
 import com.elertan.BUPluginLifecycle;
 import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
+import com.elertan.MemberService;
 import com.elertan.PolicyService;
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
@@ -14,6 +15,7 @@ import com.elertan.models.GameRules;
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.ISOOffsetDateTime;
+import com.elertan.models.Member;
 import com.elertan.utils.TickUtils;
 import com.google.inject.Inject;
 import java.time.Duration;
@@ -57,6 +59,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private GroundItemOwnedByDataProvider groundItemOwnedByDataProvider;
+    @Inject
+    private MemberService memberService;
 
     private GroundItemOwnedByDataProvider.Listener groundItemOwnedByDataProviderListener;
     private ScheduledExecutorService scheduler;
@@ -212,18 +216,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
         PolicyContext context = createContext();
-        if (context.isMustEnforceStrictPolicies()) {
-            enforceItemTakePolicy(event);
-            return;
-        }
-        GameRules gameRules = context.getGameRules();
-        if (gameRules == null || !gameRules.isRestrictGroundItems()) {
-            return;
-        }
-        enforceItemTakePolicy(event);
+        enforceItemTakePolicyWhereNecessary(event, context);
     }
 
-    private void enforceItemTakePolicy(MenuOptionClicked event) {
+    private void enforceItemTakePolicyWhereNecessary(MenuOptionClicked event,
+        PolicyContext context) {
         MenuAction menuAction = event.getMenuAction();
         String menuOption = event.getMenuOption();
         boolean isGroundItemMenuAction =
@@ -263,10 +260,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             log.debug("Item '{}' is not owned by anyone, allow take", itemComposition.getName());
             return;
         }
-        if (ownership == TileItem.OWNERSHIP_SELF) {
-            log.debug("Item '{}' is owned by me, allow take", itemComposition.getName());
-            return;
-        }
 
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
@@ -285,36 +278,85 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
-            event.consume();
-            ChatMessageBuilder builder = new ChatMessageBuilder();
-            builder.append(
-                buPluginConfig.chatErrorColor(),
-                chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT)
-            );
-            buChatService.sendMessage(builder.build());
+            boolean mustPerformCheck =
+                context.isMustEnforceStrictPolicies() || (context.getGameRules() != null && (
+                    context.getGameRules().isRestrictGroundItems() || context.getGameRules()
+                        .isRestrictPlayerVersusPlayerLoot()
+                ));
+            if (mustPerformCheck) {
+                event.consume();
+                ChatMessageBuilder builder = new ChatMessageBuilder();
+                builder.append(
+                    buPluginConfig.chatErrorColor(),
+                    chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT)
+                );
+                buChatService.sendMessage(builder.build());
+            }
             return;
         }
         GroundItemOwnedByData groundItemOwnedByData = groundItemOwnedByMap.get(key);
         if (groundItemOwnedByData != null) {
             // Our group owns the item
-//            takeItemOwnedByGroupMember(key);
+
+            // But could still be a pvp acquired item
+            boolean mustPerformPlayerVersusPlayerCheck =
+                context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
+                    && context.getGameRules().isRestrictPlayerVersusPlayerLoot());
+
+            String droppedByPlayerName = groundItemOwnedByData.getDroppedByPlayerName();
+            if (mustPerformPlayerVersusPlayerCheck && droppedByPlayerName != null) {
+                log.info(
+                    "Performing player versus player loot check for item '{}' dropped by {}",
+                    itemId,
+                    droppedByPlayerName
+                );
+
+                Member member = null;
+                try {
+                    member = memberService.getMemberByName(droppedByPlayerName);
+                } catch (Exception ignored) {
+                }
+                if (member != null) {
+                    log.info("Player '{}' is part of our group, allow take", droppedByPlayerName);
+                    return;
+                }
+
+                log.info("Player '{}' is not part of our group, deny take", droppedByPlayerName);
+                event.consume();
+                ChatMessageBuilder builder = new ChatMessageBuilder();
+                builder.append(
+                    buPluginConfig.chatRestrictionColor(),
+                    chatMessageProvider.messageFor(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION)
+                );
+                buChatService.sendMessage(builder.build());
+            }
             return;
         }
 
-        event.consume();
-        ChatMessageBuilder builder = new ChatMessageBuilder();
-        if (isWidgetTargetOnGroundItemAction) {
-            builder.append(
-                buPluginConfig.chatRestrictionColor(),
-                chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_CAST_RESTRICTION)
-            );
-        } else {
-            builder.append(
-                buPluginConfig.chatRestrictionColor(),
-                chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_TAKE_RESTRICTION)
-            );
+        if (ownership == TileItem.OWNERSHIP_SELF) {
+            log.debug("Item '{}' is owned by me, allow take", itemComposition.getName());
+            return;
         }
-        buChatService.sendMessage(builder.build());
+
+        boolean mustPerformGroundItemsCheck =
+            context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
+                && context.getGameRules().isRestrictGroundItems());
+        if (mustPerformGroundItemsCheck) {
+            event.consume();
+            ChatMessageBuilder builder = new ChatMessageBuilder();
+            if (isWidgetTargetOnGroundItemAction) {
+                builder.append(
+                    buPluginConfig.chatRestrictionColor(),
+                    chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_CAST_RESTRICTION)
+                );
+            } else {
+                builder.append(
+                    buPluginConfig.chatRestrictionColor(),
+                    chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_TAKE_RESTRICTION)
+                );
+            }
+            buChatService.sendMessage(builder.build());
+        }
     }
 
     private GetClickedTileItemOutput getClickedTileItem(MenuOptionClicked event) {
