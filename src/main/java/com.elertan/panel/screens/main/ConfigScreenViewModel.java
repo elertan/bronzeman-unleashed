@@ -107,7 +107,7 @@ public class ConfigScreenViewModel {
 
     private void setGameRules(GameRules gameRules) {
         this.gameRules = gameRules;
-        log.info("config screen set game rules: {}", gameRules);
+        log.debug("config screen set game rules: {}", gameRules);
     }
 
     @ImplementedBy(FactoryImpl.class)
