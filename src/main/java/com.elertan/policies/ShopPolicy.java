@@ -22,7 +22,6 @@ import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
@@ -64,7 +63,7 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
 
     public void onWidgetLoaded(WidgetLoaded event) {
         int groupId = event.getGroupId();
-        if (groupId != WidgetID.SHOP_GROUP_ID) {
+        if (groupId != InterfaceID.SHOPMAIN) {
             return;
         }
         onShopOpened();
@@ -72,7 +71,7 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
 
     public void onWidgetClosed(WidgetClosed event) {
         int groupId = event.getGroupId();
-        if (groupId != WidgetID.SHOP_GROUP_ID) {
+        if (groupId != InterfaceID.SHOPMAIN) {
             return;
         }
         onShopClosed();
