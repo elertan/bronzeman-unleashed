@@ -92,6 +92,16 @@ public class GameRulesEditor extends JPanel {
 
         add(
             createSection(
+                "Player vs. Player (PvP)",
+                "Player vs. Player settings",
+                createPlayerVersusPlayerPanel(),
+                true
+            ), gbc
+        );
+        gbc.gridy++;
+
+        add(
+            createSection(
                 "Notifications",
                 "Notification settings",
                 createNotificationsPanel(),
@@ -328,7 +338,7 @@ public class GameRulesEditor extends JPanel {
         JCheckBox preventPlayerOwnedHouseCheckbox = new JCheckBox();
         Bindings.bindSelected(
             preventPlayerOwnedHouseCheckbox,
-            viewModel.preventPlayedOwnedHousePropery
+            viewModel.preventPlayedOwnedHouseProperty
         );
         Bindings.bindEnabled(
             preventPlayerOwnedHouseCheckbox,
@@ -339,6 +349,38 @@ public class GameRulesEditor extends JPanel {
                 "Restrict POH usage",
                 "Restrict using a POH that isn't yours or a group member's",
                 preventPlayerOwnedHouseCheckbox
+            ), gbc
+        );
+
+        return panel;
+    }
+
+    private JPanel createPlayerVersusPlayerPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setOpaque(false);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        gbc.insets = new Insets(0, 0, 5, 0);
+
+        JCheckBox restrictPlayerVersusPlayerLootCheckbox = new JCheckBox();
+        Bindings.bindSelected(
+            restrictPlayerVersusPlayerLootCheckbox,
+            viewModel.restrictPlayerVersusPlayerLootProperty
+        );
+        Bindings.bindEnabled(
+            restrictPlayerVersusPlayerLootCheckbox,
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
+        );
+        panel.add(
+            createCheckboxInput(
+                "Restrict loot",
+                "Restricts all loot from drops when killing other players or when opening loot keys",
+                restrictPlayerVersusPlayerLootCheckbox
             ), gbc
         );
 

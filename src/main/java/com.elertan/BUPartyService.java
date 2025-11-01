@@ -33,10 +33,10 @@ public class BUPartyService implements BUPluginLifecycle {
     public void onGameStateChanged(GameStateChanged event) {
         GameState gameState = event.getGameState();
         if (gameState == GameState.LOGGING_IN) {
-            log.info("Player logging in...");
+            log.debug("Player logging in...");
 
             if (isWaitingUntilGameRulesReady) {
-                log.info("Already waiting for game rules to be ready, not waiting again");
+                log.debug("Already waiting for game rules to be ready, not waiting again");
                 return;
             }
 

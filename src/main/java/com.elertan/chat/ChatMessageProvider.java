@@ -42,6 +42,10 @@ public final class ChatMessageProvider {
             MessageKey.POH_ENTER_RESTRICTION,
             this::pohEnterRestrictionMessage
         );
+        this.resolvers.put(
+            MessageKey.PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION,
+            this::playerVersusPlayerLootRestrictionMessage
+        );
     }
 
     /**
@@ -120,6 +124,16 @@ public final class ChatMessageProvider {
         );
     }
 
+    private String playerVersusPlayerLootRestrictionMessage() {
+        boolean isSolo = isSolo();
+        String identity = getIdentity(isSolo);
+        return String.format(
+            "You cannot loot this player due to %s restrictions.%s",
+            identity,
+            isSolo ? "" : " You may only loot players of your group."
+        );
+    }
+
     /**
      * Keys for message lookups. Extend with non-error keys later without changing call sites.
      */
@@ -129,6 +143,7 @@ public final class ChatMessageProvider {
         TRADE_RESTRICTION,
         GROUND_ITEM_TAKE_RESTRICTION,
         POH_ENTER_RESTRICTION,
-        GROUND_ITEM_CAST_RESTRICTION
+        GROUND_ITEM_CAST_RESTRICTION,
+        PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION,
     }
 }

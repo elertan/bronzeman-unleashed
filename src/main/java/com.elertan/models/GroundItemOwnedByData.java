@@ -19,4 +19,8 @@ public class GroundItemOwnedByData {
     @Setter
     @NonNull
     private ISOOffsetDateTime despawnsAt;
+
+    @Getter
+    @Setter
+    private String droppedByPlayerName;
 }

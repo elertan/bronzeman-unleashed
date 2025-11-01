@@ -9,6 +9,7 @@ import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.policies.GrandExchangePolicy;
 import com.elertan.policies.GroundItemsPolicy;
 import com.elertan.policies.PlayerOwnedHousePolicy;
+import com.elertan.policies.PlayerVersusPlayerPolicy;
 import com.elertan.policies.ShopPolicy;
 import com.elertan.policies.TradePolicy;
 import com.elertan.remote.RemoteStorageService;
@@ -19,6 +20,7 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.events.AccountHashChanged;
+import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ItemContainerChanged;
@@ -35,6 +37,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.events.ServerNpcLoot;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -94,6 +97,8 @@ public final class BUPlugin extends Plugin {
     private LootValuationService lootValuationService;
     @Inject
     private PlayerOwnedHousePolicy playerOwnedHousePolicy;
+    @Inject
+    private PlayerVersusPlayerPolicy playerVersusPlayerPolicy;
 
     @Inject
     private Client client;
@@ -141,6 +146,7 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(shopPolicy);
         lifecycleDependencies.add(groundItemsPolicy);
         lifecycleDependencies.add(playerOwnedHousePolicy);
+        lifecycleDependencies.add(playerVersusPlayerPolicy);
 
         lifecycleDependencies.add(chatMessageEventBroadcaster);
     }
@@ -278,5 +284,15 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onScriptPreFired(ScriptPreFired event) {
         playerOwnedHousePolicy.onScriptPreFired(event);
+    }
+
+    @Subscribe
+    public void onActorDeath(ActorDeath e) {
+        playerVersusPlayerPolicy.onActorDeath(e);
+    }
+
+    @Subscribe
+    public void onPlayerLootReceived(PlayerLootReceived e) {
+        playerVersusPlayerPolicy.onPlayerLootReceived(e);
     }
 }

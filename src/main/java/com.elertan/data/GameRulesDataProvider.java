@@ -75,7 +75,7 @@ public class GameRulesDataProvider implements BUPluginLifecycle {
             throw new IllegalStateException("Not ready yet");
         }
 
-        log.info("Updating game rules: {}", gameRules);
+        log.debug("Updating game rules: {}", gameRules);
 
         return storagePort.update(gameRules);
     }

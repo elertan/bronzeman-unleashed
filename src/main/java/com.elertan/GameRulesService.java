@@ -201,6 +201,13 @@ public class GameRulesService implements BUPluginLifecycle {
                 booleanFormatter.apply(newGameRules.isPreventPlayedOwnedHouse())
             );
         }
+        if (oldGameRules.isRestrictPlayerVersusPlayerLoot()
+            != newGameRules.isRestrictPlayerVersusPlayerLoot()) {
+            differences.put(
+                "Restrict PvP loot",
+                booleanFormatter.apply(newGameRules.isRestrictPlayerVersusPlayerLoot())
+            );
+        }
         if (!Objects.equals(
             oldGameRules.getValuableLootNotificationThreshold(),
             newGameRules.getValuableLootNotificationThreshold()

@@ -199,7 +199,10 @@ public class UnlockedItemsDataProvider implements BUPluginLifecycle {
             }
 
             unlockedItemsMap = new ConcurrentHashMap<>(map);
-            log.info("UnlockedItemDataProvider initialized with {} items", unlockedItemsMap.size());
+            log.debug(
+                "UnlockedItemDataProvider initialized with {} items",
+                unlockedItemsMap.size()
+            );
             setState(State.Ready);
         });
     }

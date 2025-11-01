@@ -197,7 +197,7 @@ public class MembersDataProvider implements BUPluginLifecycle {
             }
 
             membersMap = new ConcurrentHashMap<>(map);
-            log.info("MembersDataProvider initialized with {} members", membersMap.size());
+            log.debug("MembersDataProvider initialized with {} members", membersMap.size());
             setState(State.Ready);
         });
     }

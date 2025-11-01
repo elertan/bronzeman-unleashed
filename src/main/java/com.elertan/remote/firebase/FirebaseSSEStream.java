@@ -195,7 +195,7 @@ public class FirebaseSSEStream {
                     }
 
                     if (!loggedStart) {
-                        log.info("Firebase SSE stream connected");
+                        log.debug("Firebase SSE stream connected");
                         loggedStart = true;
                     }
 

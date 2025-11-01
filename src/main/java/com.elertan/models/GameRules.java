@@ -44,6 +44,11 @@ public class GameRules {
     @Setter
     private boolean preventPlayedOwnedHouse;
 
+    // Player Versus Player
+    @Getter
+    @Setter
+    private boolean restrictPlayerVersusPlayerLoot;
+
     // Notifications
     @Getter
     @Setter
@@ -65,6 +70,7 @@ public class GameRules {
         boolean preventTradeLockedItems,
         boolean preventGrandExchangeBuyOffers,
         boolean preventPlayedOwnedHouse,
+        boolean restrictPlayerVersusPlayerLoot,
         boolean shareAchievementNotifications,
         Integer valuableLootNotificationThreshold, String partyPassword) {
         this.lastUpdatedByAccountHash = lastUpdatedByAccountHash;
@@ -75,6 +81,7 @@ public class GameRules {
         this.preventTradeLockedItems = preventTradeLockedItems;
         this.preventGrandExchangeBuyOffers = preventGrandExchangeBuyOffers;
         this.preventPlayedOwnedHouse = preventPlayedOwnedHouse;
+        this.restrictPlayerVersusPlayerLoot = restrictPlayerVersusPlayerLoot;
         this.shareAchievementNotifications = shareAchievementNotifications;
         this.valuableLootNotificationThreshold = valuableLootNotificationThreshold;
         this.partyPassword = partyPassword;
@@ -91,6 +98,7 @@ public class GameRules {
             true,
             true,
             true,
+            false,
             true,
             100_000,
             null
@@ -107,6 +115,7 @@ public class GameRules {
             ", preventTradeLockedItems=" + preventTradeLockedItems
             + ", preventGrandExchangeBuyOffers=" + preventGrandExchangeBuyOffers
             + ", preventPlayedOwnedHouse=" + preventPlayedOwnedHouse
+            + ", restrictPlayerVersusPlayerLoot=" + restrictPlayerVersusPlayerLoot
             + ", shareAchievementNotifications=" + shareAchievementNotifications
             + ", valuableLootNotificationThreshold=" + valuableLootNotificationThreshold
             + ", partyPassword='" + partyPassword + '\'' + '}';
