@@ -1,5 +1,6 @@
 package com.elertan.panel.screens;
 
+import com.elertan.panel.ViewportWidthTrackingPanel;
 import com.elertan.panel.screens.setup.GameRulesStepView;
 import com.elertan.panel.screens.setup.GameRulesStepViewViewModel;
 import com.elertan.panel.screens.setup.RemoteStepView;
@@ -22,7 +23,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.ScrollPaneConstants;
-import net.runelite.client.ui.PluginPanel;
 
 public class SetupScreen extends JPanel implements AutoCloseable {
 
@@ -81,24 +81,10 @@ public class SetupScreen extends JPanel implements AutoCloseable {
             this::buildStep
         );
 
-        // Wrap the content panel to clamp width to the plugin panel and allow vertical growth
-        JPanel widthLimiter = new JPanel(new BorderLayout()) {
-            @Override
-            public Dimension getPreferredSize() {
-                Dimension d = super.getPreferredSize();
-                // inner has 10px left + 10px right padding; keep content within visible area
-                d.width = PluginPanel.PANEL_WIDTH - 20;
-                return d;
-            }
+        ViewportWidthTrackingPanel viewportWrapper = new ViewportWidthTrackingPanel(new BorderLayout());
+        viewportWrapper.add(contentPanel, BorderLayout.NORTH);
 
-            @Override
-            public Dimension getMaximumSize() {
-                return new Dimension(PluginPanel.PANEL_WIDTH - 20, Integer.MAX_VALUE);
-            }
-        };
-        widthLimiter.add(contentPanel, BorderLayout.NORTH);
-
-        JScrollPane scrollPane = new JScrollPane(widthLimiter);
+        JScrollPane scrollPane = new JScrollPane(viewportWrapper);
         scrollPane.setBorder(null);
         scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
@@ -106,22 +92,14 @@ public class SetupScreen extends JPanel implements AutoCloseable {
         scrollPane.getVerticalScrollBar().addAdjustmentListener(e -> {
             boolean visible = scrollPane.getVerticalScrollBar().isVisible();
             if (visible) {
-                widthLimiter.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 10));
+                viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 10));
             } else {
-                widthLimiter.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+                viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
             }
-            widthLimiter.revalidate();
+            viewportWrapper.revalidate();
         });
 
-        JPanel wrappedPanel = new JPanel();
-        wrappedPanel.setLayout(new BorderLayout());
-        // Prevent the scroll pane container from expanding beyond the plugin width
-        wrappedPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, Integer.MAX_VALUE));
-        wrappedPanel.add(scrollPane, BorderLayout.CENTER);
-
-        inner.add(wrappedPanel);
-
-        inner.add(Box.createVerticalGlue());
+        inner.add(scrollPane);
 
         inner.add(Box.createVerticalStrut(15));
 

@@ -1,5 +1,6 @@
 package com.elertan.panel.screens.main;
 
+import com.elertan.panel.ViewportWidthTrackingPanel;
 import com.elertan.panel.components.GameRulesEditor;
 import com.elertan.panel.components.GameRulesEditorViewModel;
 import com.elertan.ui.Bindings;
@@ -70,7 +71,7 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         gbc.fill = GridBagConstraints.BOTH;
         GameRulesEditor gameRulesEditor = gameRulesEditorFactory.create(gameRulesEditorViewModel);
 
-        JPanel viewportWrapper = new JPanel(new BorderLayout());
+        ViewportWidthTrackingPanel viewportWrapper = new ViewportWidthTrackingPanel(new BorderLayout());
         viewportWrapper.add(gameRulesEditor, BorderLayout.NORTH);
 
         JScrollPane scrollPane = new JScrollPane(viewportWrapper);
@@ -156,7 +157,7 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         leaveButton.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
         leaveButton.addActionListener(e -> viewModel.leaveButtonClick());
         leaveButtonEnabledBinding = Bindings.bindEnabled(
-            updateGameRulesButton,
+            leaveButton,
             viewModel.isSubmittingProperty.derive(b -> !b)
         );
         add(leaveButton, gbc);
