@@ -47,7 +47,7 @@ public class MemberService implements BUPluginLifecycle {
         memberMapListener = new MembersDataProvider.MemberMapListener() {
             @Override
             public void onUpdate(Member member, Member old) {
-                log.info(
+                log.debug(
                     "member service -> member update: {} - old: {}",
                     member == null ? null : member.toString(),
                     old == null ? null : old.toString()
@@ -66,7 +66,7 @@ public class MemberService implements BUPluginLifecycle {
                     if (!Objects.equals(member.getName(), old.getName())) {
                         ChatMessageBuilder builder = new ChatMessageBuilder();
                         builder.append(buPluginConfig.chatPlayerNameColor(), old.getName());
-                        builder.append(" has name changed to ");
+                        builder.append(" name changed to ");
                         builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
                         builder.append(".");
                         buChatService.sendMessage(builder.build());
@@ -74,7 +74,7 @@ public class MemberService implements BUPluginLifecycle {
                     if (member.getRole() != old.getRole()) {
                         ChatMessageBuilder builder = new ChatMessageBuilder();
                         builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
-                        builder.append(" has their role has changed from ");
+                        builder.append(" role has changed from ");
                         builder.append(
                             buPluginConfig.chatHighlightColor(),
                             old.getRole().toString()
