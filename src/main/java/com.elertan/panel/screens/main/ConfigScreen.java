@@ -42,6 +42,7 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
 
         gbc.weighty = 0.0;
         JButton backButton = new JButton("Back");
+        backButton.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
         backButton.addActionListener(e -> viewModel.onBackButtonClick());
         backButtonEnabledBinding = Bindings.bindEnabled(
             backButton,
@@ -122,6 +123,7 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
 
         gbc.weightx = 0.0;
         JButton updateGameRulesButton = new JButton("Update Game Rules");
+        updateGameRulesButton.setBorder(BorderFactory.createEmptyBorder(15, 0, 15, 0));
         updateGameRulesButton.addActionListener(e -> viewModel.updateGameRulesClick());
         updateGameRulesButtonEnabledBinding = Bindings.bindEnabled(
             updateGameRulesButton,
