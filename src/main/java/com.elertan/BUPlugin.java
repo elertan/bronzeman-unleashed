@@ -8,6 +8,7 @@ import com.elertan.data.MembersDataProvider;
 import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.policies.GrandExchangePolicy;
 import com.elertan.policies.GroundItemsPolicy;
+import com.elertan.policies.PlayerOwnedHousePolicy;
 import com.elertan.policies.ShopPolicy;
 import com.elertan.policies.TradePolicy;
 import com.elertan.remote.RemoteStorageService;
@@ -90,6 +91,8 @@ public final class BUPlugin extends Plugin {
     private ChatMessageEventBroadcaster chatMessageEventBroadcaster;
     @Inject
     private LootValuationService lootValuationService;
+    @Inject
+    private PlayerOwnedHousePolicy playerOwnedHousePolicy;
 
     @Inject
     private Client client;
@@ -136,6 +139,7 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(tradePolicy);
         lifecycleDependencies.add(shopPolicy);
         lifecycleDependencies.add(groundItemsPolicy);
+        lifecycleDependencies.add(playerOwnedHousePolicy);
 
         lifecycleDependencies.add(chatMessageEventBroadcaster);
     }
