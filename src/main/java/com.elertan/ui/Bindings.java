@@ -312,6 +312,9 @@ public final class Bindings {
 
             lastEnum.set(enumValue);
             cardLayout.show(host, key);
+
+            host.revalidate();
+            host.repaint();
         };
 
         return bind(property, getter, setter);
