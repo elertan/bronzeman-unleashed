@@ -281,7 +281,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
             event.consume();
-            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT_ERROR));
+            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT));
             return;
         }
         GroundItemOwnedByData groundItemOwnedByData = groundItemOwnedByMap.get(key);
@@ -293,9 +293,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         event.consume();
         if (isWidgetTargetOnGroundItemAction) {
-            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_CAST_RESTRICTION_ERROR));
+            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_CAST_RESTRICTION));
         } else {
-            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_TAKE_RESTRICTION_ERROR));
+            buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_TAKE_RESTRICTION));
         }
     }
 

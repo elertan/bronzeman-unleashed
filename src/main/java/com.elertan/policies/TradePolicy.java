@@ -142,7 +142,7 @@ public class TradePolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     private void tradeRestrictionError() {
-        buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.TRADE_RESTRICTION_ERROR));
+        buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.TRADE_RESTRICTION));
         buSoundHelper.playDisabledSound();
     }
 }

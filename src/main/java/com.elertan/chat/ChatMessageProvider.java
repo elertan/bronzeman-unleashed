@@ -17,17 +17,6 @@ public final class ChatMessageProvider {
     private final MemberService memberService;
     private final Map<MessageKey, Supplier<String>> resolvers;
 
-    /**
-     * Keys for message lookups. Extend with non-error keys later without changing call sites.
-     */
-    public enum MessageKey {
-        STILL_LOADING_TEMPORARY_STRICT_GAME_RULES_ENFORCEMENT,
-        STILL_LOADING_PLEASE_WAIT_ERROR,
-        TRADE_RESTRICTION_ERROR,
-        GROUND_ITEM_TAKE_RESTRICTION_ERROR,
-        GROUND_ITEM_CAST_RESTRICTION_ERROR
-    }
-
     @Inject
     public ChatMessageProvider(final MemberService memberService) {
         this.memberService = memberService;
@@ -37,17 +26,21 @@ public final class ChatMessageProvider {
             this::stillLoadingTemporaryStrictGameRulesEnforcement
         );
         this.resolvers.put(
-            MessageKey.STILL_LOADING_PLEASE_WAIT_ERROR,
+            MessageKey.STILL_LOADING_PLEASE_WAIT,
             this::stillLoadingPleaseWaitError
         );
-        this.resolvers.put(MessageKey.TRADE_RESTRICTION_ERROR, this::tradeRestrictionMessage);
+        this.resolvers.put(MessageKey.TRADE_RESTRICTION, this::tradeRestrictionMessage);
         this.resolvers.put(
-            MessageKey.GROUND_ITEM_TAKE_RESTRICTION_ERROR,
+            MessageKey.GROUND_ITEM_TAKE_RESTRICTION,
             this::groundItemTakeRestrictionMessage
         );
         this.resolvers.put(
-            MessageKey.GROUND_ITEM_CAST_RESTRICTION_ERROR,
+            MessageKey.GROUND_ITEM_CAST_RESTRICTION,
             this::groundItemCastRestrictionMessage
+        );
+        this.resolvers.put(
+            MessageKey.POH_ENTER_RESTRICTION,
+            this::pohEnterRestrictionMessage
         );
     }
 
@@ -115,5 +108,27 @@ public final class ChatMessageProvider {
             identity,
             isSolo ? "" : " Only items of your group may be casted on."
         );
+    }
+
+    private String pohEnterRestrictionMessage() {
+        boolean isSolo = isSolo();
+        String identity = getIdentity(isSolo);
+        return String.format(
+            "You cannot enter this Played Owned House due to %s restrictions.%s",
+            identity,
+            isSolo ? "" : " You may only enter one owned by your group."
+        );
+    }
+
+    /**
+     * Keys for message lookups. Extend with non-error keys later without changing call sites.
+     */
+    public enum MessageKey {
+        STILL_LOADING_TEMPORARY_STRICT_GAME_RULES_ENFORCEMENT,
+        STILL_LOADING_PLEASE_WAIT,
+        TRADE_RESTRICTION,
+        GROUND_ITEM_TAKE_RESTRICTION,
+        POH_ENTER_RESTRICTION,
+        GROUND_ITEM_CAST_RESTRICTION
     }
 }
