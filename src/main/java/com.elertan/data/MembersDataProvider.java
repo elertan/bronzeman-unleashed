@@ -168,6 +168,30 @@ public class MembersDataProvider implements BUPluginLifecycle {
         return keyValueStoragePort.update(member.getAccountHash(), member);
     }
 
+
+    public CompletableFuture<Void> updateMember(Member member) {
+        if (keyValueStoragePort == null) {
+            throw new IllegalStateException("storagePort is null");
+        }
+        if (membersMap == null) {
+            throw new IllegalStateException("membersMap is null");
+        }
+
+        membersMap.put(member.getAccountHash(), member);
+        return keyValueStoragePort.update(member.getAccountHash(), member);
+    }
+
+    public CompletableFuture<Void> removeMember(long accountHash) {
+        if (keyValueStoragePort == null) {
+            throw new IllegalStateException("storagePort is null");
+        }
+        if (membersMap == null) {
+            throw new IllegalStateException("membersMap is null");
+        }
+
+        return keyValueStoragePort.delete(accountHash);
+    }
+
     private void remoteStorageServiceStateListener(RemoteStorageService.State state) {
         if (state == RemoteStorageService.State.NotReady) {
             membersMap = null;

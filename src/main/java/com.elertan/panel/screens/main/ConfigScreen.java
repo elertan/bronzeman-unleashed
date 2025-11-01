@@ -8,6 +8,7 @@ import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
@@ -25,6 +26,7 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
 
     private final AutoCloseable backButtonEnabledBinding;
     private final AutoCloseable updateGameRulesButtonEnabledBinding;
+    private final AutoCloseable leaveButtonEnabledBinding;
     private final AutoCloseable errorMessageLabelVisibleBinding;
     private final AutoCloseable errorMessageLabelTextBinding;
 
@@ -92,7 +94,7 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         gbc.weighty = 0.0;
         gbc.gridy++;
 
-        add(Box.createVerticalStrut(10), gbc);
+        add(Box.createVerticalStrut(5), gbc);
         gbc.gridy++;
 
         JLabel errorMessageLabel = new JLabel();
@@ -118,10 +120,9 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         add(errorMessageLabel, gbc);
         gbc.gridy++;
 
-        add(Box.createVerticalStrut(10), gbc);
+        add(Box.createVerticalStrut(5), gbc);
         gbc.gridy++;
 
-        gbc.weightx = 0.0;
         JButton updateGameRulesButton = new JButton("Update Game Rules");
         updateGameRulesButton.setBorder(BorderFactory.createEmptyBorder(15, 0, 15, 0));
         updateGameRulesButton.addActionListener(e -> viewModel.updateGameRulesClick());
@@ -147,10 +148,24 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         add(updateGameRulesButton, gbc);
         gbc.gridy++;
 
+        add(Box.createVerticalStrut(15), gbc);
+        gbc.gridy++;
+
+        JButton leaveButton = new JButton("Leave Bronzeman");
+        leaveButton.setBackground(new Color(183, 48, 48));
+        leaveButton.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
+        leaveButton.addActionListener(e -> viewModel.leaveButtonClick());
+        leaveButtonEnabledBinding = Bindings.bindEnabled(
+            updateGameRulesButton,
+            viewModel.isSubmittingProperty.derive(b -> !b)
+        );
+        add(leaveButton, gbc);
+        gbc.gridy++;
     }
 
     @Override
     public void close() throws Exception {
+        leaveButtonEnabledBinding.close();
         errorMessageLabelVisibleBinding.close();
         errorMessageLabelTextBinding.close();
         updateGameRulesButtonEnabledBinding.close();

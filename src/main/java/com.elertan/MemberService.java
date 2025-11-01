@@ -8,9 +8,15 @@ import com.elertan.models.MemberRole;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.Player;
@@ -243,5 +249,154 @@ public class MemberService implements BUPluginLifecycle {
                 log.info("member added!");
             });
         }
+    }
+
+    public CompletableFuture<Void> promoteMemberToOwner(long accountHash) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+
+        Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
+        if (membersMap == null) {
+            future.completeExceptionally(new IllegalStateException("members map is null"));
+            return future;
+        }
+        Member memberToPromote = membersMap.get(accountHash);
+        if (memberToPromote == null) {
+            future.completeExceptionally(new IllegalStateException("member to promote is null"));
+            return future;
+        }
+        if (memberToPromote.getRole() == MemberRole.Owner) {
+            future.complete(null);
+            return future;
+        }
+
+        List<Member> membersToDemote = membersMap.values()
+            .stream()
+            .filter(x -> x.getAccountHash() != accountHash && x.getRole() == MemberRole.Owner)
+            .collect(Collectors.toList());
+
+        Member newMemberToPromote = new Member(
+            memberToPromote.getAccountHash(),
+            memberToPromote.getName(),
+            memberToPromote.getJoinedAt(),
+            MemberRole.Owner
+        );
+        membersDataProvider.updateMember(newMemberToPromote).whenComplete((void1, throwable) -> {
+            if (throwable != null) {
+                future.completeExceptionally(throwable);
+                return;
+            }
+
+            List<CompletableFuture<Void>> demoteFutures = new ArrayList<>();
+            for (Member memberToDemote : membersToDemote) {
+                Member newMemberToDemote = new Member(
+                    memberToDemote.getAccountHash(),
+                    memberToDemote.getName(),
+                    memberToDemote.getJoinedAt(),
+                    MemberRole.Member
+                );
+                CompletableFuture<Void> fut = membersDataProvider.updateMember(newMemberToDemote);
+                demoteFutures.add(fut);
+            }
+
+            if (!demoteFutures.isEmpty()) {
+                CompletableFuture.allOf(demoteFutures.toArray(new CompletableFuture[0]))
+                    .whenComplete((void2, throwable2) -> {
+                        if (throwable2 != null) {
+                            future.completeExceptionally(throwable2);
+                            return;
+                        }
+
+                        future.complete(null);
+                    });
+                return;
+            }
+
+            future.complete(null);
+        });
+
+        return future;
+    }
+
+    public CompletableFuture<Void> leaveGroup() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+
+        Member myMember;
+        try {
+            myMember = getMyMember();
+        } catch (Exception e) {
+            future.completeExceptionally(e);
+            return future;
+        }
+        if (myMember == null) {
+            log.warn("Attempted to leave group but we are not a member");
+            future.complete(null);
+            return future;
+        }
+
+        membersDataProvider.removeMember(myMember.getAccountHash())
+            .whenComplete((void1, throwable) -> {
+                if (throwable != null) {
+                    log.error("Failed to remove member", throwable);
+                    future.completeExceptionally(throwable);
+                    return;
+                }
+
+                future.complete(null);
+            });
+
+        return future;
+    }
+
+    public CompletableFuture<Void> leaveGroupAndPromoteOldestMember() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+
+        Member myMember;
+        try {
+            myMember = getMyMember();
+        } catch (Exception e) {
+            future.completeExceptionally(e);
+            return future;
+        }
+        if (myMember == null) {
+            log.warn("Attempted to leave group but we are not a member");
+            future.complete(null);
+            return future;
+        }
+
+        Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
+        if (membersMap == null) {
+            future.completeExceptionally(new IllegalStateException("members map is null"));
+            return future;
+        }
+
+        Optional<Member> otherOldestMemberOpt = membersMap.values()
+            .stream()
+            .filter(x -> x.getAccountHash() != myMember.getAccountHash())
+            .min(Comparator.comparing(x -> x.getJoinedAt().getValue()));
+
+        if (!otherOldestMemberOpt.isPresent()) {
+            log.warn("Attempted to leave group and promote but there are no other members");
+            future.complete(null);
+            return future;
+        }
+        Member otherOldestMember = otherOldestMemberOpt.get();
+
+        promoteMemberToOwner(otherOldestMember.getAccountHash()).whenComplete((void1, throwable) -> {
+            if (throwable != null) {
+                future.completeExceptionally(throwable);
+                return;
+            }
+
+            leaveGroup().whenComplete((void2, throwable2) -> {
+                if (throwable2 != null) {
+                    future.completeExceptionally(throwable2);
+                    return;
+                }
+
+                future.complete(null);
+            });
+        });
+
+        return future;
     }
 }

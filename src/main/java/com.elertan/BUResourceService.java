@@ -97,7 +97,7 @@ public class BUResourceService implements BUPluginLifecycle {
         client.setModIcons(newModIcons);
 
         this.buModIcons = new BUModIcons(chatIconId);
-        log.info("BUResourceService: mod icons and sprites initialized");
+        log.debug("BUResourceService: mod icons and sprites initialized");
     }
 
     public CompletableFuture<Integer> getOrSetupItemImageModIconId(int itemId) {
