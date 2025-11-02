@@ -127,7 +127,7 @@ public final class BUPlugin extends Plugin {
         if (lifecycleDependencies != null) {
             return;
         }
-        log.info("Initializing lifecycle dependencies");
+        log.debug("Initializing lifecycle dependencies");
         lifecycleDependencies = new ArrayList<>();
 
         // Core
@@ -170,7 +170,7 @@ public final class BUPlugin extends Plugin {
 
     @Override
     protected void startUp() throws Exception {
-        log.info("BU: startup begin");
+        log.debug("BU: startup begin");
         super.startUp();
         initLifecycleDependencies();
 
@@ -183,7 +183,7 @@ public final class BUPlugin extends Plugin {
             }
 
             started = true;
-            log.info("BU: startup ok");
+            log.debug("BU: startup ok");
         } catch (Exception e) {
             started = false;
             log.error("BU: startup failed", e);
@@ -193,7 +193,7 @@ public final class BUPlugin extends Plugin {
 
     @Override
     protected void shutDown() throws Exception {
-        log.info("BU: shutdown begin");
+        log.debug("BU: shutdown begin");
         Exception failure = null;
         try {
             if (started) {
@@ -205,9 +205,9 @@ public final class BUPlugin extends Plugin {
                     currentAccountConfigurationChangeListener
                 );
 
-                log.info("BU: shutdown ok");
+                log.debug("BU: shutdown ok");
             } else {
-                log.info("BU: shutdown skipped, not started");
+                log.debug("BU: shutdown skipped, not started");
             }
         } catch (Exception e) {
             log.error("BU: shutdown failed", e);
