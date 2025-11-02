@@ -42,10 +42,12 @@ public class GameRulesEditorViewModel implements AutoCloseable {
     private GameRulesEditorViewModel(Props initialProps) {
         this.props = initialProps;
 
+        boolean setGameRules = false;
         GameRules gameRules = initialProps.getGameRules();
         if (gameRules == null) {
             ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
             gameRules = GameRules.createWithDefaults(initialProps.getAccountHash(), now);
+            setGameRules = true;
         }
 
         onlyForTradeableItemsProperty = new Property<>(gameRules.isOnlyForTradeableItems());
@@ -91,6 +93,10 @@ public class GameRulesEditorViewModel implements AutoCloseable {
         valuableLootNotificationThresholdProperty.addListener(
             valuableLootNotificationThresholdListener);
         partyPasswordProperty.addListener(partyPasswordListener);
+
+        if (setGameRules) {
+            initialProps.onGameRulesChanged.accept(gameRules);
+        }
     }
 
     @Override

@@ -24,6 +24,8 @@ public class GameRulesStepView extends JPanel implements AutoCloseable {
 
     private final AutoCloseable backButtonEnabledBinding;
     private final AutoCloseable finishButtonEnabledBinding;
+    private final AutoCloseable errorMessageContainerVisibleBinding;
+    private final AutoCloseable errorMessageLabelTextBinding;
 
     private GameRulesStepView(GameRulesStepViewViewModel viewModel,
         GameRulesEditor gameRulesEditor) {
@@ -45,6 +47,33 @@ public class GameRulesStepView extends JPanel implements AutoCloseable {
             gameRulesEditor.getPreferredSize().height
         ));
         add(gameRulesEditor);
+
+        JPanel errorMessageContainer = new JPanel();
+        errorMessageContainer.setLayout(new BoxLayout(errorMessageContainer, BoxLayout.Y_AXIS));
+        errorMessageContainer.setBorder(BorderFactory.createEmptyBorder(0, 0, 20, 0));
+        errorMessageContainerVisibleBinding = Bindings.bindVisible(
+            errorMessageContainer,
+            viewModel.errorMessage.derive(errorMessage -> errorMessage != null
+                && !errorMessage.isEmpty())
+        );
+
+        JLabel errorMessageLabel = new JLabel();
+        errorMessageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        errorMessageLabelTextBinding = Bindings.bindLabelText(
+            errorMessageLabel, viewModel.errorMessage.derive(errorMessage -> {
+                if (errorMessage == null || errorMessage.isEmpty()) {
+                    return "";
+                }
+
+                String sb = "<html><div style=\"text-align:center;color:red;\">" +
+                    errorMessage +
+                    "</div></html>";
+
+                return sb;
+            })
+        );
+        errorMessageContainer.add(errorMessageLabel);
+        add(errorMessageContainer);
 
         JPanel buttonRow = new JPanel();
         buttonRow.setLayout(new BoxLayout(buttonRow, BoxLayout.X_AXIS));
@@ -75,6 +104,8 @@ public class GameRulesStepView extends JPanel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        errorMessageLabelTextBinding.close();
+        errorMessageContainerVisibleBinding.close();
         finishButtonEnabledBinding.close();
         backButtonEnabledBinding.close();
     }

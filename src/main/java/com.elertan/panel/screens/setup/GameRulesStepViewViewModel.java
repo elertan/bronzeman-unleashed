@@ -26,22 +26,17 @@ public class GameRulesStepViewViewModel {
 
     public void onFinishButtonClicked() {
         isSubmitting.set(true);
-        log.info(">>>>>>>>>.1");
 
         listener.onFinish().whenComplete((__, throwable) -> {
-            log.info(">>>>>>>>>.2");
             try {
-                log.info(">>>>>>>>>.3");
                 if (throwable != null) {
-                    log.info(">>>>>>>>>.4");
+                    log.error("error saving game rules", throwable);
                     errorMessage.set("An error occurred while trying to save the game rules.");
                     return;
                 }
 
-                log.info(">>>>>>>>>.5");
                 errorMessage.set(null);
             } finally {
-                log.info(">>>>>>>>>.6");
                 isSubmitting.set(false);
             }
         });

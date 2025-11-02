@@ -246,7 +246,7 @@ public final class Bindings {
                 @SuppressWarnings("unchecked")
                 T typedValue = (T) value;
                 Map<T, String> valueToStringMap = valueToStringMapProperty.get();
-                String text = valueToStringMap.getOrDefault(typedValue, "null");
+                String text = valueToStringMap.getOrDefault(typedValue, "Unknown");
                 return super.getListCellRendererComponent(
                     list,
                     text,
