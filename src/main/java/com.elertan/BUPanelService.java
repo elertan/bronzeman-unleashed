@@ -68,7 +68,12 @@ public class BUPanelService implements BUPluginLifecycle {
 
     private void currentAccountConfigurationChangeListener(
         AccountConfiguration accountConfiguration) {
-        if (accountConfiguration == null) {
+        boolean shouldOpenPanel = false;
+        try {
+            shouldOpenPanel = accountConfigurationService.isCurrentAccountAutoOpenAccountConfigurationEnabled();
+        } catch (Exception ignored) {
+        }
+        if (accountConfiguration == null && shouldOpenPanel) {
             openPanel();
         }
     }
