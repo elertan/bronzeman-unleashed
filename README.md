@@ -116,7 +116,7 @@ The **Bronzeman Panel** showcases every unlocked item with:
 
 ## And when you earn a new unlock, it feels special
 
-![Unlock Overlay GIF](assets/unlock_overlay.gif)  
+![Unlock Overlay GIF](assets/unlock-overlay.gif)  
 *A satisfying unlock animation that celebrates your achievements.*
 
 When you earn a new unlock, it *feels* special.  
