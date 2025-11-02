@@ -399,24 +399,24 @@ public class GameRulesEditor extends JPanel {
         gbc.weightx = 1.0;
         gbc.insets = new Insets(0, 0, 5, 0);
 
-        JCheckBox shareAchievementsCheckbox = new JCheckBox();
-        Bindings.bindSelected(
-            shareAchievementsCheckbox,
-            viewModel.shareAchievementNotificationsProperty
-        );
+//        JCheckBox shareAchievementsCheckbox = new JCheckBox();
+//        Bindings.bindSelected(
+//            shareAchievementsCheckbox,
+//            viewModel.shareAchievementNotificationsProperty
+//        );
 //        Bindings.bindEnabled(
 //            shareAchievementsCheckbox,
 //            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
 //        );
-        shareAchievementsCheckbox.setEnabled(false);
-        panel.add(
-            createCheckboxInput(
-                "Share achievements",
-                "Whether to share achievements in the chat to other members (level ups, quest completions, combat tasks and more...)",
-                shareAchievementsCheckbox
-            ), gbc
-        );
-        gbc.gridy++;
+//        shareAchievementsCheckbox.setEnabled(false);
+//        panel.add(
+//            createCheckboxInput(
+//                "Share achievements",
+//                "Whether to share achievements in the chat to other members (level ups, quest completions, combat tasks and more...)",
+//                shareAchievementsCheckbox
+//            ), gbc
+//        );
+//        gbc.gridy++;
 
         // Integer spinner with US comma grouping and loose mid-typing, strict commit
         JSpinner valuableLootThresholdSpinner = new JSpinner(
