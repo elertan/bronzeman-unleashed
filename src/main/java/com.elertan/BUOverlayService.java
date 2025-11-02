@@ -35,6 +35,7 @@ public class BUOverlayService implements BUPluginLifecycle {
         accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
             currentAccountConfigurationChangeListener);
 
+        itemUnlockOverlay.clear();
         overlayManager.remove(itemUnlockOverlay);
     }
 
@@ -42,7 +43,6 @@ public class BUOverlayService implements BUPluginLifecycle {
         AccountConfiguration accountConfiguration) {
         if (accountConfiguration == null) {
             itemUnlockOverlay.clear();
-            return;
         }
     }
 }
