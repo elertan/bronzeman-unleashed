@@ -29,7 +29,7 @@ So no more herbs runs to farm for supplies to go do bossing, or any other advent
 
 *Full control over your playstyle — configure your own game rules and restrictions.*
 
-<table>
+<table border="0" style="border-collapse: collapse;">
 <tr>
 <td>
 
