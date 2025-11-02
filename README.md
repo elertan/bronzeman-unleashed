@@ -109,7 +109,7 @@ The **Bronzeman Panel** showcases every unlocked item with:
 
 </td>
 <td>
-<img src="assets/unlocked-items.png" alt="Unlocked Items Panel"> 
+<img src="assets/unlocks-panel.png" alt="Unlocked Items Panel"> 
 </td>
 </tr>
 </table>
