@@ -408,7 +408,7 @@ public class ItemUnlockOverlay extends Overlay {
 
             int rightPad = 10; // keep a small margin from the right edge
             int startX = frameX + visibleWidth - (labelW + spaceW + nameW) - rightPad;
-            int acquiredByY = textY + fmSmall.getAscent() + 5;
+            int acquiredByY = textY + fmSmall.getAscent() + 8;
 
             if (acquiredByY < y + visibleHeight) {
                 g.setColor(Color.GRAY);
