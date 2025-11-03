@@ -74,6 +74,10 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
         keyListener = new KeyListener() {
             @Override
             public void keyTyped(KeyEvent e) {
+                if (!isReadFriendsHouseChatboxInputLoopRunning) {
+                    return;
+                }
+
                 if (e.getKeyChar() == '\n') {
                     if (lastFriendsHouseEnteredName != null
                         && !lastFriendsHouseEnteredName.isEmpty()) {
@@ -84,6 +88,10 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
 
             @Override
             public void keyPressed(KeyEvent e) {
+                if (!isReadFriendsHouseChatboxInputLoopRunning) {
+                    return;
+                }
+
                 if (e.getKeyCode() == KeyEvent.VK_ENTER) {
                     if (lastFriendsHouseEnteredName != null
                         && !lastFriendsHouseEnteredName.isEmpty()) {
@@ -103,6 +111,10 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
 
             @Override
             public void keyReleased(KeyEvent e) {
+                if (!isReadFriendsHouseChatboxInputLoopRunning) {
+                    return;
+                }
+
                 if (e.getKeyCode() == KeyEvent.VK_ENTER) {
                     if (lastFriendsHouseEnteredName != null
                         && !lastFriendsHouseEnteredName.isEmpty()) {
@@ -294,6 +306,9 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
     public void onScriptPreFired(ScriptPreFired event) {
         if (!accountConfigurationService.isReady()
             || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+            return;
+        }
+        if (!isReadFriendsHouseChatboxInputLoopRunning) {
             return;
         }
 
