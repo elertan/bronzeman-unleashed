@@ -79,9 +79,9 @@ You can define your own adventure by choosing what rules and restrictions you wa
 ## Sync your data online and get started in under five minutes
 
 <img src="assets/setup.png" alt="Setup Guide" height="600">
-*Simple setup, automatic syncing — ready to play in under five minutes.*
+*Simple setup, automatic realtime syncing — ready to play in under five minutes.*
 
-Your data syncs online after a minimal setup.
+Your data syncs online after a minimal setup, and streams all data to every group member for live updates!
 You’ll be ready to play in under five minutes.
 
 As of right now I decided to only support Firebase. Firebase will be free to use using their free tier.
@@ -114,13 +114,12 @@ The **Bronzeman Panel** showcases every unlocked item with:
 </tr>
 </table>
 
-## And when you earn a new unlock, it feels special
+## And when you earn a new unlock
 
 ![Unlock Overlay GIF](assets/unlock-overlay.gif)  
 *A satisfying unlock animation that celebrates your achievements.*
 
-When you earn a new unlock, it *feels* special.  
-Enjoy:
+it *feels* special.  
 
 - A beautifully animated overlay celebrating your or your group member's achievement.
 - A detailed chatbox message.
