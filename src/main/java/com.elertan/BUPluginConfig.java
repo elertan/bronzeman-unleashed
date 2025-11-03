@@ -125,12 +125,14 @@ public interface BUPluginConfig extends Config {
 
     @ConfigItem(keyName = "chatRestrictionColor", name = "Restriction color", description = "The color used to notify you of a restriction that is in palce in the chat", section = chatSection)
     default Color chatRestrictionColor() {
-        return new Color(255, 107, 104);
+        // This color is great with a transparent chatbox, but sucks for opaque
+//        return new Color(255, 107, 104);
+        return new Color(255, 74, 70);
     }
 
     @ConfigItem(keyName = "chatErrorColor", name = "Error color", description = "The color used for an error in the chat", section = chatSection)
     default Color chatErrorColor() {
-        return new Color(255, 107, 104);
+        return new Color(255, 74, 70);
     }
 
     @ConfigItem(keyName = "useItemIconsInChat", name = "Use item icons", description = "Whether to prepend item icons before the item name in the chat", section = chatSection)
