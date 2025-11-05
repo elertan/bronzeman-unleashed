@@ -243,6 +243,7 @@ public final class BUPlugin extends Plugin {
         buChatService.onGameStateChanged(event);
         buPartyService.onGameStateChanged(event);
         achievementDiaryService.onGameStateChanged(event);
+        itemUnlockService.onGameStateChanged(event);
     }
 
     @Subscribe

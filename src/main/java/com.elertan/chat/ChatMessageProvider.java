@@ -50,6 +50,10 @@ public final class ChatMessageProvider {
             MessageKey.PLAYER_VERSUS_PLAYER_LOOT_KEY_RESTRICTION,
             this::playerVersusPlayerLootKeyRestrictionMessage
         );
+        this.resolvers.put(
+            MessageKey.ITEM_UNLOCKS_UNSUPPORTED_WORLD,
+            this::itemUnlocksUnsupportedWorld
+        );
     }
 
     /**
@@ -147,6 +151,10 @@ public final class ChatMessageProvider {
         );
     }
 
+    private String itemUnlocksUnsupportedWorld() {
+        return "Item unlocks are disabled on this world type. Seasonal or special mode worlds do not support adding new unlocked items.";
+    }
+
     /**
      * Keys for message lookups. Extend with non-error keys later without changing call sites.
      */
@@ -159,5 +167,6 @@ public final class ChatMessageProvider {
         GROUND_ITEM_CAST_RESTRICTION,
         PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION,
         PLAYER_VERSUS_PLAYER_LOOT_KEY_RESTRICTION,
+        ITEM_UNLOCKS_UNSUPPORTED_WORLD,
     }
 }
