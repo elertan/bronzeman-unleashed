@@ -6,6 +6,7 @@ import com.elertan.BUPluginConfig;
 import com.elertan.BUPluginLifecycle;
 import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
+import com.elertan.MinigameService;
 import com.elertan.PolicyService;
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
@@ -56,6 +57,8 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
     private BUPluginConfig buPluginConfig;
     @Inject
     private BUSoundHelper buSoundHelper;
+    @Inject
+    private MinigameService minigameService;
 
     private ConcurrentHashMap<String, ConcurrentLinkedQueue<PlayerDeathLocation>> playerDeathLocationsByPlayerName;
 
@@ -136,6 +139,11 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
     }
 
     private void enforcePlayerLootReceivedPolicy(Player player, Collection<ItemStack> itemStacks) {
+        // Disable for last man standing
+        if (minigameService.isPlayingLastManStanding()) {
+            return;
+        }
+
         String playerName = TextUtils.sanitizePlayerName(player.getName());
         log.info("loot received for player: {}", playerName);
 
