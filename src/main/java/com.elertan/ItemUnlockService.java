@@ -1,9 +1,6 @@
 package com.elertan;
 
-import com.elertan.chat.ChatMessageProvider;
-import com.elertan.chat.ChatMessageProvider.MessageKey;
 import com.elertan.data.UnlockedItemsDataProvider;
-import com.elertan.models.AccountConfiguration;
 import com.elertan.models.GameRules;
 import com.elertan.models.ISOOffsetDateTime;
 import com.elertan.models.Member;
@@ -26,12 +23,10 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
-import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPCComposition;
-import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
@@ -148,23 +143,20 @@ public class ItemUnlockService implements BUPluginLifecycle {
     @Inject
     private BUChatService buChatService;
     @Inject
-    private ChatMessageProvider chatMessageProvider;
-    @Inject
     private ItemUnlockOverlay itemUnlockOverlay;
     @Inject
     private MemberService memberService;
     @Inject
     private GameRulesService gameRulesService;
-    @Inject
-    private AccountConfigurationService accountConfigurationService;
 
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
+    private boolean hasUnlockedItemDataProviderReadyStateBeenSeen;
     private final Consumer<UnlockedItemsDataProvider.State> unlockedItemDataProviderStateListener = this::unlockedItemDataProviderStateListener;
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
-    private volatile boolean hasNotifiedPlayerOfNonSupportedWorldType = false;
 
     @Override
     public void startUp() throws Exception {
+        hasUnlockedItemDataProviderReadyStateBeenSeen = false;
+
         unlockedItemsMapListener = new UnlockedItemsDataProvider.UnlockedItemsMapListener() {
 
             @Override
@@ -272,29 +264,12 @@ public class ItemUnlockService implements BUPluginLifecycle {
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
         unlockedItemsDataProvider.addStateListener(unlockedItemDataProviderStateListener);
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
     }
 
     @Override
     public void shutDown() throws Exception {
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
         unlockedItemsDataProvider.removeStateListener(unlockedItemDataProviderStateListener);
         unlockedItemsDataProvider.removeUnlockedItemsMapListener(unlockedItemsMapListener);
-    }
-
-    public void onGameStateChanged(GameStateChanged event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
-            return;
-        }
-        GameState gameState = event.getGameState();
-        if (gameState == GameState.LOGGED_IN) {
-            checkAndNotifyNonSupportedWorldType();
-        } else if (gameState == GameState.LOGIN_SCREEN || gameState == GameState.HOPPING) {
-            hasNotifiedPlayerOfNonSupportedWorldType = false;
-        }
     }
 
     public void onItemContainerChanged(ItemContainerChanged event) {
@@ -390,36 +365,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
         return future;
     }
 
-    private void currentAccountConfigurationChangeListener(
-        AccountConfiguration accountConfiguration) {
-        if (accountConfiguration == null) {
-            return;
-        }
-
-        checkAndNotifyNonSupportedWorldType();
-    }
-
-    private void checkAndNotifyNonSupportedWorldType() {
-        boolean isSupported;
-        try {
-            isSupported = isCurrentWorldSupportedForUnlockingItems();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        if (isSupported) {
-            return;
-        }
-        // Because this check can invoked from logging in/hopping to a new world
-        // as well as configuring the plugin, we need to make sure we only notify
-        // once for an unsupported world type
-        if (hasNotifiedPlayerOfNonSupportedWorldType) {
-            return;
-        }
-        hasNotifiedPlayerOfNonSupportedWorldType = true;
-
-        buChatService.sendMessage(chatMessageProvider.messageFor(MessageKey.ITEM_UNLOCKS_UNSUPPORTED_WORLD));
-    }
-
     private CompletableFuture<Void> unlockItem(int initialItemId, Integer droppedByNPCId) {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
@@ -432,7 +377,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
         // We don't support all world types, for example we don't want unlocks on seasonal modes
         try {
             if (!isCurrentWorldSupportedForUnlockingItems()) {
-                log.debug("Current world is not supported for unlocking items");
+                log.info("Current world is not supported for unlocking items");
                 future.complete(null);
                 return future;
             }
