@@ -386,6 +386,13 @@ public class ItemUnlockService implements BUPluginLifecycle {
             return future;
         }
 
+        // Skip unlocking temporary items from Last Man Standing
+        if (isInLMS()) {
+            log.debug("Player is in LMS, skipping item unlock");
+            future.complete(null);
+            return future;
+        }
+
         // We want the base item, not a noted item or similar
         int itemId = itemManager.canonicalize(initialItemId);
 
@@ -489,6 +496,17 @@ public class ItemUnlockService implements BUPluginLifecycle {
                 t));
 
         return !hasUnsupportedWorldType;
+    }
+
+    /**
+     * Checks if the player is currently in Last Man Standing.
+     * This prevents unlocking temporary items from LMS.
+     *
+     * @return true if the player is in LMS, false otherwise
+     */
+    private boolean isInLMS() {
+        // Varbit 5314 = IN_LMS (1 if in game, 0 if not)
+        return client.getVarbitValue(5314) == 1;
     }
 
     private void unlockedItemDataProviderStateListener(UnlockedItemsDataProvider.State state) {
