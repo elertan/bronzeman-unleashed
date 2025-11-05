@@ -407,7 +407,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
         try {
             isSupported = isCurrentWorldSupportedForUnlockingItems();
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            return;
         }
 
         if (isSupported) {
