@@ -7,6 +7,7 @@ import com.elertan.BUPluginLifecycle;
 import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
 import com.elertan.MemberService;
+import com.elertan.MinigameService;
 import com.elertan.PolicyService;
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
@@ -61,6 +62,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private GroundItemOwnedByDataProvider groundItemOwnedByDataProvider;
     @Inject
     private MemberService memberService;
+    @Inject
+    private MinigameService minigameService;
 
     private GroundItemOwnedByDataProvider.Listener groundItemOwnedByDataProviderListener;
     private ScheduledExecutorService scheduler;
@@ -252,6 +255,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
         int itemId = event.getId();
         if (itemId <= 1) {
+            return;
+        }
+
+        // In last man standing we want to allow taking any items
+        if (minigameService.isPlayingLastManStanding()) {
             return;
         }
 
