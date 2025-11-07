@@ -52,7 +52,11 @@ public final class ChatMessageProvider {
         );
         this.resolvers.put(
             MessageKey.ITEM_UNLOCKS_UNSUPPORTED_WORLD,
-            this::itemUnlocksUnsupportedWorld
+            this::itemUnlocksUnsupportedWorldMessage
+        );
+        this.resolvers.put(
+            MessageKey.FALADOR_PARTY_ROOM_BALLOON_RESTRICTION,
+            this::faladorPartyRoomBalloonRestrictionMessage
         );
     }
 
@@ -151,8 +155,17 @@ public final class ChatMessageProvider {
         );
     }
 
-    private String itemUnlocksUnsupportedWorld() {
+    private String itemUnlocksUnsupportedWorldMessage() {
         return "Item unlocks are disabled on this world type. Seasonal or special mode worlds do not support adding new unlocked items.";
+    }
+
+    private String faladorPartyRoomBalloonRestrictionMessage() {
+        boolean isSolo = isSolo();
+        String identity = getIdentity(isSolo);
+        return String.format(
+            "You cannot burst the Falador Party Room balloons due to %s restrictions.",
+            identity
+        );
     }
 
     /**
@@ -168,5 +181,6 @@ public final class ChatMessageProvider {
         PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION,
         PLAYER_VERSUS_PLAYER_LOOT_KEY_RESTRICTION,
         ITEM_UNLOCKS_UNSUPPORTED_WORLD,
+        FALADOR_PARTY_ROOM_BALLOON_RESTRICTION,
     }
 }

@@ -49,6 +49,11 @@ public class GameRules {
     @Setter
     private boolean restrictPlayerVersusPlayerLoot;
 
+    // Falador Party Room
+    @Getter
+    @Setter
+    private boolean restrictFaladorPartyRoomBalloons;
+
     // Notifications
     @Getter
     @Setter
@@ -71,6 +76,7 @@ public class GameRules {
         boolean preventGrandExchangeBuyOffers,
         boolean preventPlayerOwnedHouse,
         boolean restrictPlayerVersusPlayerLoot,
+        boolean restrictFaladorPartyRoomBalloons,
         boolean shareAchievementNotifications,
         Integer valuableLootNotificationThreshold, String partyPassword) {
         this.lastUpdatedByAccountHash = lastUpdatedByAccountHash;
@@ -82,6 +88,7 @@ public class GameRules {
         this.preventGrandExchangeBuyOffers = preventGrandExchangeBuyOffers;
         this.preventPlayerOwnedHouse = preventPlayerOwnedHouse;
         this.restrictPlayerVersusPlayerLoot = restrictPlayerVersusPlayerLoot;
+        this.restrictFaladorPartyRoomBalloons = restrictFaladorPartyRoomBalloons;
         this.shareAchievementNotifications = shareAchievementNotifications;
         this.valuableLootNotificationThreshold = valuableLootNotificationThreshold;
         this.partyPassword = partyPassword;
@@ -100,6 +107,7 @@ public class GameRules {
             true,
             false,
             true,
+            true,
             100_000,
             null
         );
@@ -116,6 +124,7 @@ public class GameRules {
             + ", preventGrandExchangeBuyOffers=" + preventGrandExchangeBuyOffers
             + ", preventPlayedOwnedHouse=" + preventPlayerOwnedHouse
             + ", restrictPlayerVersusPlayerLoot=" + restrictPlayerVersusPlayerLoot
+            + ", restrictFaladorPartyRoomBalloons=" + restrictFaladorPartyRoomBalloons
             + ", shareAchievementNotifications=" + shareAchievementNotifications
             + ", valuableLootNotificationThreshold=" + valuableLootNotificationThreshold
             + ", partyPassword='" + partyPassword + '\'' + '}';
