@@ -71,7 +71,6 @@ public class FaladorPartyRoomPolicy extends PolicyBase implements BUPluginLifecy
         if (!sanitizedMenuTarget.equalsIgnoreCase("party balloon")) {
             return;
         }
-        log.info("is party balloon");
 
         event.consume();
         ChatMessageBuilder builder = new ChatMessageBuilder();
