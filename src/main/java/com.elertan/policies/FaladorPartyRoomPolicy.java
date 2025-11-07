@@ -1,18 +1,33 @@
 package com.elertan.policies;
 
 import com.elertan.AccountConfigurationService;
+import com.elertan.BUChatService;
+import com.elertan.BUPluginConfig;
 import com.elertan.BUPluginLifecycle;
 import com.elertan.GameRulesService;
 import com.elertan.PolicyService;
+import com.elertan.chat.ChatMessageProvider;
+import com.elertan.chat.ChatMessageProvider.MessageKey;
 import com.elertan.models.GameRules;
+import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import net.runelite.api.Actor;
-import net.runelite.api.MenuEntry;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.client.chat.ChatMessageBuilder;
+import net.runelite.client.util.Text;
 
+@Slf4j
 @Singleton
 public class FaladorPartyRoomPolicy extends PolicyBase implements BUPluginLifecycle {
 
+    @Inject
+    private BUPluginConfig buPluginConfig;
+    @Inject
+    private BUChatService buChatService;
+    @Inject
+    private ChatMessageProvider chatMessageProvider;
+
+    @Inject
     public FaladorPartyRoomPolicy(AccountConfigurationService accountConfigurationService,
         GameRulesService gameRulesService, PolicyService policyService) {
         super(accountConfigurationService, gameRulesService, policyService);
@@ -47,26 +62,23 @@ public class FaladorPartyRoomPolicy extends PolicyBase implements BUPluginLifecy
     }
 
     private void enforceMenuOptionClicked(MenuOptionClicked event, PolicyContext context) {
-        MenuEntry menuEntry = event.getMenuEntry();
-        if (menuEntry != null) {
-            log.info("menu entry: {}", menuEntry.getIdentifier());
-            Actor actor = menuEntry.getActor();
-            if (actor != null) {
-                log.info("actor name: {}", actor.getName());
-            }
-        }
-
-        log.info(
-            "mo: {}, mao: {}, id: {}, target: {}",
-            event.getMenuOption(),
-            event.getMenuAction().ordinal(),
-            event.getId(),
-            event.getMenuTarget()
-        );
-
         String menuOption = event.getMenuOption();
         if (!menuOption.equalsIgnoreCase("burst")) {
             return;
         }
+        String menuTarget = event.getMenuTarget();
+        String sanitizedMenuTarget = Text.sanitize(Text.removeTags(menuTarget));
+        if (!sanitizedMenuTarget.equalsIgnoreCase("party balloon")) {
+            return;
+        }
+        log.info("is party balloon");
+
+        event.consume();
+        ChatMessageBuilder builder = new ChatMessageBuilder();
+        builder.append(
+            buPluginConfig.chatRestrictionColor(),
+            chatMessageProvider.messageFor(MessageKey.FALADOR_PARTY_ROOM_BALLOON_RESTRICTION)
+        );
+        buChatService.sendMessage(builder.build());
     }
 }

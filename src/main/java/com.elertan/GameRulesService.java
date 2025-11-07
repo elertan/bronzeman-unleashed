@@ -208,6 +208,13 @@ public class GameRulesService implements BUPluginLifecycle {
                 booleanFormatter.apply(newGameRules.isRestrictPlayerVersusPlayerLoot())
             );
         }
+        if (oldGameRules.isRestrictFaladorPartyRoomBalloons()
+            != newGameRules.isRestrictFaladorPartyRoomBalloons()) {
+            differences.put(
+                "Restrict Falador Party Room balloons",
+                booleanFormatter.apply(newGameRules.isRestrictFaladorPartyRoomBalloons())
+            );
+        }
         if (!Objects.equals(
             oldGameRules.getValuableLootNotificationThreshold(),
             newGameRules.getValuableLootNotificationThreshold()
