@@ -278,6 +278,7 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
         PolicyContext context = createContext();
         if (context.isMustEnforceStrictPolicies()) {
             enforceOnMenuOptionClicked(event);
+            return;
         }
         GameRules gameRules = context.getGameRules();
         if (gameRules == null || !gameRules.isRestrictPlayerVersusPlayerLoot()) {
