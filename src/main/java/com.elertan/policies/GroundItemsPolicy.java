@@ -115,14 +115,12 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     public void onItemSpawned(ItemSpawned event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
         PolicyContext context = createContext();
-        GameRules gameRules = context.getGameRules();
-        if (gameRules == null || !gameRules.isRestrictGroundItems()) {
+        if (!context.shouldApplyForRules(GameRules::isRestrictGroundItems)) {
             return;
         }
 
@@ -180,8 +178,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     public void onItemDespawned(ItemDespawned event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
@@ -228,8 +225,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 

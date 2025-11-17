@@ -60,8 +60,7 @@ public class TradePolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
@@ -91,12 +90,7 @@ public class TradePolicy extends PolicyBase implements BUPluginLifecycle {
 
     private void onChatAcceptTradeClicked(MenuOptionClicked event) {
         PolicyContext context = createContext();
-        GameRules gameRules = context.getGameRules();
-        boolean enforcePolicy =
-            context.isMustEnforceStrictPolicies() || (gameRules != null
-                && gameRules.isPreventTradeOutsideGroup());
-
-        if (!enforcePolicy) {
+        if (!context.shouldApplyForRules(GameRules::isPreventTradeLockedItems)) {
             return;
         }
 
@@ -113,13 +107,7 @@ public class TradePolicy extends PolicyBase implements BUPluginLifecycle {
 
     private void onTradeWithClicked(MenuOptionClicked event) {
         PolicyContext context = createContext();
-        GameRules gameRules = context.getGameRules();
-        boolean enforcePolicy =
-            context.isMustEnforceStrictPolicies() || (gameRules != null
-                && gameRules.isPreventTradeOutsideGroup());
-
-        if (!enforcePolicy) {
-            log.info("...but not enforcing policies");
+        if (!context.shouldApplyForRules(GameRules::isPreventTradeOutsideGroup)) {
             return;
         }
 
