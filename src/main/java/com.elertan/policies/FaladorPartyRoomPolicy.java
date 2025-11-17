@@ -44,24 +44,15 @@ public class FaladorPartyRoomPolicy extends PolicyBase implements BUPluginLifecy
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
         PolicyContext context = createContext();
-        if (context.isMustEnforceStrictPolicies()) {
-            enforceMenuOptionClicked(event, context);
+        if (!context.shouldApplyForRules(GameRules::isRestrictFaladorPartyRoomBalloons)) {
             return;
         }
-        GameRules gameRules = context.getGameRules();
-        if (gameRules == null || !gameRules.isRestrictFaladorPartyRoomBalloons()) {
-            return;
-        }
-        enforceMenuOptionClicked(event, context);
-    }
 
-    private void enforceMenuOptionClicked(MenuOptionClicked event, PolicyContext context) {
         String menuOption = event.getMenuOption();
         if (!menuOption.equalsIgnoreCase("burst")) {
             return;

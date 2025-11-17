@@ -62,8 +62,7 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     public void onWidgetLoaded(WidgetLoaded event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
@@ -75,8 +74,7 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     public void onWidgetClosed(WidgetClosed event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 

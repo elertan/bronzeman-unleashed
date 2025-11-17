@@ -43,8 +43,7 @@ public class GrandExchangePolicy extends PolicyBase implements BUPluginLifecycle
     }
 
     public void onScriptPostFired(ScriptPostFired event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
@@ -56,18 +55,10 @@ public class GrandExchangePolicy extends PolicyBase implements BUPluginLifecycle
 
     private void onSearchBuild() {
         PolicyContext context = createContext();
-        if (context.isMustEnforceStrictPolicies()) {
-            lockGrandExchangeSearchResults();
+        if (!context.shouldApplyForRules(GameRules::isPreventGrandExchangeBuyOffers)) {
             return;
         }
-        GameRules gameRules = context.getGameRules();
-        if (gameRules == null || !gameRules.isPreventGrandExchangeBuyOffers()) {
-            return;
-        }
-        lockGrandExchangeSearchResults();
-    }
 
-    private void lockGrandExchangeSearchResults() {
         Widget searchResultsWidget = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         if (searchResultsWidget == null) {
             log.error("Search results widget is null onGrandExchangeSearchBuild");

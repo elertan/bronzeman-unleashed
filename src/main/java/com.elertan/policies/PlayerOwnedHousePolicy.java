@@ -95,13 +95,8 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
                 if (e.getKeyCode() == KeyEvent.VK_ENTER) {
                     if (lastFriendsHouseEnteredName != null
                         && !lastFriendsHouseEnteredName.isEmpty()) {
-                        PolicyContext policyContext = createContext();
-                        if (policyContext.isMustEnforceStrictPolicies()) {
-                            enforcePolicyEnterKeyPressedOnFriendsHouseName(e);
-                            return;
-                        }
-                        GameRules gameRules = policyContext.getGameRules();
-                        if (gameRules == null || !gameRules.isPreventPlayerOwnedHouse()) {
+                        PolicyContext context = createContext();
+                        if (!context.shouldApplyForRules(GameRules::isPreventPlayerOwnedHouse)) {
                             return;
                         }
                         enforcePolicyEnterKeyPressedOnFriendsHouseName(e);
@@ -135,24 +130,14 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
         PolicyContext context = createContext();
-        if (context.isMustEnforceStrictPolicies()) {
-            enforcePolicyMenuOptionClicked(event);
+        if (!context.shouldApplyForRules(GameRules::isPreventPlayerOwnedHouse)) {
             return;
         }
-        GameRules gameRules = context.getGameRules();
-        if (gameRules == null || !gameRules.isPreventPlayerOwnedHouse()) {
-            return;
-        }
-        enforcePolicyMenuOptionClicked(event);
-    }
-
-    private void enforcePolicyMenuOptionClicked(MenuOptionClicked event) {
         MenuAction menuAction = event.getMenuAction();
         String menuOption = event.getMenuOption();
         // Enter house via POH board
@@ -304,8 +289,7 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
     }
 
     public void onScriptPreFired(ScriptPreFired event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
         if (!isReadFriendsHouseChatboxInputLoopRunning) {
