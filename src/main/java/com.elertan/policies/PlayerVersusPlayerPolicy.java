@@ -275,6 +275,18 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
             return;
         }
 
+        PolicyContext context = createContext();
+        if (context.isMustEnforceStrictPolicies()) {
+            enforceOnMenuOptionClicked(event);
+        }
+        GameRules gameRules = context.getGameRules();
+        if (gameRules == null || !gameRules.isRestrictPlayerVersusPlayerLoot()) {
+            return;
+        }
+        enforceOnMenuOptionClicked(event);
+    }
+
+    private void enforceOnMenuOptionClicked(MenuOptionClicked event) {
         String menuOption = event.getMenuOption();
         Widget widget = event.getWidget();
         if (widget == null) {
