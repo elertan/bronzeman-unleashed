@@ -147,9 +147,6 @@ public class ItemUnlockOverlay extends Overlay {
         if (accountConfigurationService.getCurrentAccountConfiguration() == null) {
             return null;
         }
-        if (phase == Phase.IDLE && current == null) {
-            return null;
-        }
 
         final long now = System.currentTimeMillis();
 
