@@ -112,6 +112,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
         put("Key (medium)", ItemID.TRAIL_CLUE_MEDIUM_RIDDLE001_KEY);
         put("Key (elite)", ItemID.TRAIL_ELITE_RIDDLE_KEY32);
+
+        put("Loot key", ItemID.WILDY_LOOT_KEY0);
     }};
     private static final Set<Integer> INCLUDED_CONTAINER_IDS = ImmutableSet.of(
         InventoryID.INV, // inventory
