@@ -79,8 +79,7 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
     }
 
     public void onActorDeath(ActorDeath e) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
@@ -100,21 +99,16 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
             log.debug("playerDeathLocations is null");
             return;
         }
+
         PolicyContext policyContext = createContext();
-        GameRules gameRules = policyContext.getGameRules();
-        if (policyContext.isMustEnforceStrictPolicies()) {
-            addPlayerDeathLocation(otherPlayer);
-            return;
-        }
-        if (gameRules == null || !gameRules.isRestrictPlayerVersusPlayerLoot()) {
+        if (!policyContext.shouldApplyForRules(GameRules::isRestrictPlayerVersusPlayerLoot)) {
             return;
         }
         addPlayerDeathLocation(otherPlayer);
     }
 
     public void onPlayerLootReceived(PlayerLootReceived e) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
@@ -270,24 +264,15 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
-        if (!accountConfigurationService.isReady()
-            || accountConfigurationService.getCurrentAccountConfiguration() == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
         PolicyContext context = createContext();
-        if (context.isMustEnforceStrictPolicies()) {
-            enforceOnMenuOptionClicked(event);
+        if (!context.shouldApplyForRules(GameRules::isRestrictPlayerVersusPlayerLoot)) {
             return;
         }
-        GameRules gameRules = context.getGameRules();
-        if (gameRules == null || !gameRules.isRestrictPlayerVersusPlayerLoot()) {
-            return;
-        }
-        enforceOnMenuOptionClicked(event);
-    }
 
-    private void enforceOnMenuOptionClicked(MenuOptionClicked event) {
         String menuOption = event.getMenuOption();
         Widget widget = event.getWidget();
         if (widget == null) {
@@ -320,6 +305,9 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
             buChatService.sendMessage(builder.build());
             buSoundHelper.playDisabledSound();
         }
+    }
+
+    private void enforceOnMenuOptionClicked(MenuOptionClicked event) {
     }
 
     @Value
