@@ -112,6 +112,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
         put("Key (medium)", ItemID.TRAIL_CLUE_MEDIUM_RIDDLE001_KEY);
         put("Key (elite)", ItemID.TRAIL_ELITE_RIDDLE_KEY32);
+
+        put("Loot key", ItemID.WILDY_LOOT_KEY0);
     }};
     private static final Set<Integer> INCLUDED_CONTAINER_IDS = ImmutableSet.of(
         InventoryID.INV, // inventory
@@ -120,13 +122,13 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
         InventoryID.TRAIL_REWARDINV, // Barrows chest
         InventoryID.MISC_RESOURCES_COLLECTED, // Miscellania reward
-        // I think we should probably not include these it might ruin the moment
-//            InventoryID.RAIDS_REWARDS, // Chambers of eric reward
-//            InventoryID.TOB_CHESTS, // Theater of Blood reward
-//            InventoryID.TOA_CHESTS, // Tombs of Amascut reward
+        InventoryID.RAIDS_REWARDS, // Chambers of eric reward
+        InventoryID.TOB_CHESTS, // Theater of Blood reward
+        InventoryID.TOA_CHESTS, // Tombs of Amascut reward
         InventoryID.SEED_VAULT, // Farming Guild seed vault
         InventoryID.TRAWLER_REWARDINV, // Fishing trawler reward
-        InventoryID.LOOTING_BAG // Looting bag
+        InventoryID.LOOTING_BAG, // Looting bag
+        InventoryID.PMOON_REWARDINV // Moons of Peril reward
     );
     private static final Set<WorldType> supportedWorldTypes = ImmutableSet.of(
         WorldType.MEMBERS,
@@ -157,14 +159,13 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private MemberService memberService;
     @Inject
     private GameRulesService gameRulesService;
-    private final Consumer<UnlockedItemsDataProvider.State> unlockedItemDataProviderStateListener = this::unlockedItemDataProviderStateListener;
     @Inject
     private ChatMessageProvider chatMessageProvider;
     @Inject
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private MinigameService minigameService;
-
+    private final Consumer<UnlockedItemsDataProvider.State> unlockedItemDataProviderStateListener = this::unlockedItemDataProviderStateListener;
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private volatile boolean hasNotifiedPlayerOfNonSupportedWorldType = false;
     private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;

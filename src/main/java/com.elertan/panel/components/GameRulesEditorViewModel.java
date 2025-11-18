@@ -22,6 +22,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
     public final Property<Boolean> preventGrandExchangeBuyOffersProperty;
     public final Property<Boolean> preventPlayedOwnedHouseProperty;
     public final Property<Boolean> restrictPlayerVersusPlayerLootProperty;
+    public final Property<Boolean> restrictFaladorPartyRoomBalloonsProperty;
     public final Property<Boolean> shareAchievementNotificationsProperty;
     public final Property<Integer> valuableLootNotificationThresholdProperty;
     public final Property<String> partyPasswordProperty;
@@ -35,6 +36,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
     private final PropertyChangeListener preventGrandExchangeBuyOffersListener = this::preventGrandExchangeBuyOffersListener;
     private final PropertyChangeListener preventPlayerOwnedHouseListener = this::preventPlayedOwnedHouseListener;
     private final PropertyChangeListener restrictPlayerVersusPlayerLoot = this::restrictPlayerVersusPlayerLoot;
+    private final PropertyChangeListener restrictFaladorPartyRoomBalloons = this::restrictFaladorPartyRoomBalloons;
     private final PropertyChangeListener shareAchievementNotificationsListener = this::shareAchievementNotificationsListener;
     private final PropertyChangeListener valuableLootNotificationThresholdListener = this::valuableLootNotificationThresholdListener;
     private final PropertyChangeListener partyPasswordListener = this::partyPasswordListener;
@@ -57,6 +59,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
         preventGrandExchangeBuyOffersProperty = new Property<>(gameRules.isPreventGrandExchangeBuyOffers());
         preventPlayedOwnedHouseProperty = new Property<>(gameRules.isPreventPlayerOwnedHouse());
         restrictPlayerVersusPlayerLootProperty = new Property<>(gameRules.isRestrictPlayerVersusPlayerLoot());
+        restrictFaladorPartyRoomBalloonsProperty = new Property<>(gameRules.isRestrictFaladorPartyRoomBalloons());
         shareAchievementNotificationsProperty = new Property<>(gameRules.isShareAchievementNotifications());
         valuableLootNotificationThresholdProperty = new Property<>(gameRules.getValuableLootNotificationThreshold());
         partyPasswordProperty = new Property<>(gameRules.getPartyPassword());
@@ -89,6 +92,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
         preventGrandExchangeBuyOffersProperty.addListener(preventGrandExchangeBuyOffersListener);
         preventPlayedOwnedHouseProperty.addListener(preventPlayerOwnedHouseListener);
         restrictPlayerVersusPlayerLootProperty.addListener(restrictPlayerVersusPlayerLoot);
+        restrictFaladorPartyRoomBalloonsProperty.addListener(restrictFaladorPartyRoomBalloons);
         shareAchievementNotificationsProperty.addListener(shareAchievementNotificationsListener);
         valuableLootNotificationThresholdProperty.addListener(
             valuableLootNotificationThresholdListener);
@@ -105,6 +109,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
         valuableLootNotificationThresholdProperty.removeListener(
             valuableLootNotificationThresholdListener);
         shareAchievementNotificationsProperty.removeListener(shareAchievementNotificationsListener);
+        restrictFaladorPartyRoomBalloonsProperty.removeListener(restrictFaladorPartyRoomBalloons);
         restrictPlayerVersusPlayerLootProperty.removeListener(restrictPlayerVersusPlayerLoot);
         preventPlayedOwnedHouseProperty.removeListener(preventPlayerOwnedHouseListener);
         preventGrandExchangeBuyOffersProperty.removeListener(preventGrandExchangeBuyOffersListener);
@@ -130,6 +135,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
         preventGrandExchangeBuyOffersProperty.set(gameRules.isPreventGrandExchangeBuyOffers());
         preventPlayedOwnedHouseProperty.set(gameRules.isPreventPlayerOwnedHouse());
         restrictPlayerVersusPlayerLootProperty.set(gameRules.isRestrictPlayerVersusPlayerLoot());
+        restrictFaladorPartyRoomBalloonsProperty.set(gameRules.isRestrictFaladorPartyRoomBalloons());
         shareAchievementNotificationsProperty.set(gameRules.isShareAchievementNotifications());
         partyPasswordProperty.set(gameRules.getPartyPassword());
         valuableLootNotificationThresholdProperty.set(gameRules.getValuableLootNotificationThreshold());
@@ -169,6 +175,11 @@ public class GameRulesEditorViewModel implements AutoCloseable {
 
     private void restrictPlayerVersusPlayerLoot(PropertyChangeEvent event) {
         log.debug("restrictPlayerVersusPlayerLoot changed to: {}", event.getNewValue());
+        tryUpdateGameRules();
+    }
+
+    private void restrictFaladorPartyRoomBalloons(PropertyChangeEvent event) {
+        log.debug("restrictFaladorPartyRoomBalloons changed to: {}", event.getNewValue());
         tryUpdateGameRules();
     }
 
@@ -212,6 +223,7 @@ public class GameRulesEditorViewModel implements AutoCloseable {
             preventGrandExchangeBuyOffersProperty.get(),
             preventPlayedOwnedHouseProperty.get(),
             restrictPlayerVersusPlayerLootProperty.get(),
+            restrictFaladorPartyRoomBalloonsProperty.get(),
             shareAchievementNotificationsProperty.get(),
             valuableLootNotificationThresholdProperty.get(),
             partyPasswordProperty.get()

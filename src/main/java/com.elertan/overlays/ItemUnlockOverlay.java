@@ -141,13 +141,7 @@ public class ItemUnlockOverlay extends Overlay {
         if (!config.showUnlockOverlay()) {
             return null;
         }
-        if (!accountConfigurationService.isReady()) {
-            return null;
-        }
-        if (accountConfigurationService.getCurrentAccountConfiguration() == null) {
-            return null;
-        }
-        if (phase == Phase.IDLE && current == null) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return null;
         }
 

@@ -159,6 +159,10 @@ public class AccountConfigurationService implements BUPluginLifecycle {
         return accountConfigurationMap != null;
     }
 
+    public boolean isBronzemanEnabled() {
+        return isReady() && getCurrentAccountConfiguration() != null;
+    }
+
     public CompletableFuture<Void> waitUntilCurrentAccountConfigurationReady(
         Duration timeout) {
         return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {

@@ -7,6 +7,7 @@ import com.elertan.data.LastEventDataProvider;
 import com.elertan.data.MembersDataProvider;
 import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.models.AccountConfiguration;
+import com.elertan.policies.FaladorPartyRoomPolicy;
 import com.elertan.policies.GrandExchangePolicy;
 import com.elertan.policies.GroundItemsPolicy;
 import com.elertan.policies.PlayerOwnedHousePolicy;
@@ -110,6 +111,8 @@ public final class BUPlugin extends Plugin {
     private PlayerOwnedHousePolicy playerOwnedHousePolicy;
     @Inject
     private PlayerVersusPlayerPolicy playerVersusPlayerPolicy;
+    @Inject
+    private FaladorPartyRoomPolicy faladorPartyRoomPolicy;
 
     @Inject
     private Client client;
@@ -159,6 +162,7 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(groundItemsPolicy);
         lifecycleDependencies.add(playerOwnedHousePolicy);
         lifecycleDependencies.add(playerVersusPlayerPolicy);
+        lifecycleDependencies.add(faladorPartyRoomPolicy);
 
         lifecycleDependencies.add(chatMessageEventBroadcaster);
     }
@@ -283,6 +287,7 @@ public final class BUPlugin extends Plugin {
         groundItemsPolicy.onMenuOptionClicked(event);
         playerOwnedHousePolicy.onMenuOptionClicked(event);
         playerVersusPlayerPolicy.onMenuOptionClicked(event);
+        faladorPartyRoomPolicy.onMenuOptionClicked(event);
     }
 
     @Subscribe

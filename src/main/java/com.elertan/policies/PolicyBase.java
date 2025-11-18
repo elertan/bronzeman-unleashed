@@ -5,6 +5,7 @@ import com.elertan.GameRulesService;
 import com.elertan.PolicyService;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.models.GameRules;
+import java.util.function.Function;
 import javax.annotation.Nullable;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -56,5 +57,16 @@ public class PolicyBase {
         private final GameRules gameRules;
         @Getter
         private final boolean mustEnforceStrictPolicies;
+
+        public boolean shouldApplyForRules(
+            Function<@NonNull GameRules, @NonNull Boolean> rulesApplier) {
+            if (mustEnforceStrictPolicies) {
+                return true;
+            }
+            if (gameRules == null) {
+                return false;
+            }
+            return rulesApplier.apply(gameRules);
+        }
     }
 }
