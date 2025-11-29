@@ -1,44 +1,42 @@
 package com.elertan.data;
 
-import com.elertan.BUPluginLifecycle;
 import com.elertan.models.UnlockedItem;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.RemoteStorageService;
-import com.elertan.utils.ListenerUtils;
-import com.elertan.utils.StateListenerManager;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Singleton
-public class UnlockedItemsDataProvider implements BUPluginLifecycle {
+public class UnlockedItemsDataProvider extends AbstractDataProvider {
 
-    private final StateListenerManager<State> stateListeners = new StateListenerManager<>("UnlockedItemsDataProvider");
     private final ConcurrentLinkedQueue<UnlockedItemsMapListener> unlockedItemsMapListeners = new ConcurrentLinkedQueue<>();
+
     @Inject
     private RemoteStorageService remoteStorageService;
 
-    @Getter
-    private State state = State.NotReady;
     private KeyValueStoragePort<Integer, UnlockedItem> keyValueStoragePort;
-    private KeyValueStoragePort.Listener<Integer, UnlockedItem> unlockedItemsStoragePortListener;
+    private KeyValueStoragePort.Listener<Integer, UnlockedItem> storagePortListener;
     private ConcurrentHashMap<Integer, UnlockedItem> unlockedItemsMap;
-    private final Consumer<RemoteStorageService.State> remoteStorageServiceStateListener = this::remoteStorageServiceStateListener;
+
+    public UnlockedItemsDataProvider() {
+        super("UnlockedItemsDataProvider");
+    }
+
+    @Override
+    protected RemoteStorageService getRemoteStorageService() {
+        return remoteStorageService;
+    }
 
     @Override
     public void startUp() throws Exception {
-        remoteStorageService.addStateListener(remoteStorageServiceStateListener);
-
-        unlockedItemsStoragePortListener = new KeyValueStoragePort.Listener<Integer, UnlockedItem>() {
+        storagePortListener = new KeyValueStoragePort.Listener<Integer, UnlockedItem>() {
             @Override
             public void onFullUpdate(Map<Integer, UnlockedItem> map) {
                 if (unlockedItemsMap == null) {
@@ -80,18 +78,32 @@ public class UnlockedItemsDataProvider implements BUPluginLifecycle {
                 }
             }
         };
-
-        tryInitialize();
+        super.startUp();
     }
 
     @Override
-    public void shutDown() throws Exception {
-        unlockedItemsMap = null;
-        state = State.NotReady;
-        unlockedItemsStoragePortListener = null;
-        keyValueStoragePort = null;
+    protected void onRemoteStorageReady() {
+        keyValueStoragePort = remoteStorageService.getUnlockedItemsStoragePort();
+        keyValueStoragePort.addListener(storagePortListener);
 
-        remoteStorageService.removeStateListener(remoteStorageServiceStateListener);
+        keyValueStoragePort.readAll().whenComplete((map, throwable) -> {
+            if (throwable != null) {
+                log.error("UnlockedItemDataProvider storageport read all failed", throwable);
+                return;
+            }
+            unlockedItemsMap = new ConcurrentHashMap<>(map);
+            log.debug("UnlockedItemDataProvider initialized with {} items", unlockedItemsMap.size());
+            setState(State.Ready);
+        });
+    }
+
+    @Override
+    protected void onRemoteStorageNotReady() {
+        unlockedItemsMap = null;
+        if (keyValueStoragePort != null) {
+            keyValueStoragePort.removeListener(storagePortListener);
+            keyValueStoragePort = null;
+        }
     }
 
     public Map<Integer, UnlockedItem> getUnlockedItemsMap() {
@@ -99,14 +111,6 @@ public class UnlockedItemsDataProvider implements BUPluginLifecycle {
             return null;
         }
         return Collections.unmodifiableMap(unlockedItemsMap);
-    }
-
-    public void addStateListener(Consumer<State> listener) {
-        stateListeners.addListener(listener);
-    }
-
-    public void removeStateListener(Consumer<State> listener) {
-        stateListeners.removeListener(listener);
     }
 
     public void addUnlockedItemsMapListener(UnlockedItemsMapListener listener) {
@@ -117,120 +121,27 @@ public class UnlockedItemsDataProvider implements BUPluginLifecycle {
         unlockedItemsMapListeners.remove(listener);
     }
 
-    public CompletableFuture<Void> waitUntilReady(Duration timeout) {
-        return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
-            Consumer<State> stateConsumer;
-
-            @Override
-            public boolean isReady() {
-                return getState() == State.Ready;
-            }
-
-            @Override
-            public void addListener(Runnable notify) {
-                stateConsumer = state -> {
-                    notify.run();
-                };
-                addStateListener(stateConsumer);
-            }
-
-            @Override
-            public void removeListener() {
-                if (stateConsumer == null) {
-                    return;
-                }
-                removeStateListener(stateConsumer);
-            }
-
-            @Override
-            public Duration getTimeout() {
-                return timeout;
-            }
-        });
-    }
-
     public CompletableFuture<Void> addUnlockedItem(UnlockedItem unlockedItem) {
-        if (state != State.Ready) {
-            Exception ex = new IllegalStateException("State is not ready");
+        if (getState() != State.Ready) {
             CompletableFuture<Void> future = new CompletableFuture<>();
-            future.completeExceptionally(ex);
+            future.completeExceptionally(new IllegalStateException("State is not ready"));
             return future;
         }
-
         unlockedItemsMap.put(unlockedItem.getId(), unlockedItem);
         return keyValueStoragePort.update(unlockedItem.getId(), unlockedItem);
     }
 
     public CompletableFuture<Void> removeUnlockedItemById(int itemId) {
-        if (state != State.Ready) {
-            Exception ex = new IllegalStateException("State is not ready");
+        if (getState() != State.Ready) {
             CompletableFuture<Void> future = new CompletableFuture<>();
-            future.completeExceptionally(ex);
+            future.completeExceptionally(new IllegalStateException("State is not ready"));
             return future;
         }
         return keyValueStoragePort.delete(itemId);
     }
 
-    private void remoteStorageServiceStateListener(RemoteStorageService.State state) {
-        if (state == RemoteStorageService.State.NotReady) {
-            unlockedItemsMap = null;
-            if (keyValueStoragePort != null) {
-                keyValueStoragePort.removeListener(unlockedItemsStoragePortListener);
-                keyValueStoragePort = null;
-            }
-            setState(State.NotReady);
-            return;
-        }
-
-        tryInitialize();
-    }
-
-    private void tryInitialize() {
-        if (remoteStorageService.getState() == RemoteStorageService.State.NotReady) {
-            unlockedItemsMap = null;
-            if (keyValueStoragePort != null) {
-                keyValueStoragePort.removeListener(unlockedItemsStoragePortListener);
-                keyValueStoragePort = null;
-            }
-            setState(State.NotReady);
-            return;
-        }
-
-        keyValueStoragePort = remoteStorageService.getUnlockedItemsStoragePort();
-        keyValueStoragePort.addListener(unlockedItemsStoragePortListener);
-
-        keyValueStoragePort.readAll().whenComplete((map, throwable) -> {
-            if (throwable != null) {
-                log.error("UnlockedItemDataProvider storageport read all failed", throwable);
-                return;
-            }
-
-            unlockedItemsMap = new ConcurrentHashMap<>(map);
-            log.debug(
-                "UnlockedItemDataProvider initialized with {} items",
-                unlockedItemsMap.size()
-            );
-            setState(State.Ready);
-        });
-    }
-
-    private void setState(State state) {
-        if (this.state == state) {
-            return;
-        }
-        this.state = state;
-        stateListeners.notifyListeners(state);
-    }
-
-    public enum State {
-        NotReady,
-        Ready,
-    }
-
     public interface UnlockedItemsMapListener {
-
         void onUpdate(UnlockedItem unlockedItem);
-
         void onDelete(UnlockedItem unlockedItem);
     }
 }
