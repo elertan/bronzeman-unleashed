@@ -1,6 +1,5 @@
 package com.elertan;
 
-import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.event.PetDropBUEvent;
 import com.elertan.models.ISOOffsetDateTime;
 import com.google.inject.Inject;
@@ -67,7 +66,7 @@ public class PetDropService implements BUPluginLifecycle {
     @Inject
     private ItemManager itemManager;
     @Inject
-    private UnlockedItemsDataProvider unlockedItemsDataProvider;
+    private AccountConfigurationService accountConfigurationService;
 
     // All pet item IDs loaded from game enum
     private Set<Integer> petItemIds = new HashSet<>();
@@ -166,7 +165,7 @@ public class PetDropService implements BUPluginLifecycle {
             return;
         }
 
-        if (unlockedItemsDataProvider.getState() != UnlockedItemsDataProvider.State.Ready) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
