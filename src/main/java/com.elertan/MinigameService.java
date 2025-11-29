@@ -68,7 +68,7 @@ public class MinigameService {
         }
 
         // Region-based (Inferno, Gauntlet, ToA, Fight Caves)
-        int[] regions = client.getMapRegions();
+        int[] regions = client.getTopLevelWorldView().getMapRegions();
         if (regions != null) {
             for (int region : regions) {
                 if (region == INFERNO_REGION ||
