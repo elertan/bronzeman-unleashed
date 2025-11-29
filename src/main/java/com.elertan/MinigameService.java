@@ -15,8 +15,9 @@ public class MinigameService {
     private static final int TOB_VARBIT = 6440;      // ToB
     private static final int BA_VARBIT = 3923;       // Barbarian Assault
 
-    // Region IDs - https://github.com/runelite/runelite/blob/master/runelite-client/src/main/java/net/runelite/client/plugins/screenshot/ScreenshotPlugin.java
+    // Inferno - https://github.com/JourneyDeprecated/OpenOSRS/blob/master/runelite-client/src/main/java/net/runelite/client/plugins/inferno/InfernoPlugin.java
     private static final int INFERNO_REGION = 9043;
+    // Gauntlet - https://github.com/runelite/runelite/blob/master/runelite-client/src/main/java/net/runelite/client/plugins/screenshot/ScreenshotPlugin.java
     private static final int GAUNTLET_REGION = 7512;
     private static final int CORRUPTED_GAUNTLET_REGION = 7768;
 
