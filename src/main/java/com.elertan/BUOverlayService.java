@@ -20,7 +20,7 @@ public class BUOverlayService implements BUPluginLifecycle {
     @Inject
     private AccountConfigurationService accountConfigurationService;
 
-    private Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
+    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
 
     @Override
     public void startUp() throws Exception {

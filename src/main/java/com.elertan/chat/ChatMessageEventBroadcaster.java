@@ -354,14 +354,7 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
         NPCComposition npcComposition = client.getNpcDefinition(e.getNpcId());
         String formattedCoins = String.format("%,d", totalCoins);
 
-        CompletableFuture<String> itemIconTagFuture;
-        if (config.useItemIconsInChat()) {
-            itemIconTagFuture = buChatService.getItemIconTag(e.getItemId());
-        } else {
-            itemIconTagFuture = CompletableFuture.completedFuture(null);
-        }
-
-        itemIconTagFuture.whenComplete((itemIconTag, throwable) -> {
+        buChatService.getItemIconTagIfEnabled(e.getItemId()).whenComplete((itemIconTag, throwable) -> {
             if (throwable != null) {
                 log.error("Failed to get item icon tag", throwable);
                 future.completeExceptionally(throwable);
