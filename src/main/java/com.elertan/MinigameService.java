@@ -37,6 +37,13 @@ public class MinigameService {
         14672   // Tomb
     );
 
+    // Fight Caves Region IDs - https://github.com/runelite/runelite/pull/2351
+    private static final Set<Integer> FIGHT_CAVES_REGIONS = ImmutableSet.of(
+        9294, 9295, 9296,
+        9550, 9551, 9552,
+        9806, 9807, 9808
+    );
+
     @Inject
     private Client client;
 
@@ -60,14 +67,15 @@ public class MinigameService {
             return true;
         }
 
-        // Region-based (Inferno, Gauntlet, ToA)
+        // Region-based (Inferno, Gauntlet, ToA, Fight Caves)
         int[] regions = client.getMapRegions();
         if (regions != null) {
             for (int region : regions) {
                 if (region == INFERNO_REGION ||
                     region == GAUNTLET_REGION ||
                     region == CORRUPTED_GAUNTLET_REGION ||
-                    TOA_REGIONS.contains(region)) {
+                    TOA_REGIONS.contains(region) ||
+                    FIGHT_CAVES_REGIONS.contains(region)) {
                     return true;
                 }
             }
