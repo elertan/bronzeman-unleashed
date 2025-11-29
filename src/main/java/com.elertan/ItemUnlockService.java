@@ -31,8 +31,13 @@ import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPCComposition;
+import net.runelite.api.Player;
+import net.runelite.api.Tile;
+import net.runelite.api.TileItem;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.ItemSpawned;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.client.callback.ClientThread;
@@ -352,6 +357,56 @@ public class ItemUnlockService implements BUPluginLifecycle {
                 }
             });
         }
+    }
+
+    public void onItemSpawned(ItemSpawned event) {
+        if (unlockedItemsDataProvider.getState() != UnlockedItemsDataProvider.State.Ready) {
+            return;
+        }
+
+        // Check if inventory is full (28 items)
+        ItemContainer inventory = client.getItemContainer(InventoryID.INV);
+        if (inventory == null) {
+            return;
+        }
+
+        Item[] items = inventory.getItems();
+        int itemCount = 0;
+        for (Item item : items) {
+            if (item.getId() > 0) {
+                itemCount++;
+            }
+        }
+        if (itemCount < 28) {
+            return;
+        }
+
+        // Check if item spawned at player's tile
+        TileItem tileItem = event.getItem();
+        Tile tile = event.getTile();
+
+        Player localPlayer = client.getLocalPlayer();
+        if (localPlayer == null) {
+            return;
+        }
+
+        WorldPoint playerLocation = localPlayer.getWorldLocation();
+        WorldPoint itemLocation = tile.getWorldLocation();
+
+        if (!playerLocation.equals(itemLocation)) {
+            return;
+        }
+
+        int itemId = tileItem.getId();
+        if (hasUnlockedItem(itemId)) {
+            return;
+        }
+
+        unlockItem(itemId, null).whenComplete((__, throwable) -> {
+            if (throwable != null) {
+                log.error("Failed to unlock ground item", throwable);
+            }
+        });
     }
 
     public void addNewUnlockedItemListener(Consumer<UnlockedItem> consumer) {
