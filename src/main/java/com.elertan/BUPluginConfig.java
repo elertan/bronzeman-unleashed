@@ -21,6 +21,8 @@ public interface BUPluginConfig extends Config {
     String chatSection = "chatSection";
     @ConfigSection(name = "Party", description = "Controls the party settings", position = 4)
     String partySection = "partySection";
+    @ConfigSection(name = "Minigames", description = "Controls minigame behavior", position = 5)
+    String minigameSection = "minigameSection";
     String SHOULD_AUTOMATICALLY_JOIN_PARTY_KEY = "shouldAutomaticallyJoinParty";
     String SHOULD_CHANGE_TO_PARTY_EVEN_IF_ALREADY_IN_PARTY = "shouldChangeToPartyEvenIfAlreadyInParty";
     String ACCOUNT_CONFIG_MAP_JSON_KEY = "accountConfigMapJson";
@@ -143,6 +145,16 @@ public interface BUPluginConfig extends Config {
     @ConfigItem(keyName = SHOULD_AUTOMATICALLY_JOIN_PARTY_KEY, name = "Auto-join party on login", description = "Whether to automatically join the party when you login on a Bronzeman character (when a party password is set)", section = partySection)
     default boolean shouldAutomaticallyJoinPartyOnLogin() {
         return true;
+    }
+
+    @ConfigItem(keyName = "hideUnlockOverlayInMinigames", name = "Hide unlock overlay", description = "Hides the item unlock overlay in minigames/instances (Inferno, Gauntlet, raids, etc.)", section = minigameSection)
+    default boolean hideUnlockOverlayInMinigames() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "hideUnlockChatInMinigames", name = "Hide unlock chat", description = "Hides the item unlock chat message in minigames/instances", section = minigameSection)
+    default boolean hideUnlockChatInMinigames() {
+        return false;
     }
 
     @ConfigItem(keyName = SHOULD_CHANGE_TO_PARTY_EVEN_IF_ALREADY_IN_PARTY, name = "Auto-join even if already in party", description = "Whether to change to the party even if you are already in a party", section = partySection, hidden = true)

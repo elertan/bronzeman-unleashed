@@ -197,7 +197,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     unlockedItem.getDroppedByNPCId()
                 );
 
-                if (buPluginConfig.showItemUnlocksInChat()) {
+                boolean hideChat = buPluginConfig.hideUnlockChatInMinigames() && minigameService.isInMinigameOrInstance();
+                if (buPluginConfig.showItemUnlocksInChat() && !hideChat) {
                     CompletableFuture<String> itemIconTagFuture;
                     if (buPluginConfig.useItemIconsInChat()) {
                         itemIconTagFuture = buChatService.getItemIconTag(
