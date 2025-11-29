@@ -7,5 +7,6 @@ public enum BUEventType {
     CombatTaskAchievement,
     QuestCompletionAchievement,
     DiaryCompletionAchievement,
-    ValuableLoot
+    ValuableLoot,
+    PetDrop
 }

@@ -12,6 +12,7 @@ import com.elertan.event.CombatTaskAchievementBUEvent;
 import com.elertan.event.DiaryCompletionAchievementBUEvent;
 import com.elertan.event.QuestCompletionAchievementBUEvent;
 import com.elertan.event.SkillLevelUpAchievementBUEvent;
+import com.elertan.event.PetDropBUEvent;
 import com.elertan.event.TotalLevelAchievementBUEvent;
 import com.elertan.event.ValuableLootBUEvent;
 import com.elertan.models.Member;
@@ -55,6 +56,7 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
         .put(BUEventType.QuestCompletionAchievement, this::transformQuestCompletionAchievementEvent)
         .put(BUEventType.DiaryCompletionAchievement, this::transformDiaryCompletionAchievementEvent)
         .put(BUEventType.ValuableLoot, this::transformValuableLootEvent)
+        .put(BUEventType.PetDrop, this::transformPetDropEvent)
         .build();
 
     private final Consumer<BUEvent> eventListener = this::eventListener;
@@ -390,5 +392,38 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
         });
 
         return future;
+    }
+
+    private CompletableFuture<String> transformPetDropEvent(BUEvent event) {
+        Supplier<String> sync = () -> {
+            if (client.getAccountHash() == event.getDispatchedFromAccountHash()) {
+                return null;
+            }
+
+            PetDropBUEvent e = (PetDropBUEvent) event;
+            Member member = memberService.getMemberByAccountHash(e.getDispatchedFromAccountHash());
+            if (member == null) {
+                log.error(
+                    "could not find member by hash {} at transformPetDropEvent",
+                    e.getDispatchedFromAccountHash()
+                );
+                return null;
+            }
+
+            ChatMessageBuilder builder = new ChatMessageBuilder();
+            builder.append(config.chatPlayerNameColor(), member.getName());
+
+            String petName = e.getPetName();
+            if (petName != null) {
+                builder.append(" has received a pet: ");
+                builder.append(config.chatHighlightColor(), petName);
+                builder.append("!");
+            } else {
+                builder.append(" has received a pet!");
+            }
+
+            return builder.build();
+        };
+        return CompletableFuture.supplyAsync(sync);
     }
 }

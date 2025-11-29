@@ -32,6 +32,7 @@ import net.runelite.api.events.ItemSpawned;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.events.WidgetClosed;
@@ -113,6 +114,8 @@ public final class BUPlugin extends Plugin {
     private PlayerVersusPlayerPolicy playerVersusPlayerPolicy;
     @Inject
     private FaladorPartyRoomPolicy faladorPartyRoomPolicy;
+    @Inject
+    private PetDropService petDropService;
 
     @Inject
     private Client client;
@@ -163,6 +166,7 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(playerOwnedHousePolicy);
         lifecycleDependencies.add(playerVersusPlayerPolicy);
         lifecycleDependencies.add(faladorPartyRoomPolicy);
+        lifecycleDependencies.add(petDropService);
 
         lifecycleDependencies.add(chatMessageEventBroadcaster);
     }
@@ -248,6 +252,12 @@ public final class BUPlugin extends Plugin {
         buPartyService.onGameStateChanged(event);
         achievementDiaryService.onGameStateChanged(event);
         itemUnlockService.onGameStateChanged(event);
+        petDropService.onGameStateChanged(event);
+    }
+
+    @Subscribe
+    public void onGameTick(GameTick event) {
+        petDropService.onGameTick(event);
     }
 
     @Subscribe
@@ -269,6 +279,7 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onChatMessage(ChatMessage chatMessage) {
         buChatService.onChatMessage(chatMessage);
+        petDropService.onChatMessage(chatMessage);
     }
 
     @Subscribe
