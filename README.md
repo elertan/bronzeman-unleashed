@@ -32,7 +32,7 @@ Every unlock gets celebrated.
 
 ## Your Rules
 
-![game-rules](assets/game-rules.png)
+<img src="assets/game-rules.png" alt="Game Rules" height="400">
 
 Configure your own restrictions:
 - Track only tradeable items
@@ -54,7 +54,7 @@ Play with friends. Shared unlocks, live notifications, real-time sync via Fireba
 
 ## Track Your Progress
 
-![unlocks-panel](assets/unlocks-panel.png)
+<img src="assets/unlocks-panel.png" alt="Unlocks Panel" height="400">
 
 Search, sort, filter. See who unlocked what and when.
 
@@ -62,7 +62,7 @@ Search, sort, filter. See who unlocked what and when.
 
 ## Getting Started
 
-![setup](assets/setup.png)
+<img src="assets/setup.png" alt="Setup" height="400">
 
 The plugin walks you through setup. For Firebase configuration, see the [setup guide](firebase-guide.md).
 
