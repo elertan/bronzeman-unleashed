@@ -114,6 +114,19 @@ public class ItemUnlockService implements BUPluginLifecycle {
         put("Key (elite)", ItemID.TRAIL_ELITE_RIDDLE_KEY32);
 
         put("Loot key", ItemID.WILDY_LOOT_KEY0);
+
+        // Black mask charge variants - all map to uncharged (8921)
+        put("Black mask", 8921);
+        put("Black mask (1)", 8921);
+        put("Black mask (2)", 8921);
+        put("Black mask (3)", 8921);
+        put("Black mask (4)", 8921);
+        put("Black mask (5)", 8921);
+        put("Black mask (6)", 8921);
+        put("Black mask (7)", 8921);
+        put("Black mask (8)", 8921);
+        put("Black mask (9)", 8921);
+        put("Black mask (10)", 8921);
     }};
     private static final Set<Integer> INCLUDED_CONTAINER_IDS = ImmutableSet.of(
         InventoryID.INV, // inventory
@@ -352,6 +365,13 @@ public class ItemUnlockService implements BUPluginLifecycle {
     public boolean hasUnlockedItem(int itemId) throws IllegalStateException {
         if (unlockedItemsDataProvider.getState() != UnlockedItemsDataProvider.State.Ready) {
             throw new IllegalStateException("State is not READY");
+        }
+
+        // Apply name mapping (same as unlockItem)
+        ItemComposition itemComposition = itemManager.getItemComposition(itemId);
+        Integer mappedItemId = MAP_ITEM_NAMES.get(itemComposition.getName());
+        if (mappedItemId != null) {
+            itemId = mappedItemId;
         }
 
         if (AUTO_UNLOCKED_ITEMS.contains(itemId)) {

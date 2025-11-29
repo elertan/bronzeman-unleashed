@@ -189,14 +189,17 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
 
         @Override
         public ConfigScreen create(ConfigScreenViewModel viewModel) {
-            GameRulesEditorViewModel.Props props = viewModel.gameRulesEditorViewModelPropsProperty.get();
             GameRulesEditorViewModel gameRulesEditorViewModel = gameRulesEditorViewModelFactory.create(
-                props);
+                viewModel.gameRulesEditorViewModelPropsProperty.get());
 
+            // Add listener FIRST to catch any async updates
             viewModel.gameRulesEditorViewModelPropsProperty.addListener((event) -> {
                 GameRulesEditorViewModel.Props newProps = viewModel.gameRulesEditorViewModelPropsProperty.get();
                 gameRulesEditorViewModel.setProps(newProps);
             });
+
+            // Then explicitly set current value (in case async already completed)
+            gameRulesEditorViewModel.setProps(viewModel.gameRulesEditorViewModelPropsProperty.get());
 
             return new ConfigScreen(viewModel, gameRulesEditorViewModel, gameRulesEditorFactory);
         }
