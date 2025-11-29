@@ -4,6 +4,7 @@ import com.elertan.BUPluginLifecycle;
 import com.elertan.event.BUEvent;
 import com.elertan.remote.ObjectStoragePort;
 import com.elertan.remote.RemoteStorageService;
+import com.elertan.utils.StateListenerManager;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.concurrent.CompletableFuture;
@@ -16,8 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 @Singleton
 public class LastEventDataProvider implements BUPluginLifecycle {
 
-    private final ConcurrentLinkedQueue<Consumer<State>> stateListeners = new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<Consumer<BUEvent>> eventListeners = new ConcurrentLinkedQueue<>();
+    private final StateListenerManager<State> stateListeners = new StateListenerManager<>("LastEventDataProvider");
+    private final StateListenerManager<BUEvent> eventListeners = new StateListenerManager<>("LastEventDataProvider.events");
     @Inject
     private RemoteStorageService remoteStorageService;
     @Getter
@@ -33,13 +34,7 @@ public class LastEventDataProvider implements BUPluginLifecycle {
         storagePortListener = new ObjectStoragePort.Listener<BUEvent>() {
             @Override
             public void onUpdate(BUEvent value) {
-                for (Consumer<BUEvent> eventListener : eventListeners) {
-                    try {
-                        eventListener.accept(value);
-                    } catch (Exception e) {
-                        log.error("error in event listener", e);
-                    }
-                }
+                eventListeners.notifyListeners(value);
             }
 
             @Override
@@ -55,19 +50,19 @@ public class LastEventDataProvider implements BUPluginLifecycle {
     }
 
     public void addStateListener(Consumer<State> listener) {
-        stateListeners.add(listener);
+        stateListeners.addListener(listener);
     }
 
     public void removeStateListener(Consumer<State> listener) {
-        stateListeners.remove(listener);
+        stateListeners.removeListener(listener);
     }
 
     public void addEventListener(Consumer<BUEvent> listener) {
-        eventListeners.add(listener);
+        eventListeners.addListener(listener);
     }
 
     public void removeEventListener(Consumer<BUEvent> listener) {
-        eventListeners.remove(listener);
+        eventListeners.removeListener(listener);
     }
 
     public CompletableFuture<Void> update(BUEvent event) {
@@ -105,14 +100,7 @@ public class LastEventDataProvider implements BUPluginLifecycle {
             return;
         }
         this.state = state;
-
-        for (Consumer<State> listener : stateListeners) {
-            try {
-                listener.accept(state);
-            } catch (Exception e) {
-                log.error("set state listener last event data provider error", e);
-            }
-        }
+        stateListeners.notifyListeners(state);
     }
 
     public enum State {

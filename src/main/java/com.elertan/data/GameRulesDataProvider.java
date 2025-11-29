@@ -5,6 +5,7 @@ import com.elertan.models.GameRules;
 import com.elertan.remote.ObjectStoragePort;
 import com.elertan.remote.RemoteStorageService;
 import com.elertan.utils.ListenerUtils;
+import com.elertan.utils.StateListenerManager;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.Duration;
@@ -18,8 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 @Singleton
 public class GameRulesDataProvider implements BUPluginLifecycle {
 
-    private final ConcurrentLinkedQueue<Consumer<State>> stateListeners = new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<Consumer<GameRules>> gameRulesListeners = new ConcurrentLinkedQueue<>();
+    private final StateListenerManager<State> stateListeners = new StateListenerManager<>("GameRulesDataProvider");
+    private final StateListenerManager<GameRules> gameRulesListeners = new StateListenerManager<>("GameRulesDataProvider.gameRules");
     @Inject
     private RemoteStorageService remoteStorageService;
     @Getter
@@ -54,19 +55,19 @@ public class GameRulesDataProvider implements BUPluginLifecycle {
     }
 
     public void addStateListener(Consumer<State> listener) {
-        stateListeners.add(listener);
+        stateListeners.addListener(listener);
     }
 
     public void removeStateListener(Consumer<State> listener) {
-        stateListeners.remove(listener);
+        stateListeners.removeListener(listener);
     }
 
     public void addGameRulesListener(Consumer<GameRules> listener) {
-        gameRulesListeners.add(listener);
+        gameRulesListeners.addListener(listener);
     }
 
     public void removeGameRulesListener(Consumer<GameRules> listener) {
-        gameRulesListeners.remove(listener);
+        gameRulesListeners.removeListener(listener);
     }
 
     public CompletableFuture<Void> updateGameRules(GameRules gameRules)
@@ -148,25 +149,12 @@ public class GameRulesDataProvider implements BUPluginLifecycle {
             return;
         }
         this.state = state;
-
-        for (Consumer<State> listener : stateListeners) {
-            try {
-                listener.accept(state);
-            } catch (Exception e) {
-                log.error("set state listener unlocked item data provider error", e);
-            }
-        }
+        stateListeners.notifyListeners(state);
     }
 
     private void setGameRules(GameRules gameRules) {
         this.gameRules = gameRules;
-        for (Consumer<GameRules> listener : gameRulesListeners) {
-            try {
-                listener.accept(gameRules);
-            } catch (Exception e) {
-                log.error("set gameRules listener unlocked item data provider error", e);
-            }
-        }
+        gameRulesListeners.notifyListeners(gameRules);
     }
 
     public enum State {

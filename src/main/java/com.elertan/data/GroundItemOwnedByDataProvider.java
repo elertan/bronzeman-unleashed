@@ -6,6 +6,7 @@ import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.RemoteStorageService;
 import com.elertan.utils.ListenerUtils;
+import com.elertan.utils.StateListenerManager;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.Duration;
@@ -23,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
 
     private final ConcurrentLinkedQueue<Listener> maplisteners = new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<Consumer<State>> stateListeners = new ConcurrentLinkedQueue<>();
+    private final StateListenerManager<State> stateListeners = new StateListenerManager<>("GroundItemOwnedByDataProvider");
     @Inject
     private RemoteStorageService remoteStorageService;
     private KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> storagePort;
@@ -125,11 +126,11 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
     }
 
     public void addStateListener(Consumer<State> listener) {
-        stateListeners.add(listener);
+        stateListeners.addListener(listener);
     }
 
     public void removeStateListener(Consumer<State> listener) {
-        stateListeners.remove(listener);
+        stateListeners.removeListener(listener);
     }
 
     public CompletableFuture<Void> waitUntilReady(Duration timeout) {
@@ -145,12 +146,12 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
             @Override
             public void addListener(Runnable notify) {
                 listener = state -> notify.run();
-                stateListeners.add(listener);
+                stateListeners.addListener(listener);
             }
 
             @Override
             public void removeListener() {
-                stateListeners.remove(listener);
+                stateListeners.removeListener(listener);
                 listener = null;
             }
 
@@ -234,14 +235,7 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
             return;
         }
         this.state = state;
-
-        for (Consumer<State> listener : stateListeners) {
-            try {
-                listener.accept(state);
-            } catch (Exception e) {
-                log.error("set state listener GroundItemOwnedByDataProvider error", e);
-            }
-        }
+        stateListeners.notifyListeners(state);
     }
 
     public interface Listener {
