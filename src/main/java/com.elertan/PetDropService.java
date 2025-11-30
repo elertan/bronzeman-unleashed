@@ -2,6 +2,7 @@ package com.elertan;
 
 import com.elertan.event.PetDropBUEvent;
 import com.elertan.models.ISOOffsetDateTime;
+import com.elertan.utils.TextUtils;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.OffsetDateTime;
@@ -109,7 +110,12 @@ public class PetDropService implements BUPluginLifecycle {
                 petItemIds.add(petItemId);
             }
             petsLoaded = true;
-            log.debug("Loaded {} pet item IDs", petItemIds.size());
+            log.info("[CMD] Loaded {} pet item IDs", petItemIds.size());
+            for (int petItemId : petItemIds) {
+                ItemComposition comp = itemManager.getItemComposition(petItemId);
+                String petName = TextUtils.sanitizeItemName(comp.getName());
+                log.info("[CMD]   Pet: '{}' (id: {})", petName, petItemId);
+            }
         } catch (Exception e) {
             log.error("Failed to load pet item IDs", e);
         }
@@ -189,16 +195,20 @@ public class PetDropService implements BUPluginLifecycle {
     }
 
     private void handleCollectionLogPet(String itemName) {
+        String cleanName = TextUtils.sanitizeItemName(itemName);
+        log.info("[CMD] handleCollectionLogPet called with: '{}' -> '{}', petItemIds size: {}", itemName, cleanName, petItemIds.size());
         // Check if this item name matches a pet
         // We need to verify it's actually a pet since collection log fires for all items
         for (int petItemId : petItemIds) {
             ItemComposition comp = itemManager.getItemComposition(petItemId);
-            if (itemName.equals(comp.getName())) {
-                log.debug("Pet drop detected from collection log: {}", itemName);
-                emitPetDropEvent(itemName);
+            String petName = TextUtils.sanitizeItemName(comp.getName());
+            if (cleanName.equals(petName)) {
+                log.info("[CMD] Found matching pet: {} (id: {})", petName, petItemId);
+                emitPetDropEvent(cleanName);
                 return;
             }
         }
+        log.info("[CMD] No matching pet found for: '{}'", cleanName);
     }
 
     private void handlePetDropMessage(String message) {
@@ -245,33 +255,43 @@ public class PetDropService implements BUPluginLifecycle {
 
         // Case 3: Probita edge case - had follower and full inventory
         // Cannot identify pet, return null
-        log.debug("Could not identify pet - likely Probita edge case (follower + full inventory)");
+        log.info(
+            "Could not identify pet - likely Probita edge case (follower + full inventory) (message: {})",
+            message
+        );
         return null;
     }
 
     private void emitPetDropEvent(@Nullable String petName) {
+        log.info("[CMD] emitPetDropEvent called with: '{}'", petName);
         PetDropBUEvent event = new PetDropBUEvent(
             client.getAccountHash(),
             new ISOOffsetDateTime(OffsetDateTime.now()),
             petName
         );
         buEventService.publishEvent(event);
+        log.info("[CMD] emitPetDropEvent done");
     }
 
     /**
-     * Simulate a game message for testing pet detection.
-     * This bypasses the actual ChatMessage event and directly processes the message.
+     * Simulate a game message for testing pet detection. This bypasses the actual ChatMessage event
+     * and directly processes the message.
      *
      * @param message the message to simulate
      */
     public void simulateGameMessage(String message) {
-        log.debug("Simulating game message: {}", message);
+        log.info("[CMD] PetDropService.simulateGameMessage called with: '{}'", message);
 
         // Check for collection log message first
         Matcher collectionLogMatcher = COLLECTION_LOG_PATTERN.matcher(message);
+        log.info("[CMD] collectionLogMatcher.find(): {}", collectionLogMatcher.find());
+        // Reset matcher since find() consumes state
+        collectionLogMatcher.reset();
         if (collectionLogMatcher.find()) {
             String itemName = collectionLogMatcher.group(1);
+            log.info("[CMD] matched collection log, itemName: '{}'", itemName);
             handleCollectionLogPet(itemName);
+            log.info("[CMD] handleCollectionLogPet done");
             return;
         }
 
