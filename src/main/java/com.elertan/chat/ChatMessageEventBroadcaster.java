@@ -10,9 +10,9 @@ import com.elertan.event.BUEventType;
 import com.elertan.event.CombatLevelUpAchievementBUEvent;
 import com.elertan.event.CombatTaskAchievementBUEvent;
 import com.elertan.event.DiaryCompletionAchievementBUEvent;
+import com.elertan.event.PetDropBUEvent;
 import com.elertan.event.QuestCompletionAchievementBUEvent;
 import com.elertan.event.SkillLevelUpAchievementBUEvent;
-import com.elertan.event.PetDropBUEvent;
 import com.elertan.event.TotalLevelAchievementBUEvent;
 import com.elertan.event.ValuableLootBUEvent;
 import com.elertan.models.Member;
@@ -356,33 +356,37 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
         NPCComposition npcComposition = client.getNpcDefinition(e.getNpcId());
         String formattedCoins = String.format("%,d", totalCoins);
 
-        buChatService.getItemIconTagIfEnabled(e.getItemId()).whenComplete((itemIconTag, throwable) -> {
-            if (throwable != null) {
-                log.error("Failed to get item icon tag", throwable);
-                future.completeExceptionally(throwable);
-                return;
-            }
+        buChatService.getItemIconTagIfEnabled(e.getItemId())
+            .whenComplete((itemIconTag, throwable) -> {
+                if (throwable != null) {
+                    log.error("Failed to get item icon tag", throwable);
+                    future.completeExceptionally(throwable);
+                    return;
+                }
 
-            ChatMessageBuilder builder = new ChatMessageBuilder();
-            builder.append(config.chatPlayerNameColor(), member.getName());
-            builder.append(" has received a drop: ");
-            if (e.getQuantity() > 1) {
-                builder.append(config.chatHighlightColor(), String.format("%d", e.getQuantity()));
-                builder.append(" x ");
-            }
-            if (itemIconTag != null) {
-                builder.append(config.chatHighlightColor(), itemIconTag);
-                builder.append(" ");
-            }
-            builder.append(config.chatItemNameColor(), itemComposition.getName());
-            builder.append(" (");
-            builder.append(formattedCoins);
-            builder.append(" coins) from ");
-            builder.append(config.chatNPCNameColor(), npcComposition.getName());
-            builder.append(".");
+                ChatMessageBuilder builder = new ChatMessageBuilder();
+                builder.append(config.chatPlayerNameColor(), member.getName());
+                builder.append(" has received a drop: ");
+                if (e.getQuantity() > 1) {
+                    builder.append(
+                        config.chatHighlightColor(),
+                        String.format("%d", e.getQuantity())
+                    );
+                    builder.append(" x ");
+                }
+                if (itemIconTag != null) {
+                    builder.append(config.chatHighlightColor(), itemIconTag);
+                    builder.append(" ");
+                }
+                builder.append(config.chatItemNameColor(), itemComposition.getName());
+                builder.append(" (");
+                builder.append(formattedCoins);
+                builder.append(" coins) from ");
+                builder.append(config.chatNPCNameColor(), npcComposition.getName());
+                builder.append(".");
 
-            future.complete(builder.build());
-        });
+                future.complete(builder.build());
+            });
 
         return future;
     }
@@ -407,6 +411,7 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
         }
 
         Integer petItemId = e.getPetItemId();
+        boolean isDuplicate = e.isDuplicate();
 
         CompletableFuture<String> iconFuture = petItemId != null
             ? buChatService.getItemIconTagIfEnabled(petItemId)
@@ -423,16 +428,20 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
                 ChatMessageBuilder builder = new ChatMessageBuilder();
                 builder.append(config.chatPlayerNameColor(), member.getName());
 
+                String followedText = isDuplicate
+                    ? " has a funny feeling like they would have been followed: "
+                    : " has a funny feeling like they are being followed: ";
+                builder.append(followedText);
+
                 if (petItemId != null) {
                     String petName = client.getItemDefinition(petItemId).getName();
-                    builder.append(" has a funny feeling like they are being followed: ");
                     if (itemIconTag != null) {
                         builder.append(config.chatHighlightColor(), itemIconTag);
                         builder.append(" ");
                     }
                     builder.append(config.chatHighlightColor(), petName);
                 } else {
-                    builder.append(" has a funny feeling like they are being followed");
+                    builder.append(config.chatHighlightColor(), "Unknown");
                 }
 
                 future.complete(builder.build());

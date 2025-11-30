@@ -14,10 +14,17 @@ public class PetDropBUEvent extends BUEvent {
     @Nullable
     private final Integer petItemId;
 
+    /**
+     * Whether this is a duplicate pet (player already has this pet).
+     */
+    @Getter
+    private final boolean isDuplicate;
+
     public PetDropBUEvent(long dispatchedFromAccountHash, ISOOffsetDateTime isoOffsetDateTime,
-        @Nullable Integer petItemId) {
+        @Nullable Integer petItemId, boolean isDuplicate) {
         super(dispatchedFromAccountHash, isoOffsetDateTime);
         this.petItemId = petItemId;
+        this.isDuplicate = isDuplicate;
     }
 
     @Override

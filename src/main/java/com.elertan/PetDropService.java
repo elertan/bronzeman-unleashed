@@ -204,7 +204,7 @@ public class PetDropService implements BUPluginLifecycle {
             String petName = TextUtils.sanitizeItemName(comp.getName());
             if (cleanName.equals(petName)) {
                 log.info("[CMD] Found matching pet: {} (id: {})", petName, petItemId);
-                emitPetDropEvent(petItemId);
+                emitPetDropEvent(petItemId, false);
                 return;
             }
         }
@@ -215,8 +215,9 @@ public class PetDropService implements BUPluginLifecycle {
         // Use clientThread.invokeLater to ensure game state has updated
         clientThread.invokeLater(() -> {
             Integer petItemId = identifyPetItemId(message);
-            log.debug("Pet drop detected: {} (itemId: {})", message, petItemId);
-            emitPetDropEvent(petItemId);
+            boolean isDuplicate = message.contains(PET_MESSAGE_DUPLICATE);
+            log.debug("Pet drop detected: {} (itemId: {}, isDuplicate: {})", message, petItemId, isDuplicate);
+            emitPetDropEvent(petItemId, isDuplicate);
         });
     }
 
@@ -271,12 +272,13 @@ public class PetDropService implements BUPluginLifecycle {
         return null;
     }
 
-    private void emitPetDropEvent(@Nullable Integer petItemId) {
-        log.info("[CMD] emitPetDropEvent called with itemId: {}", petItemId);
+    private void emitPetDropEvent(@Nullable Integer petItemId, boolean isDuplicate) {
+        log.info("[CMD] emitPetDropEvent called with itemId: {}, isDuplicate: {}", petItemId, isDuplicate);
         PetDropBUEvent event = new PetDropBUEvent(
             client.getAccountHash(),
             new ISOOffsetDateTime(OffsetDateTime.now()),
-            petItemId
+            petItemId,
+            isDuplicate
         );
         buEventService.publishEvent(event);
         log.info("[CMD] emitPetDropEvent done");
