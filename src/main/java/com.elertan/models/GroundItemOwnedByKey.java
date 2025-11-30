@@ -9,6 +9,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.coords.WorldPoint;
 
 @Slf4j
 @Builder
@@ -28,6 +29,17 @@ public class GroundItemOwnedByKey implements Comparable<GroundItemOwnedByKey> {
     private final int worldX;
     @Getter
     private final int worldY;
+
+    public static GroundItemOwnedByKey of(int itemId, int world, int worldViewId, WorldPoint worldPoint) {
+        return new GroundItemOwnedByKey(
+            itemId,
+            world,
+            worldViewId,
+            worldPoint.getPlane(),
+            worldPoint.getX(),
+            worldPoint.getY()
+        );
+    }
 
     public static GroundItemOwnedByKey fromKey(String key) {
         if (key == null) {

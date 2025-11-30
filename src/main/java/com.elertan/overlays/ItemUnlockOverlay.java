@@ -4,6 +4,7 @@ import com.elertan.AccountConfigurationService;
 import com.elertan.BUPluginConfig;
 import com.elertan.BUResourceService;
 import com.elertan.MemberService;
+import com.elertan.MinigameService;
 import com.elertan.data.MembersDataProvider;
 import com.elertan.models.Member;
 import java.awt.AlphaComposite;
@@ -61,6 +62,8 @@ public class ItemUnlockOverlay extends Overlay {
     private MemberService memberService;
     @Inject
     private AccountConfigurationService accountConfigurationService;
+    @Inject
+    private MinigameService minigameService;
     private UnlockToast current;
     private UnlockToast next;
     private Phase phase = Phase.IDLE;
@@ -142,6 +145,9 @@ public class ItemUnlockOverlay extends Overlay {
             return null;
         }
         if (!accountConfigurationService.isBronzemanEnabled()) {
+            return null;
+        }
+        if (config.hideUnlockOverlayInMinigames() && minigameService.isInMinigameOrInstance()) {
             return null;
         }
 

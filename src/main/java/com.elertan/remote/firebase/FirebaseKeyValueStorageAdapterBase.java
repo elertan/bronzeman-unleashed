@@ -35,18 +35,7 @@ public class FirebaseKeyValueStorageAdapterBase<K, V> implements KeyValueStorage
         Function<K, String> keyToStringTransformer,
         Function<JsonElement, V> deserializeFromJsonElement
     ) {
-        // Base key should be of format
-        // '/Resource' // NOT -> or '/FirstLevel/SecondLevel'
-        if (basePath == null) {
-            throw new IllegalArgumentException("basePath must not be null");
-        }
-        if (!basePath.startsWith("/")) {
-            throw new IllegalArgumentException("basePath must start with '/'");
-        }
-        int lastIndexOfForwardSlash = basePath.lastIndexOf("/");
-        if (lastIndexOfForwardSlash != 0) {
-            throw new IllegalArgumentException("basePath must only be a starting resource");
-        }
+        FirebaseRealtimeDatabase.validateBasePath(basePath);
         this.basePath = basePath;
         this.db = db;
         this.gson = gson;

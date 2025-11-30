@@ -123,7 +123,7 @@ public final class BUPlugin extends Plugin {
 
     private boolean started;
     private List<BUPluginLifecycle> lifecycleDependencies;
-    private Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
+    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
 
     @Inject
     private void initLifecycleDependencies() {

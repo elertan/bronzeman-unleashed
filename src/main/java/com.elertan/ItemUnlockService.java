@@ -122,16 +122,9 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
         // Black mask charge variants - all map to uncharged (8921)
         put("Black mask", 8921);
-        put("Black mask (1)", 8921);
-        put("Black mask (2)", 8921);
-        put("Black mask (3)", 8921);
-        put("Black mask (4)", 8921);
-        put("Black mask (5)", 8921);
-        put("Black mask (6)", 8921);
-        put("Black mask (7)", 8921);
-        put("Black mask (8)", 8921);
-        put("Black mask (9)", 8921);
-        put("Black mask (10)", 8921);
+        for (int i = 1; i <= 10; i++) {
+            put("Black mask (" + i + ")", 8921);
+        }
     }};
     private static final Set<Integer> INCLUDED_CONTAINER_IDS = ImmutableSet.of(
         InventoryID.INV, // inventory
@@ -202,16 +195,10 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     unlockedItem.getDroppedByNPCId()
                 );
 
-                if (buPluginConfig.showItemUnlocksInChat()) {
-                    CompletableFuture<String> itemIconTagFuture;
-                    if (buPluginConfig.useItemIconsInChat()) {
-                        itemIconTagFuture = buChatService.getItemIconTag(
-                            unlockedItem.getId());
-                    } else {
-                        itemIconTagFuture = CompletableFuture.completedFuture(null);
-                    }
-
-                    itemIconTagFuture.whenComplete((itemIconTag, throwable) -> {
+                boolean hideChat = buPluginConfig.hideUnlockChatInMinigames() && minigameService.isInMinigameOrInstance();
+                if (buPluginConfig.showItemUnlocksInChat() && !hideChat) {
+                    buChatService.getItemIconTagIfEnabled(unlockedItem.getId())
+                        .whenComplete((itemIconTag, throwable) -> {
                             if (throwable != null) {
                                 log.error("Failed to get item icon tag", throwable);
                                 return;
@@ -271,14 +258,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
             public void onDelete(UnlockedItem unlockedItem) {
                 // We can consider this re-locking items
 
-                CompletableFuture<String> itemIconTagFuture;
-                if (buPluginConfig.useItemIconsInChat()) {
-                    itemIconTagFuture = buChatService.getItemIconTag(unlockedItem.getId());
-                } else {
-                    itemIconTagFuture = CompletableFuture.completedFuture(null);
-                }
-
-                itemIconTagFuture.whenComplete((itemIconTag, throwable) -> {
+                buChatService.getItemIconTagIfEnabled(unlockedItem.getId())
+                    .whenComplete((itemIconTag, throwable) -> {
                     if (throwable != null) {
                         log.error("Failed to get item icon tag", throwable);
                         return;
@@ -572,6 +553,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
         final boolean fIsTradeable = itemComposition.isTradeable();
         final String fItemName = itemComposition.getName();
         final int fItemId = itemId;
+        // Cache accountHash before async call - client methods require client thread
+        final long acquiredByAccountHash = client.getAccountHash();
         gameRulesService
             .waitUntilGameRulesReady(null)
             .whenComplete((__, throwable) -> {
@@ -591,7 +574,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     return;
                 }
 
-                long acquiredByAccountHash = client.getAccountHash();
                 ISOOffsetDateTime acquiredAt = new ISOOffsetDateTime(OffsetDateTime.now());
 
                 UnlockedItem unlockedItem = new UnlockedItem(

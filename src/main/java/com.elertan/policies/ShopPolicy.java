@@ -2,7 +2,6 @@ package com.elertan.policies;
 
 import com.elertan.AccountConfigurationService;
 import com.elertan.BUPluginConfig;
-import com.elertan.BUPluginLifecycle;
 import com.elertan.BUResourceService;
 import com.elertan.GameRulesService;
 import com.elertan.ItemUnlockService;
@@ -30,7 +29,7 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 
 @Slf4j
 @Singleton
-public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
+public class ShopPolicy extends PolicyBase {
 
     private final ShopmainOverlay shopmainOverlay = new ShopmainOverlay();
     @Inject
@@ -51,14 +50,6 @@ public class ShopPolicy extends PolicyBase implements BUPluginLifecycle {
     public ShopPolicy(AccountConfigurationService accountConfigurationService,
         GameRulesService gameRulesService, PolicyService policyService) {
         super(accountConfigurationService, gameRulesService, policyService);
-    }
-
-    @Override
-    public void startUp() throws Exception {
-    }
-
-    @Override
-    public void shutDown() throws Exception {
     }
 
     public void onWidgetLoaded(WidgetLoaded event) {

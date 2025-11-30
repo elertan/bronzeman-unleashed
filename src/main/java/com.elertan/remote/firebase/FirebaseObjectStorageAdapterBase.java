@@ -25,19 +25,7 @@ public class FirebaseObjectStorageAdapterBase<T> implements ObjectStoragePort<T>
         Function<T, JsonElement> serializer,
         Function<JsonElement, T> deserializer
     ) {
-        // Base key should be of format
-        // '/Resource' // NOT -> or '/FirstLevel/SecondLevel'
-        if (path == null) {
-            throw new IllegalArgumentException("path must not be null");
-        }
-        if (!path.startsWith("/")) {
-            throw new IllegalArgumentException("path must start with '/'");
-        }
-        int lastIndexOfForwardSlash = path.lastIndexOf("/");
-        if (lastIndexOfForwardSlash != 0) {
-            throw new IllegalArgumentException("path must only be a starting resource");
-        }
-
+        FirebaseRealtimeDatabase.validateBasePath(path);
         this.path = path;
         this.db = db;
         this.serializer = serializer;

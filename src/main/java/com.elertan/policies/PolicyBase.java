@@ -1,6 +1,7 @@
 package com.elertan.policies;
 
 import com.elertan.AccountConfigurationService;
+import com.elertan.BUPluginLifecycle;
 import com.elertan.GameRulesService;
 import com.elertan.PolicyService;
 import com.elertan.models.AccountConfiguration;
@@ -13,7 +14,7 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class PolicyBase {
+public class PolicyBase implements BUPluginLifecycle {
 
     protected final AccountConfigurationService accountConfigurationService;
     protected final GameRulesService gameRulesService;
@@ -24,6 +25,14 @@ public class PolicyBase {
         this.accountConfigurationService = accountConfigurationService;
         this.gameRulesService = gameRulesService;
         this.policyService = policyService;
+    }
+
+    @Override
+    public void startUp() throws Exception {
+    }
+
+    @Override
+    public void shutDown() throws Exception {
     }
 
     @NonNull
