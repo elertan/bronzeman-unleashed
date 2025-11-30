@@ -2,9 +2,10 @@ package com.elertan;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Consumer;
+import java.util.ArrayList;
+import java.util.List;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.events.ChatMessage;
@@ -25,16 +26,19 @@ public class BUCommandService implements BUPluginLifecycle {
     @Inject
     private BUChatService buChatService;
 
-    private final Map<String, CommandHandler> commands = new HashMap<>();
-    private final Map<String, CommandHandler> debugCommands = new HashMap<>();
+    private final List<CommandInfo> commands = new ArrayList<>();
+    private final List<CommandInfo> debugCommands = new ArrayList<>();
 
     @Override
     public void startUp() throws Exception {
+        // General commands
+        commands.add(new CommandInfo("help", "Show available commands", null, this::handleHelp));
+
         // Debug commands for pet detection testing
-        debugCommands.put("pet_following", this::handlePetFollowing);
-        debugCommands.put("pet_backpack", this::handlePetBackpack);
-        debugCommands.put("pet_duplicate", this::handlePetDuplicate);
-        debugCommands.put("pet_collection", this::handlePetCollection);
+        debugCommands.add(new CommandInfo("pet_following", "Simulate pet follow msg", null, this::handlePetFollowing));
+        debugCommands.add(new CommandInfo("pet_backpack", "Simulate pet backpack msg", null, this::handlePetBackpack));
+        debugCommands.add(new CommandInfo("pet_duplicate", "Simulate pet duplicate msg", null, this::handlePetDuplicate));
+        debugCommands.add(new CommandInfo("pet_collection", "Simulate collection log", "<name>", this::handlePetCollection));
     }
 
     @Override
@@ -72,22 +76,48 @@ public class BUCommandService implements BUPluginLifecycle {
         }
 
         // Check regular commands first
-        CommandHandler handler = commands.get(commandName);
-        if (handler != null) {
-            handler.handle(argument);
-            return true;
-        }
-
-        // Check debug commands if enabled
-        if (config.enableDebugCommands()) {
-            handler = debugCommands.get(commandName);
-            if (handler != null) {
-                handler.handle(argument);
+        for (CommandInfo cmd : commands) {
+            if (cmd.getName().equals(commandName)) {
+                cmd.getHandler().handle(argument);
                 return true;
             }
         }
 
+        // Check debug commands if enabled
+        if (config.enableDebugCommands()) {
+            for (CommandInfo cmd : debugCommands) {
+                if (cmd.getName().equals(commandName)) {
+                    cmd.getHandler().handle(argument);
+                    return true;
+                }
+            }
+        }
+
         return false;
+    }
+
+    private void handleHelp(String arg) {
+        buChatService.sendMessage("[BU Commands]");
+        for (CommandInfo cmd : commands) {
+            buChatService.sendMessage(formatCommandHelp(cmd));
+        }
+
+        if (config.enableDebugCommands() && !debugCommands.isEmpty()) {
+            buChatService.sendMessage("[Debug Commands]");
+            for (CommandInfo cmd : debugCommands) {
+                buChatService.sendMessage(formatCommandHelp(cmd));
+            }
+        }
+    }
+
+    private String formatCommandHelp(CommandInfo cmd) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("!bu:").append(cmd.getName());
+        if (cmd.getArgs() != null) {
+            sb.append(":").append(cmd.getArgs());
+        }
+        sb.append(" - ").append(cmd.getDescription());
+        return sb.toString();
     }
 
     private void handlePetFollowing(String arg) {
@@ -107,7 +137,7 @@ public class BUCommandService implements BUPluginLifecycle {
 
     private void handlePetCollection(String petName) {
         if (petName == null || petName.isEmpty()) {
-            buChatService.sendMessage("Usage: !bu:pet_collection:PetName");
+            buChatService.sendMessage("Usage: !bu:pet_collection:<name>");
             return;
         }
         log.debug("Debug: Simulating pet collection log for: {}", petName);
@@ -115,9 +145,17 @@ public class BUCommandService implements BUPluginLifecycle {
     }
 
     private void simulatePetMessage(String message) {
-        // Create a mock ChatMessage-like call to PetDropService
         petDropService.simulateGameMessage(message);
         buChatService.sendMessage("[Debug] Simulated: " + message);
+    }
+
+    @AllArgsConstructor
+    @Getter
+    private static class CommandInfo {
+        private final String name;
+        private final String description;
+        private final String args;
+        private final CommandHandler handler;
     }
 
     @FunctionalInterface
