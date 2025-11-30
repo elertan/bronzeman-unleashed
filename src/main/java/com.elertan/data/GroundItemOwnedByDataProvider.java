@@ -3,13 +3,13 @@ package com.elertan.data;
 import com.elertan.BUPluginLifecycle;
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
-import com.elertan.remote.KeyValueStoragePort;
+import com.elertan.remote.KeyListStoragePort;
 import com.elertan.remote.RemoteStorageService;
 import com.elertan.utils.ListenerUtils;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.Duration;
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,75 +26,78 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
     private final ConcurrentLinkedQueue<Consumer<State>> stateListeners = new ConcurrentLinkedQueue<>();
     @Inject
     private RemoteStorageService remoteStorageService;
-    private KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> storagePort;
-    private KeyValueStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData> storagePortListener;
+    private KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> storagePort;
+    private KeyListStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData> storagePortListener;
     @Getter
     private State state = State.NotReady;
     @Getter
-    private ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap;
+    private ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap;
     private final Consumer<RemoteStorageService.State> remoteStorageServiceStateListener = this::remoteStorageServiceStateListener;
 
     @Override
     public void startUp() throws Exception {
         remoteStorageService.addStateListener(remoteStorageServiceStateListener);
 
-        storagePortListener = new KeyValueStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData>() {
+        storagePortListener = new KeyListStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData>() {
             @Override
-            public void onFullUpdate(Map<GroundItemOwnedByKey, GroundItemOwnedByData> map) {
-                groundItemOwnedByMap = new ConcurrentHashMap<>(map);
+            public void onFullUpdate(Map<GroundItemOwnedByKey, List<GroundItemOwnedByData>> map) {
+                groundItemOwnedByMap = new ConcurrentHashMap<>();
+                for (Map.Entry<GroundItemOwnedByKey, List<GroundItemOwnedByData>> entry : map.entrySet()) {
+                    ConcurrentHashMap<String, GroundItemOwnedByData> innerMap = new ConcurrentHashMap<>();
+                    // We don't have entry keys from readAll result, but the adapter's local cache does
+                    // For full update, we'll sync from the adapter's cache
+                    groundItemOwnedByMap.put(entry.getKey(), innerMap);
+                }
+                // Sync with adapter's local cache for entry keys
+                syncFromAdapterCache();
 
-                Map<GroundItemOwnedByKey, GroundItemOwnedByData> unmodifiableMap = Collections.unmodifiableMap(
-                    map);
                 for (Listener listener : maplisteners) {
                     try {
-                        listener.onReadAll(unmodifiableMap);
+                        listener.onReadAll(groundItemOwnedByMap);
                     } catch (Exception e) {
-                        log.error(
-                            "Error while notifying listener on GroundItemOwnedByDataProvider.",
-                            e
-                        );
+                        log.error("Error while notifying listener on GroundItemOwnedByDataProvider.", e);
                     }
                 }
             }
 
             @Override
-            public void onUpdate(GroundItemOwnedByKey key, GroundItemOwnedByData value) {
+            public void onAdd(GroundItemOwnedByKey key, String entryKey, GroundItemOwnedByData value) {
                 if (groundItemOwnedByMap == null) {
                     return;
                 }
 
-                if (value == null) {
-                    groundItemOwnedByMap.remove(key);
-                } else {
-                    groundItemOwnedByMap.put(key, value);
-                }
+                ConcurrentHashMap<String, GroundItemOwnedByData> innerMap =
+                    groundItemOwnedByMap.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
+                innerMap.put(entryKey, value);
 
                 for (Listener listener : maplisteners) {
                     try {
-                        listener.onUpdate(key, value);
+                        listener.onAdd(key, entryKey, value);
                     } catch (Exception e) {
-                        log.error(
-                            "Error while notifying listener on GroundItemOwnedByDataProvider.",
-                            e
-                        );
+                        log.error("Error while notifying listener on GroundItemOwnedByDataProvider.", e);
                     }
                 }
             }
 
             @Override
-            public void onDelete(GroundItemOwnedByKey key) {
+            public void onRemove(GroundItemOwnedByKey key, String entryKey) {
                 if (groundItemOwnedByMap == null) {
                     return;
                 }
-                groundItemOwnedByMap.remove(key);
+
+                ConcurrentHashMap<String, GroundItemOwnedByData> innerMap = groundItemOwnedByMap.get(key);
+                if (innerMap != null) {
+                    innerMap.remove(entryKey);
+                    if (innerMap.isEmpty()) {
+                        groundItemOwnedByMap.remove(key);
+                    }
+                }
+
                 for (Listener listener : maplisteners) {
                     try {
-                        listener.onDelete(key);
+                        listener.onRemove(key, entryKey);
                     } catch (Exception e) {
-                        log.error(
-                            "Error while notifying listener on GroundItemOwnedByDataProvider.",
-                            e
-                        );
+                        log.error("Error while notifying listener on GroundItemOwnedByDataProvider.", e);
                     }
                 }
             }
@@ -133,7 +136,6 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
     }
 
     public CompletableFuture<Void> waitUntilReady(Duration timeout) {
-
         return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
             Consumer<State> listener;
 
@@ -176,9 +178,24 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
                 return;
             }
 
-            groundItemOwnedByMap = new ConcurrentHashMap<>(map);
+            groundItemOwnedByMap = new ConcurrentHashMap<>();
+            // readAll doesn't give us entry keys, sync from adapter cache instead
+            syncFromAdapterCache();
             setState(State.Ready);
         });
+    }
+
+    private void syncFromAdapterCache() {
+        if (storagePort instanceof com.elertan.remote.firebase.FirebaseKeyListStorageAdapterBase) {
+            @SuppressWarnings("unchecked")
+            com.elertan.remote.firebase.FirebaseKeyListStorageAdapterBase<GroundItemOwnedByKey, GroundItemOwnedByData> adapter =
+                (com.elertan.remote.firebase.FirebaseKeyListStorageAdapterBase<GroundItemOwnedByKey, GroundItemOwnedByData>) storagePort;
+            ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> cache = adapter.getLocalCache();
+            groundItemOwnedByMap = new ConcurrentHashMap<>();
+            for (Map.Entry<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> entry : cache.entrySet()) {
+                groundItemOwnedByMap.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
+            }
+        }
     }
 
     private void deinitialize() throws Exception {
@@ -193,35 +210,49 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
         groundItemOwnedByMap = null;
     }
 
-    public CompletableFuture<Void> update(GroundItemOwnedByKey key,
-        GroundItemOwnedByData newGroundItemOwnedByData) {
+    public CompletableFuture<String> addEntry(GroundItemOwnedByKey key, GroundItemOwnedByData data) {
         if (storagePort == null) {
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            Exception ex = new IllegalStateException("storagePort is null");
-            future.completeExceptionally(ex);
+            CompletableFuture<String> future = new CompletableFuture<>();
+            future.completeExceptionally(new IllegalStateException("storagePort is null"));
             return future;
         }
 
-        if (groundItemOwnedByMap != null) {
-            groundItemOwnedByMap.put(key, newGroundItemOwnedByData);
-        }
-
-        return storagePort.update(key, newGroundItemOwnedByData);
+        return storagePort.add(key, data);
     }
 
-    public CompletableFuture<Void> delete(GroundItemOwnedByKey key) {
+    public CompletableFuture<Void> removeOneEntry(GroundItemOwnedByKey key) {
         if (storagePort == null) {
             CompletableFuture<Void> future = new CompletableFuture<>();
-            Exception ex = new IllegalStateException("storagePort is null");
-            future.completeExceptionally(ex);
+            future.completeExceptionally(new IllegalStateException("storagePort is null"));
             return future;
         }
 
-        if (groundItemOwnedByMap != null) {
-            groundItemOwnedByMap.remove(key);
+        return storagePort.removeOne(key);
+    }
+
+    public CompletableFuture<Void> removeEntry(GroundItemOwnedByKey key, String entryKey) {
+        if (storagePort == null) {
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            future.completeExceptionally(new IllegalStateException("storagePort is null"));
+            return future;
         }
 
-        return storagePort.delete(key);
+        return storagePort.remove(key, entryKey);
+    }
+
+    public boolean hasEntries(GroundItemOwnedByKey key) {
+        if (groundItemOwnedByMap == null) {
+            return false;
+        }
+        ConcurrentHashMap<String, GroundItemOwnedByData> innerMap = groundItemOwnedByMap.get(key);
+        return innerMap != null && !innerMap.isEmpty();
+    }
+
+    public ConcurrentHashMap<String, GroundItemOwnedByData> getEntries(GroundItemOwnedByKey key) {
+        if (groundItemOwnedByMap == null) {
+            return null;
+        }
+        return groundItemOwnedByMap.get(key);
     }
 
     public enum State {
@@ -245,11 +276,8 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
     }
 
     public interface Listener {
-
-        void onReadAll(Map<GroundItemOwnedByKey, GroundItemOwnedByData> map);
-
-        void onUpdate(GroundItemOwnedByKey key, GroundItemOwnedByData value);
-
-        void onDelete(GroundItemOwnedByKey key);
+        void onReadAll(ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map);
+        void onAdd(GroundItemOwnedByKey key, String entryKey, GroundItemOwnedByData value);
+        void onRemove(GroundItemOwnedByKey key, String entryKey);
     }
 }
