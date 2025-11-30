@@ -134,22 +134,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
         Tile tile = event.getTile();
-
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
-
         int itemId = tileItem.getId();
-        int world = client.getWorld();
-        int plane = worldPoint.getPlane();
-
-        GroundItemOwnedByKey key = GroundItemOwnedByKey.builder()
-            .itemId(itemId)
-            .world(world)
-            .worldViewId(worldView.getId())
-            .plane(plane)
-            .worldX(worldPoint.getX())
-            .worldY(worldPoint.getY())
-            .build();
+        GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
 
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
@@ -192,22 +180,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
         Tile tile = event.getTile();
-
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
-
         int itemId = tileItem.getId();
-        int world = client.getWorld();
-        int plane = worldPoint.getPlane();
-
-        GroundItemOwnedByKey key = GroundItemOwnedByKey.builder()
-            .itemId(itemId)
-            .world(world)
-            .worldViewId(worldView.getId())
-            .plane(plane)
-            .worldX(worldPoint.getX())
-            .worldY(worldPoint.getY())
-            .build();
+        GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
 
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
@@ -285,18 +261,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
-
-        int world = client.getWorld();
-        int plane = worldPoint.getPlane();
-
-        GroundItemOwnedByKey key = GroundItemOwnedByKey.builder()
-            .itemId(itemId)
-            .world(world)
-            .worldViewId(worldView.getId())
-            .plane(plane)
-            .worldX(worldPoint.getX())
-            .worldY(worldPoint.getY())
-            .build();
+        GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
 
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {

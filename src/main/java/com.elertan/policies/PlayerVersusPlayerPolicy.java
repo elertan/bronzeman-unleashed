@@ -171,19 +171,10 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
             }
 
             int itemId = itemStack.getId();
-            int world = lastDeathLocation.getWorld();
             WorldPoint worldPoint = lastDeathLocation.getWorldPoint();
             WorldView worldView = lastDeathLocation.getWorldView();
-            int plane = worldPoint.getPlane();
-
-            GroundItemOwnedByKey key = GroundItemOwnedByKey.builder()
-                .itemId(itemId)
-                .world(world)
-                .worldViewId(worldView.getId())
-                .plane(plane)
-                .worldX(worldPoint.getX())
-                .worldY(worldPoint.getY())
-                .build();
+            GroundItemOwnedByKey key = GroundItemOwnedByKey.of(
+                itemId, lastDeathLocation.getWorld(), worldView.getId(), worldPoint);
 
             markGroundItemOwnedByAsPlayerVersusPlayerLoot(key, playerName)
                 .whenComplete((__, throwable) -> {
