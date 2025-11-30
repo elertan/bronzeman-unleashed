@@ -4,12 +4,10 @@ import com.elertan.remote.KeyListStoragePort;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -72,27 +70,27 @@ public class FirebaseKeyListStorageAdapterBase<K, V> implements KeyListStoragePo
     }
 
     @Override
-    public CompletableFuture<List<V>> read(K key) {
+    public CompletableFuture<Map<String, V>> read(K key) {
         String path = basePath + "/" + keyToStringTransformer.apply(key);
         return db.get(path)
             .thenApply(jsonElement -> {
                 if (jsonElement == null || jsonElement.isJsonNull()) {
-                    return Collections.emptyList();
+                    return Collections.emptyMap();
                 }
                 JsonObject obj = jsonElement.getAsJsonObject();
-                List<V> list = new ArrayList<>();
+                Map<String, V> map = new HashMap<>();
                 for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
                     V value = deserializeFromJsonElement.apply(entry.getValue());
                     if (value != null) {
-                        list.add(value);
+                        map.put(entry.getKey(), value);
                     }
                 }
-                return list;
+                return map;
             });
     }
 
     @Override
-    public CompletableFuture<Map<K, List<V>>> readAll() {
+    public CompletableFuture<Map<K, Map<String, V>>> readAll() {
         return db.get(basePath)
             .thenApply(jsonElement -> {
                 if (jsonElement == null || jsonElement.isJsonNull()) {
@@ -100,7 +98,7 @@ public class FirebaseKeyListStorageAdapterBase<K, V> implements KeyListStoragePo
                 }
 
                 JsonObject obj = jsonElement.getAsJsonObject();
-                Map<K, List<V>> map = new HashMap<>();
+                Map<K, Map<String, V>> map = new HashMap<>();
 
                 for (Map.Entry<String, JsonElement> keyEntry : obj.entrySet()) {
                     K key = stringToKeyTransformer.apply(keyEntry.getKey());
@@ -109,16 +107,16 @@ public class FirebaseKeyListStorageAdapterBase<K, V> implements KeyListStoragePo
                         continue;
                     }
 
-                    List<V> list = new ArrayList<>();
+                    Map<String, V> innerMap = new HashMap<>();
                     JsonObject innerObj = keyValue.getAsJsonObject();
                     for (Map.Entry<String, JsonElement> entryEntry : innerObj.entrySet()) {
                         V value = deserializeFromJsonElement.apply(entryEntry.getValue());
                         if (value != null) {
-                            list.add(value);
+                            innerMap.put(entryEntry.getKey(), value);
                         }
                     }
-                    if (!list.isEmpty()) {
-                        map.put(key, list);
+                    if (!innerMap.isEmpty()) {
+                        map.put(key, innerMap);
                     }
                 }
 
@@ -218,7 +216,7 @@ public class FirebaseKeyListStorageAdapterBase<K, V> implements KeyListStoragePo
 
     private void handleFullUpdate(JsonElement jsonElement) {
         localCache.clear();
-        Map<K, List<V>> fullMap = new HashMap<>();
+        Map<K, Map<String, V>> fullMap = new HashMap<>();
 
         if (jsonElement != null && !jsonElement.isJsonNull() && jsonElement.isJsonObject()) {
             JsonObject obj = jsonElement.getAsJsonObject();
@@ -237,7 +235,6 @@ public class FirebaseKeyListStorageAdapterBase<K, V> implements KeyListStoragePo
                 }
 
                 ConcurrentHashMap<String, V> innerMap = new ConcurrentHashMap<>();
-                List<V> list = new ArrayList<>();
                 JsonObject innerObj = keyValue.getAsJsonObject();
 
                 for (Map.Entry<String, JsonElement> entryEntry : innerObj.entrySet()) {
@@ -251,13 +248,12 @@ public class FirebaseKeyListStorageAdapterBase<K, V> implements KeyListStoragePo
                     }
                     if (value != null) {
                         innerMap.put(entryKey, value);
-                        list.add(value);
                     }
                 }
 
                 if (!innerMap.isEmpty()) {
                     localCache.put(key, innerMap);
-                    fullMap.put(key, list);
+                    fullMap.put(key, new HashMap<>(innerMap));
                 }
             }
         }
@@ -328,7 +324,7 @@ public class FirebaseKeyListStorageAdapterBase<K, V> implements KeyListStoragePo
         }
     }
 
-    private void notifyListenersOnFullUpdate(Map<K, List<V>> map) {
+    private void notifyListenersOnFullUpdate(Map<K, Map<String, V>> map) {
         for (Listener<K, V> listener : listeners) {
             try {
                 listener.onFullUpdate(map);

@@ -41,6 +41,7 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ItemDespawned;
 import net.runelite.api.events.ItemSpawned;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
 
 @Slf4j
@@ -48,6 +49,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     @Inject
     private Client client;
+    @Inject
+    private ClientThread clientThread;
     @Inject
     private BUPluginConfig buPluginConfig;
     @Inject
@@ -128,22 +131,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
         Tile tile = event.getTile();
-
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
-
         int itemId = tileItem.getId();
-        int world = client.getWorld();
-        int plane = worldPoint.getPlane();
-
-        GroundItemOwnedByKey key = GroundItemOwnedByKey.builder()
-            .itemId(itemId)
-            .world(world)
-            .worldViewId(worldView.getId())
-            .plane(plane)
-            .worldX(worldPoint.getX())
-            .worldY(worldPoint.getY())
-            .build();
+        GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
 
         ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
@@ -180,22 +171,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
         Tile tile = event.getTile();
-
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
-
         int itemId = tileItem.getId();
-        int world = client.getWorld();
-        int plane = worldPoint.getPlane();
-
-        GroundItemOwnedByKey key = GroundItemOwnedByKey.builder()
-            .itemId(itemId)
-            .world(world)
-            .worldViewId(worldView.getId())
-            .plane(plane)
-            .worldX(worldPoint.getX())
-            .worldY(worldPoint.getY())
-            .build();
+        GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
 
         if (!groundItemOwnedByDataProvider.hasEntries(key)) {
             log.debug("gi {} has no entries, ignore", key);
@@ -267,18 +246,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
-
-        int world = client.getWorld();
-        int plane = worldPoint.getPlane();
-
-        GroundItemOwnedByKey key = GroundItemOwnedByKey.builder()
-            .itemId(itemId)
-            .world(world)
-            .worldViewId(worldView.getId())
-            .plane(plane)
-            .worldX(worldPoint.getX())
-            .worldY(worldPoint.getY())
-            .build();
+        GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
 
         ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
@@ -406,50 +374,44 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return null;
     }
 
-//    private void takeItemOwnedByGroupMember(GroundItemOwnedByKey key) {
-//        groundItemOwnedByDataProvider.delete(key).whenComplete((__, throwable) -> {
-//            if (throwable != null) {
-//                log.error("Failed to delte ground item {} from group member", key, throwable);
-//                return;
-//            }
-//        });
-//    }
-
+    // Called from scheduler thread - must use clientThread.invoke() for client access
     private void cleanupExpiredGroundItems() {
-        ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
-        if (map == null || map.isEmpty()) {
-            return;
-        }
-
-        OffsetDateTime now = OffsetDateTime.now();
-        long accountHash = client.getAccountHash();
-
-        for (Map.Entry<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> keyEntry : map.entrySet()) {
-            GroundItemOwnedByKey key = keyEntry.getKey();
-            ConcurrentHashMap<String, GroundItemOwnedByData> entries = keyEntry.getValue();
-            if (entries == null) {
-                continue;
+        clientThread.invoke(() -> {
+            ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
+            if (map == null || map.isEmpty()) {
+                return;
             }
 
-            for (Map.Entry<String, GroundItemOwnedByData> entry : entries.entrySet()) {
-                String entryKey = entry.getKey();
-                GroundItemOwnedByData data = entry.getValue();
-                if (data.getAccountHash() != accountHash) {
-                    continue;
-                }
-                if (data.getDespawnsAt().getValue().isAfter(now)) {
+            OffsetDateTime now = OffsetDateTime.now();
+            long accountHash = client.getAccountHash();
+
+            for (Map.Entry<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> keyEntry : map.entrySet()) {
+                GroundItemOwnedByKey key = keyEntry.getKey();
+                ConcurrentHashMap<String, GroundItemOwnedByData> entries = keyEntry.getValue();
+                if (entries == null) {
                     continue;
                 }
 
-                log.debug("Cleaning up expired ground item {} entry {}", key, entryKey);
-
-                groundItemOwnedByDataProvider.removeEntry(key, entryKey).whenComplete((result, throwable) -> {
-                    if (throwable != null) {
-                        log.error("Failed to clean up expired ground item {} entry {}", key, entryKey, throwable);
+                for (Map.Entry<String, GroundItemOwnedByData> entry : entries.entrySet()) {
+                    String entryKey = entry.getKey();
+                    GroundItemOwnedByData data = entry.getValue();
+                    if (data.getAccountHash() != accountHash) {
+                        continue;
                     }
-                });
+                    if (data.getDespawnsAt().getValue().isAfter(now)) {
+                        continue;
+                    }
+
+                    log.debug("Cleaning up expired ground item {} entry {}", key, entryKey);
+
+                    groundItemOwnedByDataProvider.removeEntry(key, entryKey).whenComplete((result, throwable) -> {
+                        if (throwable != null) {
+                            log.error("Failed to clean up expired ground item {} entry {}", key, entryKey, throwable);
+                        }
+                    });
+                }
             }
-        }
+        });
     }
 
     private void cleanupExpiredGroundItemsForEveryone() {

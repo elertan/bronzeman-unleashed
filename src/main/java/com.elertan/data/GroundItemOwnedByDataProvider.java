@@ -1,57 +1,53 @@
 package com.elertan.data;
 
-import com.elertan.BUPluginLifecycle;
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.remote.KeyListStoragePort;
 import com.elertan.remote.RemoteStorageService;
-import com.elertan.utils.ListenerUtils;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Singleton
-public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
+public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
 
-    private final ConcurrentLinkedQueue<Listener> maplisteners = new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<Consumer<State>> stateListeners = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<Listener> mapListeners = new ConcurrentLinkedQueue<>();
+
     @Inject
     private RemoteStorageService remoteStorageService;
+
     private KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> storagePort;
     private KeyListStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData> storagePortListener;
-    @Getter
-    private State state = State.NotReady;
+
     @Getter
     private ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap;
-    private final Consumer<RemoteStorageService.State> remoteStorageServiceStateListener = this::remoteStorageServiceStateListener;
+
+    public GroundItemOwnedByDataProvider() {
+        super("GroundItemOwnedByDataProvider");
+    }
+
+    @Override
+    protected RemoteStorageService getRemoteStorageService() {
+        return remoteStorageService;
+    }
 
     @Override
     public void startUp() throws Exception {
-        remoteStorageService.addStateListener(remoteStorageServiceStateListener);
-
         storagePortListener = new KeyListStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData>() {
             @Override
-            public void onFullUpdate(Map<GroundItemOwnedByKey, List<GroundItemOwnedByData>> map) {
+            public void onFullUpdate(Map<GroundItemOwnedByKey, Map<String, GroundItemOwnedByData>> map) {
                 groundItemOwnedByMap = new ConcurrentHashMap<>();
-                for (Map.Entry<GroundItemOwnedByKey, List<GroundItemOwnedByData>> entry : map.entrySet()) {
-                    ConcurrentHashMap<String, GroundItemOwnedByData> innerMap = new ConcurrentHashMap<>();
-                    // We don't have entry keys from readAll result, but the adapter's local cache does
-                    // For full update, we'll sync from the adapter's cache
-                    groundItemOwnedByMap.put(entry.getKey(), innerMap);
+                for (Map.Entry<GroundItemOwnedByKey, Map<String, GroundItemOwnedByData>> entry : map.entrySet()) {
+                    groundItemOwnedByMap.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
                 }
-                // Sync with adapter's local cache for entry keys
-                syncFromAdapterCache();
 
-                for (Listener listener : maplisteners) {
+                for (Listener listener : mapListeners) {
                     try {
                         listener.onReadAll(groundItemOwnedByMap);
                     } catch (Exception e) {
@@ -70,7 +66,7 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
                     groundItemOwnedByMap.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
                 innerMap.put(entryKey, value);
 
-                for (Listener listener : maplisteners) {
+                for (Listener listener : mapListeners) {
                     try {
                         listener.onAdd(key, entryKey, value);
                     } catch (Exception e) {
@@ -93,7 +89,7 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
                     }
                 }
 
-                for (Listener listener : maplisteners) {
+                for (Listener listener : mapListeners) {
                     try {
                         listener.onRemove(key, entryKey);
                     } catch (Exception e) {
@@ -102,73 +98,11 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
                 }
             }
         };
-
-        tryInitialize();
+        super.startUp();
     }
 
     @Override
-    public void shutDown() throws Exception {
-        deinitialize();
-    }
-
-    private void remoteStorageServiceStateListener(RemoteStorageService.State state) {
-        try {
-            tryInitialize();
-        } catch (Exception e) {
-            log.error("GroundItemOwnedByDataProvider remoteStorageServiceStateListener failed", e);
-        }
-    }
-
-    public void addMapListener(Listener listener) {
-        maplisteners.add(listener);
-    }
-
-    public void removeMapListener(Listener listener) {
-        maplisteners.remove(listener);
-    }
-
-    public void addStateListener(Consumer<State> listener) {
-        stateListeners.add(listener);
-    }
-
-    public void removeStateListener(Consumer<State> listener) {
-        stateListeners.remove(listener);
-    }
-
-    public CompletableFuture<Void> waitUntilReady(Duration timeout) {
-        return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
-            Consumer<State> listener;
-
-            @Override
-            public boolean isReady() {
-                return state == State.Ready;
-            }
-
-            @Override
-            public void addListener(Runnable notify) {
-                listener = state -> notify.run();
-                stateListeners.add(listener);
-            }
-
-            @Override
-            public void removeListener() {
-                stateListeners.remove(listener);
-                listener = null;
-            }
-
-            @Override
-            public Duration getTimeout() {
-                return timeout;
-            }
-        });
-    }
-
-    private void tryInitialize() throws Exception {
-        if (remoteStorageService.getState() == RemoteStorageService.State.NotReady) {
-            deinitialize();
-            return;
-        }
-
+    protected void onRemoteStorageReady() {
         storagePort = remoteStorageService.getGroundItemOwnedByStoragePort();
         storagePort.addListener(storagePortListener);
 
@@ -179,35 +113,33 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
             }
 
             groundItemOwnedByMap = new ConcurrentHashMap<>();
-            // readAll doesn't give us entry keys, sync from adapter cache instead
-            syncFromAdapterCache();
+            for (Map.Entry<GroundItemOwnedByKey, Map<String, GroundItemOwnedByData>> entry : map.entrySet()) {
+                groundItemOwnedByMap.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
+            }
             setState(State.Ready);
         });
     }
 
-    private void syncFromAdapterCache() {
-        if (storagePort instanceof com.elertan.remote.firebase.FirebaseKeyListStorageAdapterBase) {
-            @SuppressWarnings("unchecked")
-            com.elertan.remote.firebase.FirebaseKeyListStorageAdapterBase<GroundItemOwnedByKey, GroundItemOwnedByData> adapter =
-                (com.elertan.remote.firebase.FirebaseKeyListStorageAdapterBase<GroundItemOwnedByKey, GroundItemOwnedByData>) storagePort;
-            ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> cache = adapter.getLocalCache();
-            groundItemOwnedByMap = new ConcurrentHashMap<>();
-            for (Map.Entry<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> entry : cache.entrySet()) {
-                groundItemOwnedByMap.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
+    @Override
+    protected void onRemoteStorageNotReady() {
+        groundItemOwnedByMap = null;
+        if (storagePort != null) {
+            storagePort.removeListener(storagePortListener);
+            try {
+                storagePort.close();
+            } catch (Exception e) {
+                log.error("Error closing storagePort", e);
             }
+            storagePort = null;
         }
     }
 
-    private void deinitialize() throws Exception {
-        setState(State.NotReady);
+    public void addMapListener(Listener listener) {
+        mapListeners.add(listener);
+    }
 
-        if (storagePort != null) {
-            storagePort.removeListener(storagePortListener);
-            storagePort.close();
-            storagePort = null;
-        }
-
-        groundItemOwnedByMap = null;
+    public void removeMapListener(Listener listener) {
+        mapListeners.remove(listener);
     }
 
     public CompletableFuture<String> addEntry(GroundItemOwnedByKey key, GroundItemOwnedByData data) {
@@ -253,26 +185,6 @@ public class GroundItemOwnedByDataProvider implements BUPluginLifecycle {
             return null;
         }
         return groundItemOwnedByMap.get(key);
-    }
-
-    public enum State {
-        NotReady,
-        Ready
-    }
-
-    private void setState(State state) {
-        if (state == this.state) {
-            return;
-        }
-        this.state = state;
-
-        for (Consumer<State> listener : stateListeners) {
-            try {
-                listener.accept(state);
-            } catch (Exception e) {
-                log.error("set state listener GroundItemOwnedByDataProvider error", e);
-            }
-        }
     }
 
     public interface Listener {

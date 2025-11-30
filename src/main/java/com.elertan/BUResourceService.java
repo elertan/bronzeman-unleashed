@@ -113,6 +113,7 @@ public class BUResourceService implements BUPluginLifecycle {
 
         clientThread.invokeLater(() -> {
             AsyncBufferedImage asyncBufferedImage = itemManager.getImage(itemId);
+            // AsyncBufferedImage.onLoaded() callback runs on client thread - safe to use client methods
             asyncBufferedImage.onLoaded(() -> {
                 int size = 14;
                 BufferedImage resized = BUImageUtil.resizeNearest(
