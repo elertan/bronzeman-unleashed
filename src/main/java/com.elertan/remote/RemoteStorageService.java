@@ -13,7 +13,7 @@ import com.elertan.remote.firebase.FirebaseRealtimeDatabase;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.remote.firebase.FirebaseSSEStream;
 import com.elertan.remote.firebase.storageAdapters.GameRulesFirebaseObjectStorageAdapter;
-import com.elertan.remote.firebase.storageAdapters.GroundItemOwnedByKeyValueStorageAdapter;
+import com.elertan.remote.firebase.storageAdapters.GroundItemOwnedByKeyListStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.LastEventFirebaseObjectStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.MembersFirebaseKeyValueStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.UnlockedItemsFirebaseKeyValueStorageAdapter;
@@ -53,7 +53,7 @@ public class RemoteStorageService implements BUPluginLifecycle {
     @Getter
     private ObjectStoragePort<BUEvent> lastEventStoragePort;
     @Getter
-    private KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
+    private KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
     private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
 
     @Override
@@ -147,7 +147,7 @@ public class RemoteStorageService implements BUPluginLifecycle {
     private void configureFromFirebaseRealtimeDatabase(FirebaseRealtimeDatabaseURL url) {
         firebaseRealtimeDatabase = new FirebaseRealtimeDatabase(httpClient, gson, url);
 
-        groundItemOwnedByStoragePort = new GroundItemOwnedByKeyValueStorageAdapter(
+        groundItemOwnedByStoragePort = new GroundItemOwnedByKeyListStorageAdapter(
             firebaseRealtimeDatabase,
             gson
         );
