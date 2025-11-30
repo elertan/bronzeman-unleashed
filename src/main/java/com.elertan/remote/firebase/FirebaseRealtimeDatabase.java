@@ -58,6 +58,22 @@ public class FirebaseRealtimeDatabase implements AutoCloseable {
             .header("User-Agent", "BronzemanUnleashedPlugin");
     }
 
+    /**
+     * Validates that a base path is a single-level resource path (e.g., "/Resource").
+     * @throws IllegalArgumentException if path is null, doesn't start with '/', or has multiple levels
+     */
+    public static void validateBasePath(String path) {
+        if (path == null) {
+            throw new IllegalArgumentException("path must not be null");
+        }
+        if (!path.startsWith("/")) {
+            throw new IllegalArgumentException("path must start with '/'");
+        }
+        if (path.lastIndexOf("/") != 0) {
+            throw new IllegalArgumentException("path must only be a starting resource");
+        }
+    }
+
     private static CompletableFuture<okhttp3.Response> enqueueAsync(OkHttpClient client,
         Request request) {
         final okhttp3.Call call = client.newCall(request);

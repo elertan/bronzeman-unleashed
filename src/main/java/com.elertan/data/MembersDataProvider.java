@@ -1,43 +1,43 @@
 package com.elertan.data;
 
-import com.elertan.BUPluginLifecycle;
 import com.elertan.models.Member;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.RemoteStorageService;
-import com.elertan.utils.ListenerUtils;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.function.Consumer;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Singleton
-public class MembersDataProvider implements BUPluginLifecycle {
+public class MembersDataProvider extends AbstractDataProvider {
 
     private final ConcurrentLinkedQueue<MemberMapListener> memberMapListeners = new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<Consumer<State>> stateListeners = new ConcurrentLinkedQueue<>();
     private final ConcurrentSkipListSet<Long> optimisticallyAddedMembers = new ConcurrentSkipListSet<>();
+
     @Inject
     private RemoteStorageService remoteStorageService;
+
     private KeyValueStoragePort<Long, Member> keyValueStoragePort;
     private KeyValueStoragePort.Listener<Long, Member> storagePortListener;
     private ConcurrentHashMap<Long, Member> membersMap = new ConcurrentHashMap<>();
-    @Getter
-    private State state = State.NotReady;
-    private final Consumer<RemoteStorageService.State> remoteStorageServiceStateListener = this::remoteStorageServiceStateListener;
+
+    public MembersDataProvider() {
+        super("MembersDataProvider");
+    }
+
+    @Override
+    protected RemoteStorageService getRemoteStorageService() {
+        return remoteStorageService;
+    }
 
     @Override
     public void startUp() throws Exception {
-        remoteStorageService.addStateListener(remoteStorageServiceStateListener);
-
         storagePortListener = new KeyValueStoragePort.Listener<Long, Member>() {
             @Override
             public void onFullUpdate(Map<Long, Member> map) {
@@ -51,7 +51,6 @@ public class MembersDataProvider implements BUPluginLifecycle {
             @Override
             public void onUpdate(Long key, Member member) {
                 log.info("members data provider -> on update");
-
                 if (membersMap == null) {
                     return;
                 }
@@ -62,7 +61,6 @@ public class MembersDataProvider implements BUPluginLifecycle {
                 } else {
                     oldMember = membersMap.get(key);
                 }
-
                 membersMap.put(key, member);
 
                 for (MemberMapListener listener : memberMapListeners) {
@@ -77,7 +75,6 @@ public class MembersDataProvider implements BUPluginLifecycle {
             @Override
             public void onDelete(Long key) {
                 log.info("members data provider -> on delete");
-
                 if (membersMap == null) {
                     return;
                 }
@@ -93,16 +90,32 @@ public class MembersDataProvider implements BUPluginLifecycle {
                 }
             }
         };
-
-        tryInitialize();
-
+        super.startUp();
     }
 
     @Override
-    public void shutDown() throws Exception {
-        state = State.NotReady;
+    protected void onRemoteStorageReady() {
+        keyValueStoragePort = remoteStorageService.getMembersStoragePort();
+        keyValueStoragePort.addListener(storagePortListener);
 
-        remoteStorageService.removeStateListener(remoteStorageServiceStateListener);
+        keyValueStoragePort.readAll().whenComplete((map, throwable) -> {
+            if (throwable != null) {
+                log.error("MembersDataProvider storageport read all failed", throwable);
+                return;
+            }
+            membersMap = new ConcurrentHashMap<>(map);
+            log.debug("MembersDataProvider initialized with {} members", membersMap.size());
+            setState(State.Ready);
+        });
+    }
+
+    @Override
+    protected void onRemoteStorageNotReady() {
+        membersMap = null;
+        if (keyValueStoragePort != null) {
+            keyValueStoragePort.removeListener(storagePortListener);
+            keyValueStoragePort = null;
+        }
     }
 
     public Map<Long, Member> getMembersMap() {
@@ -110,14 +123,6 @@ public class MembersDataProvider implements BUPluginLifecycle {
             return null;
         }
         return Collections.unmodifiableMap(membersMap);
-    }
-
-    public void addStateListener(Consumer<State> listener) {
-        stateListeners.add(listener);
-    }
-
-    public void removeStateListener(Consumer<State> listener) {
-        stateListeners.remove(listener);
     }
 
     public void addMemberMapListener(MemberMapListener listener) {
@@ -128,33 +133,6 @@ public class MembersDataProvider implements BUPluginLifecycle {
         memberMapListeners.remove(listener);
     }
 
-    public CompletableFuture<Void> waitUntilReady(Duration timeout) {
-        return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
-            private Consumer<State> listener;
-
-            @Override
-            public boolean isReady() {
-                return getState() == State.Ready;
-            }
-
-            @Override
-            public void addListener(Runnable notify) {
-                listener = state -> notify.run();
-                addStateListener(listener);
-            }
-
-            @Override
-            public void removeListener() {
-                removeStateListener(listener);
-            }
-
-            @Override
-            public Duration getTimeout() {
-                return timeout;
-            }
-        });
-    }
-
     public CompletableFuture<Void> addMember(Member member) {
         if (keyValueStoragePort == null) {
             throw new IllegalStateException("storagePort is null");
@@ -162,12 +140,10 @@ public class MembersDataProvider implements BUPluginLifecycle {
         if (membersMap == null) {
             throw new IllegalStateException("membersMap is null");
         }
-
         optimisticallyAddedMembers.add(member.getAccountHash());
         membersMap.put(member.getAccountHash(), member);
         return keyValueStoragePort.update(member.getAccountHash(), member);
     }
-
 
     public CompletableFuture<Void> updateMember(Member member) {
         if (keyValueStoragePort == null) {
@@ -176,7 +152,6 @@ public class MembersDataProvider implements BUPluginLifecycle {
         if (membersMap == null) {
             throw new IllegalStateException("membersMap is null");
         }
-
         membersMap.put(member.getAccountHash(), member);
         return keyValueStoragePort.update(member.getAccountHash(), member);
     }
@@ -188,68 +163,11 @@ public class MembersDataProvider implements BUPluginLifecycle {
         if (membersMap == null) {
             throw new IllegalStateException("membersMap is null");
         }
-
         return keyValueStoragePort.delete(accountHash);
     }
 
-    private void remoteStorageServiceStateListener(RemoteStorageService.State state) {
-        if (state == RemoteStorageService.State.NotReady) {
-            membersMap = null;
-            keyValueStoragePort = null;
-            setState(State.NotReady);
-            return;
-        }
-
-        tryInitialize();
-    }
-
-    private void tryInitialize() {
-        if (remoteStorageService.getState() == RemoteStorageService.State.NotReady) {
-            membersMap = null;
-            keyValueStoragePort = null;
-            setState(State.NotReady);
-            return;
-        }
-
-        keyValueStoragePort = remoteStorageService.getMembersStoragePort();
-        keyValueStoragePort.addListener(storagePortListener);
-
-        keyValueStoragePort.readAll().whenComplete((map, throwable) -> {
-            if (throwable != null) {
-                log.error("MembersDataProvider storageport read all failed", throwable);
-                return;
-            }
-
-            membersMap = new ConcurrentHashMap<>(map);
-            log.debug("MembersDataProvider initialized with {} members", membersMap.size());
-            setState(State.Ready);
-        });
-    }
-
-    private void setState(State state) {
-        if (this.state == state) {
-            return;
-        }
-        this.state = state;
-
-        for (Consumer<State> listener : stateListeners) {
-            try {
-                listener.accept(state);
-            } catch (Exception e) {
-                log.error("set state listener unlocked item data provider error", e);
-            }
-        }
-    }
-
-    public enum State {
-        NotReady,
-        Ready,
-    }
-
     public interface MemberMapListener {
-
         void onUpdate(Member newMember, Member oldMember);
-
         void onDelete(Member member);
     }
 }

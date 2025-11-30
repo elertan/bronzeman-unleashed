@@ -1,16 +1,13 @@
 package com.elertan.policies;
 
+import static com.elertan.chat.ChatMessageProvider.MessageKey.TRADE_RESTRICTION;
+
 import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
-import com.elertan.BUPluginConfig;
-import com.elertan.BUPluginLifecycle;
-import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
 import com.elertan.ItemUnlockService;
 import com.elertan.MemberService;
 import com.elertan.PolicyService;
-import com.elertan.chat.ChatMessageProvider;
-import com.elertan.chat.ChatMessageProvider.MessageKey;
 import com.elertan.models.GameRules;
 import com.elertan.models.Member;
 import com.elertan.utils.TextUtils;
@@ -22,41 +19,24 @@ import net.runelite.api.MenuAction;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.chat.ChatMessageBuilder;
 
 @Slf4j
 @Singleton
-public class TradePolicy extends PolicyBase implements BUPluginLifecycle {
+public class TradePolicy extends PolicyBase {
 
     @Inject
     private Client client;
-    @Inject
-    private BUPluginConfig buPluginConfig;
     @Inject
     private ItemUnlockService itemUnlockService;
     @Inject
     private MemberService memberService;
     @Inject
-    private BUSoundHelper buSoundHelper;
-    @Inject
     private BUChatService buChatService;
-    @Inject
-    private ChatMessageProvider chatMessageProvider;
 
     @Inject
     public TradePolicy(AccountConfigurationService accountConfigurationService,
         GameRulesService gameRulesService, PolicyService policyService) {
         super(accountConfigurationService, gameRulesService, policyService);
-    }
-
-    @Override
-    public void startUp() throws Exception {
-
-    }
-
-    @Override
-    public void shutDown() throws Exception {
-
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
@@ -139,12 +119,6 @@ public class TradePolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     private void tradeRestrictionError() {
-        ChatMessageBuilder builder = new ChatMessageBuilder();
-        builder.append(
-            buPluginConfig.chatRestrictionColor(),
-            chatMessageProvider.messageFor(MessageKey.TRADE_RESTRICTION)
-        );
-        buChatService.sendMessage(builder.build());
-        buSoundHelper.playDisabledSound();
+        buChatService.sendRestrictionMessage(TRADE_RESTRICTION);
     }
 }
