@@ -498,6 +498,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
         final boolean fIsTradeable = itemComposition.isTradeable();
         final String fItemName = itemComposition.getName();
         final int fItemId = itemId;
+        // Cache accountHash before async call - client methods require client thread
+        final long acquiredByAccountHash = client.getAccountHash();
         gameRulesService
             .waitUntilGameRulesReady(null)
             .whenComplete((__, throwable) -> {
@@ -517,7 +519,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     return;
                 }
 
-                long acquiredByAccountHash = client.getAccountHash();
                 ISOOffsetDateTime acquiredAt = new ISOOffsetDateTime(OffsetDateTime.now());
 
                 UnlockedItem unlockedItem = new UnlockedItem(

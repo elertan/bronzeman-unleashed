@@ -2,10 +2,10 @@ package com.elertan.panel.components;
 
 import com.elertan.models.GameRules;
 import com.elertan.models.ISOOffsetDateTime;
+import com.elertan.panel.BaseViewModel;
 import com.elertan.ui.Property;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Singleton;
-import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.time.OffsetDateTime;
 import java.util.function.Consumer;
@@ -13,7 +13,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class GameRulesEditorViewModel implements AutoCloseable {
+public class GameRulesEditorViewModel extends BaseViewModel {
 
     public final Property<Boolean> onlyForTradeableItemsProperty;
     public final Property<Boolean> restrictGroundItemsProperty;
@@ -28,18 +28,10 @@ public class GameRulesEditorViewModel implements AutoCloseable {
     public final Property<String> partyPasswordProperty;
     public final Property<Boolean> isViewOnlyModeProperty;
     private Props props;
-    private final PropertyChangeListener onlyForTradeableItemsListener = this::onlyForTradeableItemsListener;
-    private final PropertyChangeListener restrictGroundItemsListener = this::restrictGroundItemsListener;
-    private final PropertyChangeListener preventTradeOutsideGroupListener = this::preventTradeOutsideGroupListener;
-    private final PropertyChangeListener preventTradeLockedItemsListener = this::preventTradeLockedItemsListener;
-    //    public final Property<Boolean> isValid;
-    private final PropertyChangeListener preventGrandExchangeBuyOffersListener = this::preventGrandExchangeBuyOffersListener;
-    private final PropertyChangeListener preventPlayerOwnedHouseListener = this::preventPlayedOwnedHouseListener;
-    private final PropertyChangeListener restrictPlayerVersusPlayerLoot = this::restrictPlayerVersusPlayerLoot;
-    private final PropertyChangeListener restrictFaladorPartyRoomBalloons = this::restrictFaladorPartyRoomBalloons;
-    private final PropertyChangeListener shareAchievementNotificationsListener = this::shareAchievementNotificationsListener;
-    private final PropertyChangeListener valuableLootNotificationThresholdListener = this::valuableLootNotificationThresholdListener;
-    private final PropertyChangeListener partyPasswordListener = this::partyPasswordListener;
+    private final PropertyChangeListener updateListener = evt -> {
+        log.debug("{} changed to: {}", evt.getPropertyName(), evt.getNewValue());
+        tryUpdateGameRules();
+    };
 
     private GameRulesEditorViewModel(Props initialProps) {
         this.props = initialProps;
@@ -85,39 +77,23 @@ public class GameRulesEditorViewModel implements AutoCloseable {
 //        );
 //        isValid = partyPassword.derive((partyPasswordValue) -> partyPasswordValue == null || partyPasswordValue.length() <= 20);
 
-        onlyForTradeableItemsProperty.addListener(onlyForTradeableItemsListener);
-        restrictGroundItemsProperty.addListener(restrictGroundItemsListener);
-        preventTradeOutsideGroupProperty.addListener(preventTradeOutsideGroupListener);
-        preventTradeLockedItemsProperty.addListener(preventTradeLockedItemsListener);
-        preventGrandExchangeBuyOffersProperty.addListener(preventGrandExchangeBuyOffersListener);
-        preventPlayedOwnedHouseProperty.addListener(preventPlayerOwnedHouseListener);
-        restrictPlayerVersusPlayerLootProperty.addListener(restrictPlayerVersusPlayerLoot);
-        restrictFaladorPartyRoomBalloonsProperty.addListener(restrictFaladorPartyRoomBalloons);
-        shareAchievementNotificationsProperty.addListener(shareAchievementNotificationsListener);
-        valuableLootNotificationThresholdProperty.addListener(
-            valuableLootNotificationThresholdListener);
-        partyPasswordProperty.addListener(partyPasswordListener);
+        addListener(onlyForTradeableItemsProperty, updateListener);
+        addListener(restrictGroundItemsProperty, updateListener);
+        addListener(preventTradeOutsideGroupProperty, updateListener);
+        addListener(preventTradeLockedItemsProperty, updateListener);
+        addListener(preventGrandExchangeBuyOffersProperty, updateListener);
+        addListener(preventPlayedOwnedHouseProperty, updateListener);
+        addListener(restrictPlayerVersusPlayerLootProperty, updateListener);
+        addListener(restrictFaladorPartyRoomBalloonsProperty, updateListener);
+        addListener(shareAchievementNotificationsProperty, updateListener);
+        addListener(valuableLootNotificationThresholdProperty, updateListener);
+        addListener(partyPasswordProperty, updateListener);
 
         if (setGameRules) {
             initialProps.onGameRulesChanged.accept(gameRules);
         }
     }
 
-    @Override
-    public void close() throws Exception {
-        partyPasswordProperty.removeListener(partyPasswordListener);
-        valuableLootNotificationThresholdProperty.removeListener(
-            valuableLootNotificationThresholdListener);
-        shareAchievementNotificationsProperty.removeListener(shareAchievementNotificationsListener);
-        restrictFaladorPartyRoomBalloonsProperty.removeListener(restrictFaladorPartyRoomBalloons);
-        restrictPlayerVersusPlayerLootProperty.removeListener(restrictPlayerVersusPlayerLoot);
-        preventPlayedOwnedHouseProperty.removeListener(preventPlayerOwnedHouseListener);
-        preventGrandExchangeBuyOffersProperty.removeListener(preventGrandExchangeBuyOffersListener);
-        preventTradeLockedItemsProperty.removeListener(preventTradeLockedItemsListener);
-        preventTradeOutsideGroupProperty.removeListener(preventTradeOutsideGroupListener);
-        restrictGroundItemsProperty.removeListener(restrictGroundItemsListener);
-        onlyForTradeableItemsProperty.removeListener(onlyForTradeableItemsListener);
-    }
 
     public void setProps(Props props) {
         this.props = props;
@@ -141,61 +117,6 @@ public class GameRulesEditorViewModel implements AutoCloseable {
         valuableLootNotificationThresholdProperty.set(gameRules.getValuableLootNotificationThreshold());
 
         isViewOnlyModeProperty.set(props.isViewOnlyMode());
-    }
-
-    private void onlyForTradeableItemsListener(PropertyChangeEvent event) {
-        log.debug("onlyForTradeableItems changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
-    }
-
-    private void restrictGroundItemsListener(PropertyChangeEvent event) {
-        log.debug("restrictGroundItems changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
-    }
-
-    private void preventTradeOutsideGroupListener(PropertyChangeEvent event) {
-        log.debug("preventTradeOutsideGroup changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
-    }
-
-    private void preventTradeLockedItemsListener(PropertyChangeEvent event) {
-        log.debug("preventTradeLockedItems changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
-    }
-
-    private void preventGrandExchangeBuyOffersListener(PropertyChangeEvent event) {
-        log.debug("preventGrandExchangeBuyOffers changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
-    }
-
-    private void preventPlayedOwnedHouseListener(PropertyChangeEvent event) {
-        log.debug("preventPlayedOwnedHouse changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
-    }
-
-    private void restrictPlayerVersusPlayerLoot(PropertyChangeEvent event) {
-        log.debug("restrictPlayerVersusPlayerLoot changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
-    }
-
-    private void restrictFaladorPartyRoomBalloons(PropertyChangeEvent event) {
-        log.debug("restrictFaladorPartyRoomBalloons changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
-    }
-
-    private void shareAchievementNotificationsListener(PropertyChangeEvent event) {
-        log.debug("shareAchievementNotifications changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
-    }
-
-    private void valuableLootNotificationThresholdListener(PropertyChangeEvent event) {
-        log.debug("valuableLootNotificationThreshold changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
-    }
-
-    private void partyPasswordListener(PropertyChangeEvent event) {
-        log.debug("partyPassword changed to: {}", event.getNewValue());
-        tryUpdateGameRules();
     }
 
     private boolean isValid() {
