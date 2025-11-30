@@ -8,4 +8,9 @@ public class TextUtils {
         String sanitized = Text.sanitize(Text.removeTags(playerName));
         return sanitized.replaceAll("\\s*\\(level-\\d+\\)$", "");
     }
+
+    public static String sanitizeItemName(String itemName) {
+        String sanitized = Text.removeTags(itemName);
+        return sanitized.replaceAll("\\s*\\(Members\\)$", "");
+    }
 }
