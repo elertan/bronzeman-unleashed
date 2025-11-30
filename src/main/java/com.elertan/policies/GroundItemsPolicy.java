@@ -41,6 +41,7 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ItemDespawned;
 import net.runelite.api.events.ItemSpawned;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
 
 @Slf4j
@@ -48,6 +49,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     @Inject
     private Client client;
+    @Inject
+    private ClientThread clientThread;
     @Inject
     private BUPluginConfig buPluginConfig;
     @Inject
@@ -422,33 +425,36 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 //        });
 //    }
 
+    // Called from scheduler thread - must use clientThread.invoke() for client access
     private void cleanupExpiredGroundItems() {
-        ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
-        if (map == null || map.isEmpty()) {
-            return;
-        }
-
-        OffsetDateTime now = OffsetDateTime.now();
-        long accountHash = client.getAccountHash();
-
-        for (Map.Entry<GroundItemOwnedByKey, GroundItemOwnedByData> entry : map.entrySet()) {
-            GroundItemOwnedByKey key = entry.getKey();
-            GroundItemOwnedByData data = entry.getValue();
-            if (data.getAccountHash() != accountHash) {
-                continue;
-            }
-            if (data.getDespawnsAt().getValue().isAfter(now)) {
-                continue;
+        clientThread.invoke(() -> {
+            ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
+            if (map == null || map.isEmpty()) {
+                return;
             }
 
-            log.debug("Cleaning up expired ground item {}", key);
+            OffsetDateTime now = OffsetDateTime.now();
+            long accountHash = client.getAccountHash();
 
-            groundItemOwnedByDataProvider.delete(key).whenComplete((result, throwable) -> {
-                if (throwable != null) {
-                    log.error("Failed to clean up expired ground item {}", key, throwable);
+            for (Map.Entry<GroundItemOwnedByKey, GroundItemOwnedByData> entry : map.entrySet()) {
+                GroundItemOwnedByKey key = entry.getKey();
+                GroundItemOwnedByData data = entry.getValue();
+                if (data.getAccountHash() != accountHash) {
+                    continue;
                 }
-            });
-        }
+                if (data.getDespawnsAt().getValue().isAfter(now)) {
+                    continue;
+                }
+
+                log.debug("Cleaning up expired ground item {}", key);
+
+                groundItemOwnedByDataProvider.delete(key).whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        log.error("Failed to clean up expired ground item {}", key, throwable);
+                    }
+                });
+            }
+        });
     }
 
     private void cleanupExpiredGroundItemsForEveryone() {

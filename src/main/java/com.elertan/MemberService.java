@@ -44,58 +44,62 @@ public class MemberService implements BUPluginLifecycle {
 
     @Override
     public void startUp() throws Exception {
+        // Data provider callbacks are not on client thread - wrap in clientThread.invoke()
         memberMapListener = new MembersDataProvider.MemberMapListener() {
             @Override
             public void onUpdate(Member member, Member old) {
-                log.debug(
-                    "member service -> member update: {} - old: {}",
-                    member == null ? null : member.toString(),
-                    old == null ? null : old.toString()
-                );
+                clientThread.invoke(() -> {
+                    log.debug(
+                        "member service -> member update: {} - old: {}",
+                        member == null ? null : member.toString(),
+                        old == null ? null : old.toString()
+                    );
 
-                if (old == null) {
-                    // If the updated member is not us, inform of a joi
-                    // n
-                    if (member.getAccountHash() != client.getAccountHash()) {
-                        ChatMessageBuilder builder = new ChatMessageBuilder();
-                        builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
-                        builder.append(" has joined your Group Bronzeman.");
-                        buChatService.sendMessage(builder.build());
+                    if (old == null) {
+                        // If the updated member is not us, inform of a join
+                        if (member.getAccountHash() != client.getAccountHash()) {
+                            ChatMessageBuilder builder = new ChatMessageBuilder();
+                            builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                            builder.append(" has joined your Group Bronzeman.");
+                            buChatService.sendMessage(builder.build());
+                        }
+                    } else {
+                        if (!Objects.equals(member.getName(), old.getName())) {
+                            ChatMessageBuilder builder = new ChatMessageBuilder();
+                            builder.append(buPluginConfig.chatPlayerNameColor(), old.getName());
+                            builder.append(" has changed their name to ");
+                            builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                            builder.append(".");
+                            buChatService.sendMessage(builder.build());
+                        }
+                        if (member.getRole() != old.getRole()) {
+                            ChatMessageBuilder builder = new ChatMessageBuilder();
+                            builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                            builder.append(" has changed their role from ");
+                            builder.append(
+                                buPluginConfig.chatHighlightColor(),
+                                old.getRole().toString()
+                            );
+                            builder.append(" to ");
+                            builder.append(
+                                buPluginConfig.chatHighlightColor(),
+                                member.getRole().toString()
+                            );
+                            builder.append(".");
+                            buChatService.sendMessage(builder.build());
+                        }
                     }
-                } else {
-                    if (!Objects.equals(member.getName(), old.getName())) {
-                        ChatMessageBuilder builder = new ChatMessageBuilder();
-                        builder.append(buPluginConfig.chatPlayerNameColor(), old.getName());
-                        builder.append(" has changed their name to ");
-                        builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
-                        builder.append(".");
-                        buChatService.sendMessage(builder.build());
-                    }
-                    if (member.getRole() != old.getRole()) {
-                        ChatMessageBuilder builder = new ChatMessageBuilder();
-                        builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
-                        builder.append(" has changed their role from ");
-                        builder.append(
-                            buPluginConfig.chatHighlightColor(),
-                            old.getRole().toString()
-                        );
-                        builder.append(" to ");
-                        builder.append(
-                            buPluginConfig.chatHighlightColor(),
-                            member.getRole().toString()
-                        );
-                        builder.append(".");
-                        buChatService.sendMessage(builder.build());
-                    }
-                }
+                });
             }
 
             @Override
             public void onDelete(Member member) {
-                ChatMessageBuilder builder = new ChatMessageBuilder();
-                builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
-                builder.append(" has left your Group Bronzeman.");
-                buChatService.sendMessage(builder.build());
+                clientThread.invoke(() -> {
+                    ChatMessageBuilder builder = new ChatMessageBuilder();
+                    builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                    builder.append(" has left your Group Bronzeman.");
+                    buChatService.sendMessage(builder.build());
+                });
             }
         };
 

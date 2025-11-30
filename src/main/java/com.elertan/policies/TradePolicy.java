@@ -4,7 +4,6 @@ import static com.elertan.chat.ChatMessageProvider.MessageKey.TRADE_RESTRICTION;
 
 import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
-import com.elertan.BUPluginLifecycle;
 import com.elertan.GameRulesService;
 import com.elertan.ItemUnlockService;
 import com.elertan.MemberService;
@@ -23,7 +22,7 @@ import net.runelite.api.widgets.Widget;
 
 @Slf4j
 @Singleton
-public class TradePolicy extends PolicyBase implements BUPluginLifecycle {
+public class TradePolicy extends PolicyBase {
 
     @Inject
     private Client client;
@@ -38,16 +37,6 @@ public class TradePolicy extends PolicyBase implements BUPluginLifecycle {
     public TradePolicy(AccountConfigurationService accountConfigurationService,
         GameRulesService gameRulesService, PolicyService policyService) {
         super(accountConfigurationService, gameRulesService, policyService);
-    }
-
-    @Override
-    public void startUp() throws Exception {
-
-    }
-
-    @Override
-    public void shutDown() throws Exception {
-
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {

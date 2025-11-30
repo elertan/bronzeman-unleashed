@@ -3,7 +3,6 @@ package com.elertan.policies;
 import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
 import com.elertan.BUPluginConfig;
-import com.elertan.BUPluginLifecycle;
 import com.elertan.GameRulesService;
 import com.elertan.PolicyService;
 import com.elertan.chat.ChatMessageProvider;
@@ -18,7 +17,7 @@ import net.runelite.client.util.Text;
 
 @Slf4j
 @Singleton
-public class FaladorPartyRoomPolicy extends PolicyBase implements BUPluginLifecycle {
+public class FaladorPartyRoomPolicy extends PolicyBase {
 
     @Inject
     private BUPluginConfig buPluginConfig;
@@ -31,16 +30,6 @@ public class FaladorPartyRoomPolicy extends PolicyBase implements BUPluginLifecy
     public FaladorPartyRoomPolicy(AccountConfigurationService accountConfigurationService,
         GameRulesService gameRulesService, PolicyService policyService) {
         super(accountConfigurationService, gameRulesService, policyService);
-    }
-
-    @Override
-    public void startUp() throws Exception {
-
-    }
-
-    @Override
-    public void shutDown() throws Exception {
-
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {

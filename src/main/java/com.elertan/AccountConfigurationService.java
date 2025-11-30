@@ -83,10 +83,12 @@ public class AccountConfigurationService implements BUPluginLifecycle {
         return accountConfigurationMap.get(accountHash);
     }
 
+    // Requires: client thread (uses client.getAccountHash())
     public AccountConfiguration getCurrentAccountConfiguration() {
         return getAccountConfiguration(client.getAccountHash());
     }
 
+    // Requires: client thread (uses client.getAccountHash())
     public void setCurrentAccountConfiguration(AccountConfiguration accountConfiguration) {
         setAccountConfiguration(accountConfiguration, client.getAccountHash());
     }
@@ -128,6 +130,7 @@ public class AccountConfigurationService implements BUPluginLifecycle {
         currentAccountConfigurationChangeListeners.remove(listener);
     }
 
+    // Requires: client thread (uses client.getAccountHash())
     public void addCurrentAccountHashToAutoOpenConfigurationDisabled()
         throws IllegalStateException {
         long accountHash = client.getAccountHash();
@@ -142,6 +145,7 @@ public class AccountConfigurationService implements BUPluginLifecycle {
         storeAutoOpenAccountConfigurationDisabledForAccountHashes();
     }
 
+    // Requires: client thread (uses client.getAccountHash())
     public boolean isCurrentAccountAutoOpenAccountConfigurationEnabled()
         throws IllegalStateException {
         long accountHash = client.getAccountHash();
