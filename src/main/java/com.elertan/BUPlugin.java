@@ -308,6 +308,7 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onItemSpawned(ItemSpawned event) {
+        itemUnlockService.onItemSpawned(event);
         groundItemsPolicy.onItemSpawned(event);
     }
 
