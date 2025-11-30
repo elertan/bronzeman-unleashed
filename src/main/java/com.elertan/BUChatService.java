@@ -313,4 +313,11 @@ public class BUChatService implements BUPluginLifecycle {
         return buResourceService.getOrSetupItemImageModIconId(itemId)
             .thenApply((id) -> "<img=" + id + ">");
     }
+
+    public CompletableFuture<String> getItemIconTagIfEnabled(int itemId) {
+        if (config.useItemIconsInChat()) {
+            return getItemIconTag(itemId);
+        }
+        return CompletableFuture.completedFuture(null);
+    }
 }
