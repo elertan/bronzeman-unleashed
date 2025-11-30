@@ -1,7 +1,6 @@
 package com.elertan.policies;
 
 import com.elertan.AccountConfigurationService;
-import com.elertan.BUPluginLifecycle;
 import com.elertan.GameRulesService;
 import com.elertan.ItemUnlockService;
 import com.elertan.PolicyService;
@@ -16,7 +15,7 @@ import net.runelite.api.widgets.Widget;
 
 @Slf4j
 @Singleton
-public class GrandExchangePolicy extends PolicyBase implements BUPluginLifecycle {
+public class GrandExchangePolicy extends PolicyBase {
 
     private final static int GE_SEARCH_BUILD_SCRIPT_ID = 751;
     @Inject
@@ -30,16 +29,6 @@ public class GrandExchangePolicy extends PolicyBase implements BUPluginLifecycle
         GameRulesService gameRulesService, PolicyService policyService
     ) {
         super(accountConfigurationService, gameRulesService, policyService);
-    }
-
-    @Override
-    public void startUp() throws Exception {
-
-    }
-
-    @Override
-    public void shutDown() throws Exception {
-
     }
 
     public void onScriptPostFired(ScriptPostFired event) {

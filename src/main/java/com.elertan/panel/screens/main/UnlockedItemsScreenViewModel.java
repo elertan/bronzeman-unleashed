@@ -2,6 +2,7 @@ package com.elertan.panel.screens.main;
 
 import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.models.UnlockedItem;
+import com.elertan.panel.BaseViewModel;
 import com.elertan.ui.Property;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
@@ -15,7 +16,7 @@ import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class UnlockedItemsScreenViewModel implements AutoCloseable {
+public class UnlockedItemsScreenViewModel extends BaseViewModel {
 
     public final Property<List<UnlockedItem>> allUnlockedItems;
     public final Property<String> searchText = new Property<>("");
@@ -54,12 +55,12 @@ public class UnlockedItemsScreenViewModel implements AutoCloseable {
             allUnlockedItems.set(allUnlockedItemsSupplier.get());
         });
 
-        sortedBy.addListener(sortedByListener);
+        addListener(sortedBy, sortedByListener);
     }
 
     @Override
     public void close() throws Exception {
-        sortedBy.removeListener(sortedByListener);
+        super.close();
         unlockedItemsDataProvider.removeUnlockedItemsMapListener(unlockedItemsMapListener);
     }
 

@@ -1,5 +1,7 @@
 package com.elertan;
 
+import com.elertan.chat.ChatMessageProvider;
+import com.elertan.chat.ChatMessageProvider.MessageKey;
 import com.elertan.chat.GameMessageParser;
 import com.elertan.chat.ParsedGameMessage;
 import com.elertan.event.BUEvent;
@@ -7,6 +9,7 @@ import com.elertan.event.GameMessageToEventTransformer;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.models.Member;
 import com.elertan.utils.ListenerUtils;
+import com.elertan.utils.StateListenerManager;
 import com.elertan.utils.TextUtils;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
@@ -16,7 +19,6 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
@@ -48,7 +50,7 @@ public class BUChatService implements BUPluginLifecycle {
         ChatMessageType.FRIENDSCHAT,
         ChatMessageType.PRIVATECHAT
     );
-    private final ConcurrentLinkedQueue<Consumer<Boolean>> isChatboxTransparentListeners = new ConcurrentLinkedQueue<>();
+    private final StateListenerManager<Boolean> isChatboxTransparentListeners = new StateListenerManager<>("BUChatService.isChatboxTransparent");
     @Inject
     private Client client;
     @Inject
@@ -70,6 +72,10 @@ public class BUChatService implements BUPluginLifecycle {
     private MemberService memberService;
     @Inject
     private BUEventService buEventService;
+    @Inject
+    private ChatMessageProvider chatMessageProvider;
+    @Inject
+    private BUSoundHelper buSoundHelper;
     private Boolean isChatboxTransparent = null;
 
     @Override
@@ -153,6 +159,18 @@ public class BUChatService implements BUPluginLifecycle {
         }
     }
 
+    /**
+     * Sends a restriction message with standardized formatting and plays the disabled sound.
+     *
+     * @param key the message key for the restriction message
+     */
+    public void sendRestrictionMessage(MessageKey key) {
+        ChatMessageBuilder builder = new ChatMessageBuilder();
+        builder.append(config.chatRestrictionColor(), chatMessageProvider.messageFor(key));
+        sendMessage(builder.build());
+        buSoundHelper.playDisabledSound();
+    }
+
     public void sendMessage(String message) {
         log.debug("Sending chat message: {}", message);
 
@@ -198,11 +216,11 @@ public class BUChatService implements BUPluginLifecycle {
     }
 
     public void addIsChatboxTransparentListener(Consumer<Boolean> listener) {
-        isChatboxTransparentListeners.add(listener);
+        isChatboxTransparentListeners.addListener(listener);
     }
 
     public void removeIsChatboxTransparentListener(Consumer<Boolean> listener) {
-        isChatboxTransparentListeners.remove(listener);
+        isChatboxTransparentListeners.removeListener(listener);
     }
 
     public CompletableFuture<Void> waitForIsChatboxTransparentSet(Duration timeout) {
@@ -237,14 +255,7 @@ public class BUChatService implements BUPluginLifecycle {
         }
         this.isChatboxTransparent = isChatboxTransparent;
         log.debug("isChatboxTransparent set to {}", isChatboxTransparent);
-
-        for (Consumer<Boolean> listener : isChatboxTransparentListeners) {
-            try {
-                listener.accept(isChatboxTransparent);
-            } catch (Exception e) {
-                log.error("set isChatboxTransparent listener error", e);
-            }
-        }
+        isChatboxTransparentListeners.notifyListeners(isChatboxTransparent);
     }
 
     private void currentAccountConfigurationChangeListener(
@@ -312,5 +323,12 @@ public class BUChatService implements BUPluginLifecycle {
     public CompletableFuture<String> getItemIconTag(int itemId) {
         return buResourceService.getOrSetupItemImageModIconId(itemId)
             .thenApply((id) -> "<img=" + id + ">");
+    }
+
+    public CompletableFuture<String> getItemIconTagIfEnabled(int itemId) {
+        if (config.useItemIconsInChat()) {
+            return getItemIconTag(itemId);
+        }
+        return CompletableFuture.completedFuture(null);
     }
 }

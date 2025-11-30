@@ -21,6 +21,10 @@ public interface BUPluginConfig extends Config {
     String chatSection = "chatSection";
     @ConfigSection(name = "Party", description = "Controls the party settings", position = 4)
     String partySection = "partySection";
+    @ConfigSection(name = "Minigames", description = "Controls minigame behavior", position = 5)
+    String minigameSection = "minigameSection";
+    @ConfigSection(name = "Debug", description = "Debug settings for testing", position = 99)
+    String debugSection = "debugSection";
     String SHOULD_AUTOMATICALLY_JOIN_PARTY_KEY = "shouldAutomaticallyJoinParty";
     String SHOULD_CHANGE_TO_PARTY_EVEN_IF_ALREADY_IN_PARTY = "shouldChangeToPartyEvenIfAlreadyInParty";
     String ACCOUNT_CONFIG_MAP_JSON_KEY = "accountConfigMapJson";
@@ -145,6 +149,16 @@ public interface BUPluginConfig extends Config {
         return true;
     }
 
+    @ConfigItem(keyName = "hideUnlockOverlayInMinigames", name = "Hide unlock overlay", description = "Hides the item unlock overlay in minigames/instances (Inferno, Gauntlet, raids, etc.)", section = minigameSection)
+    default boolean hideUnlockOverlayInMinigames() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "hideUnlockChatInMinigames", name = "Hide unlock chat", description = "Hides the item unlock chat message in minigames/instances", section = minigameSection)
+    default boolean hideUnlockChatInMinigames() {
+        return false;
+    }
+
     @ConfigItem(keyName = SHOULD_CHANGE_TO_PARTY_EVEN_IF_ALREADY_IN_PARTY, name = "Auto-join even if already in party", description = "Whether to change to the party even if you are already in a party", section = partySection, hidden = true)
     default boolean shouldChangeToPartyEvenIfAlreadyInParty() {
         return false;
@@ -158,5 +172,10 @@ public interface BUPluginConfig extends Config {
     @ConfigItem(keyName = AUTO_OPEN_ACCOUNT_CONFIGURATION_DISABLED_FOR_ACCOUNT_HASHES_JSON_KEY, name = "No account configuration for account hashes json", description = "A list of account hashes to not automatically open up the account configuration for", hidden = true)
     default String autoOpenAccountConfigurationDisabledForAccountHashesJson() {
         return null;
+    }
+
+    @ConfigItem(keyName = "enableDebugCommands", name = "Enable debug commands", description = "Allows !bu: chat commands for testing (e.g. !bu:pet_following)", section = debugSection)
+    default boolean enableDebugCommands() {
+        return false;
     }
 }

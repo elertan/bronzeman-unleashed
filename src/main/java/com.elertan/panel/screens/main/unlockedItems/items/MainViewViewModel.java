@@ -227,7 +227,8 @@ public class MainViewViewModel implements AutoCloseable {
         }
 
         int itemId = unlockedItem.getId();
-        itemUnlockService.removeUnlockedItemById(itemId);
+        clientThread.invoke(() -> itemUnlockService.removeUnlockedItemById(itemId));
+
     }
 
     private void allUnlockedItemsListener(PropertyChangeEvent propertyChangeEvent) {

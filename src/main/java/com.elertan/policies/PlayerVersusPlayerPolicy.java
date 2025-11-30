@@ -171,19 +171,10 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
             }
 
             int itemId = itemStack.getId();
-            int world = lastDeathLocation.getWorld();
             WorldPoint worldPoint = lastDeathLocation.getWorldPoint();
             WorldView worldView = lastDeathLocation.getWorldView();
-            int plane = worldPoint.getPlane();
-
-            GroundItemOwnedByKey key = GroundItemOwnedByKey.builder()
-                .itemId(itemId)
-                .world(world)
-                .worldViewId(worldView.getId())
-                .plane(plane)
-                .worldX(worldPoint.getX())
-                .worldY(worldPoint.getY())
-                .build();
+            GroundItemOwnedByKey key = GroundItemOwnedByKey.of(
+                itemId, lastDeathLocation.getWorld(), worldView.getId(), worldPoint);
 
             markGroundItemOwnedByAsPlayerVersusPlayerLoot(key, playerName)
                 .whenComplete((__, throwable) -> {
@@ -228,39 +219,13 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
 
     private CompletableFuture<Void> markGroundItemOwnedByAsPlayerVersusPlayerLoot(
         @NonNull GroundItemOwnedByKey key, @NonNull String playerName) {
-        CompletableFuture<Void> future = new CompletableFuture<>();
+        // PvP loot despawns after 3 minutes (300 ticks)
+        ISOOffsetDateTime despawnsAt = new ISOOffsetDateTime(OffsetDateTime.now()
+            .plus(Duration.ofMinutes(3)));
+        GroundItemOwnedByData data = new GroundItemOwnedByData(client.getAccountHash(), despawnsAt, playerName);
 
-        ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
-        GroundItemOwnedByData data;
-        if (map == null) {
-            data = null;
-        } else {
-            data = map.get(key);
-        }
-
-        if (data == null) {
-            // We can assume player vs player loot despawns after 3 minutes (300 ticks)
-            ISOOffsetDateTime despawnsAt = new ISOOffsetDateTime(OffsetDateTime.now()
-                .plus(Duration.ofMinutes(3)));
-            data = new GroundItemOwnedByData(client.getAccountHash(), despawnsAt, playerName);
-        } else {
-            long accountHash = data.getAccountHash();
-            ISOOffsetDateTime despawnsAt = data.getDespawnsAt();
-            data = new GroundItemOwnedByData(accountHash, despawnsAt, playerName);
-        }
-
-        groundItemOwnedByDataProvider.update(key, data)
-            .whenComplete((result, throwable) -> {
-                if (throwable != null) {
-                    log.error("GroundItemOwnedByDataProvider update failed", throwable);
-                    future.completeExceptionally(throwable);
-                    return;
-                }
-
-                future.complete(null);
-            });
-
-        return future;
+        return groundItemOwnedByDataProvider.addEntry(key, data)
+            .thenApply(__ -> null);
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
