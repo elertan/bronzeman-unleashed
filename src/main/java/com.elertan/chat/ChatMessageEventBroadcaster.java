@@ -388,34 +388,57 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
     }
 
     private CompletableFuture<String> transformPetDropEvent(BUEvent event) {
-        Supplier<String> sync = () -> {
-            if (client.getAccountHash() == event.getDispatchedFromAccountHash()) {
-                return null;
+        CompletableFuture<String> future = new CompletableFuture<>();
+
+        if (client.getAccountHash() == event.getDispatchedFromAccountHash()) {
+            future.complete(null);
+            return future;
+        }
+
+        PetDropBUEvent e = (PetDropBUEvent) event;
+        Member member = memberService.getMemberByAccountHash(e.getDispatchedFromAccountHash());
+        if (member == null) {
+            log.error(
+                "could not find member by hash {} at transformPetDropEvent",
+                e.getDispatchedFromAccountHash()
+            );
+            future.complete(null);
+            return future;
+        }
+
+        Integer petItemId = e.getPetItemId();
+
+        CompletableFuture<String> iconFuture = petItemId != null
+            ? buChatService.getItemIconTagIfEnabled(petItemId)
+            : CompletableFuture.completedFuture(null);
+
+        iconFuture.whenComplete((itemIconTag, throwable) -> {
+            if (throwable != null) {
+                log.error("Failed to get pet icon tag", throwable);
+                future.completeExceptionally(throwable);
+                return;
             }
 
-            PetDropBUEvent e = (PetDropBUEvent) event;
-            Member member = memberService.getMemberByAccountHash(e.getDispatchedFromAccountHash());
-            if (member == null) {
-                log.error(
-                    "could not find member by hash {} at transformPetDropEvent",
-                    e.getDispatchedFromAccountHash()
-                );
-                return null;
-            }
+            clientThread.invoke(() -> {
+                ChatMessageBuilder builder = new ChatMessageBuilder();
+                builder.append(config.chatPlayerNameColor(), member.getName());
 
-            ChatMessageBuilder builder = new ChatMessageBuilder();
-            builder.append(config.chatPlayerNameColor(), member.getName());
+                if (petItemId != null) {
+                    String petName = client.getItemDefinition(petItemId).getName();
+                    builder.append(" has a funny feeling like they are being followed: ");
+                    if (itemIconTag != null) {
+                        builder.append(config.chatHighlightColor(), itemIconTag);
+                        builder.append(" ");
+                    }
+                    builder.append(config.chatHighlightColor(), petName);
+                } else {
+                    builder.append(" has a funny feeling like they are being followed");
+                }
 
-            String petName = e.getPetName();
-            if (petName != null) {
-                builder.append(" has a funny feeling like they are being followed: ");
-                builder.append(config.chatHighlightColor(), petName);
-            } else {
-                builder.append(" has a funny feeling like they are being followed");
-            }
+                future.complete(builder.build());
+            });
+        });
 
-            return builder.build();
-        };
-        return CompletableFuture.supplyAsync(sync);
+        return future;
     }
 }

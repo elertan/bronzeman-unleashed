@@ -204,7 +204,7 @@ public class PetDropService implements BUPluginLifecycle {
             String petName = TextUtils.sanitizeItemName(comp.getName());
             if (cleanName.equals(petName)) {
                 log.info("[CMD] Found matching pet: {} (id: {})", petName, petItemId);
-                emitPetDropEvent(cleanName);
+                emitPetDropEvent(petItemId);
                 return;
             }
         }
@@ -214,9 +214,9 @@ public class PetDropService implements BUPluginLifecycle {
     private void handlePetDropMessage(String message) {
         // Use clientThread.invokeLater to ensure game state has updated
         clientThread.invokeLater(() -> {
-            String petName = identifyPet(message);
-            log.debug("Pet drop detected: {} (name: {})", message, petName);
-            emitPetDropEvent(petName);
+            Integer petItemId = identifyPetItemId(message);
+            log.debug("Pet drop detected: {} (itemId: {})", message, petItemId);
+            emitPetDropEvent(petItemId);
         });
     }
 
@@ -224,15 +224,25 @@ public class PetDropService implements BUPluginLifecycle {
      * Identify which pet was received based on current game state.
      *
      * @param message the chat message that triggered detection
-     * @return pet name, or null if cannot be identified (Probita edge case)
+     * @return pet item ID, or null if cannot be identified (Probita edge case)
      */
     @Nullable
-    private String identifyPet(String message) {
+    private Integer identifyPetItemId(String message) {
         // Case 1: Player didn't have a follower - check for new follower
         if (!hadFollower) {
             NPC follower = client.getFollower();
             if (follower != null) {
-                return follower.getName();
+                String followerName = follower.getName();
+                // Look up item ID from follower name
+                for (int petItemId : petItemIds) {
+                    ItemComposition comp = itemManager.getItemComposition(petItemId);
+                    if (TextUtils.sanitizeItemName(comp.getName()).equals(TextUtils.sanitizeItemName(followerName))) {
+                        return petItemId;
+                    }
+                }
+                // Follower found but no matching pet item - return null
+                log.warn("Found follower '{}' but no matching pet item ID", followerName);
+                return null;
             }
         }
 
@@ -246,8 +256,7 @@ public class PetDropService implements BUPluginLifecycle {
                     if (itemId > 0 && petItemIds.contains(itemId) &&
                         !previousInventoryPetItemIds.contains(itemId)) {
                         // Found a new pet in inventory (wasn't there last tick)
-                        ItemComposition comp = itemManager.getItemComposition(itemId);
-                        return comp.getName();
+                        return itemId;
                     }
                 }
             }
@@ -262,12 +271,12 @@ public class PetDropService implements BUPluginLifecycle {
         return null;
     }
 
-    private void emitPetDropEvent(@Nullable String petName) {
-        log.info("[CMD] emitPetDropEvent called with: '{}'", petName);
+    private void emitPetDropEvent(@Nullable Integer petItemId) {
+        log.info("[CMD] emitPetDropEvent called with itemId: {}", petItemId);
         PetDropBUEvent event = new PetDropBUEvent(
             client.getAccountHash(),
             new ISOOffsetDateTime(OffsetDateTime.now()),
-            petName
+            petItemId
         );
         buEventService.publishEvent(event);
         log.info("[CMD] emitPetDropEvent done");

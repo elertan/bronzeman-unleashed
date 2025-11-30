@@ -7,18 +7,17 @@ import lombok.Getter;
 public class PetDropBUEvent extends BUEvent {
 
     /**
-     * The name of the pet that was received.
-     * Can be null in the edge case where player has a follower and full inventory
-     * (pet goes to Probita and we cannot identify which pet it was).
+     * The item ID of the pet that was received.
+     * Can be null in the Probita edge case (follower + full inventory).
      */
     @Getter
     @Nullable
-    private final String petName;
+    private final Integer petItemId;
 
     public PetDropBUEvent(long dispatchedFromAccountHash, ISOOffsetDateTime isoOffsetDateTime,
-        @Nullable String petName) {
+        @Nullable Integer petItemId) {
         super(dispatchedFromAccountHash, isoOffsetDateTime);
-        this.petName = petName;
+        this.petItemId = petItemId;
     }
 
     @Override
