@@ -408,11 +408,10 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
 
             String petName = e.getPetName();
             if (petName != null) {
-                builder.append(" has received a pet: ");
+                builder.append(" has a funny feeling like they are being followed: ");
                 builder.append(config.chatHighlightColor(), petName);
-                builder.append("!");
             } else {
-                builder.append(" has received a pet!");
+                builder.append(" has a funny feeling like they are being followed");
             }
 
             return builder.build();
