@@ -6,7 +6,6 @@ import com.elertan.remote.KeyListStoragePort;
 import com.elertan.remote.RemoteStorageService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,13 +41,11 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
     public void startUp() throws Exception {
         storagePortListener = new KeyListStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData>() {
             @Override
-            public void onFullUpdate(Map<GroundItemOwnedByKey, List<GroundItemOwnedByData>> map) {
+            public void onFullUpdate(Map<GroundItemOwnedByKey, Map<String, GroundItemOwnedByData>> map) {
                 groundItemOwnedByMap = new ConcurrentHashMap<>();
-                for (Map.Entry<GroundItemOwnedByKey, List<GroundItemOwnedByData>> entry : map.entrySet()) {
-                    ConcurrentHashMap<String, GroundItemOwnedByData> innerMap = new ConcurrentHashMap<>();
-                    groundItemOwnedByMap.put(entry.getKey(), innerMap);
+                for (Map.Entry<GroundItemOwnedByKey, Map<String, GroundItemOwnedByData>> entry : map.entrySet()) {
+                    groundItemOwnedByMap.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
                 }
-                syncFromAdapterCache();
 
                 for (Listener listener : mapListeners) {
                     try {
@@ -116,22 +113,11 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             }
 
             groundItemOwnedByMap = new ConcurrentHashMap<>();
-            syncFromAdapterCache();
-            setState(State.Ready);
-        });
-    }
-
-    private void syncFromAdapterCache() {
-        if (storagePort instanceof com.elertan.remote.firebase.FirebaseKeyListStorageAdapterBase) {
-            @SuppressWarnings("unchecked")
-            com.elertan.remote.firebase.FirebaseKeyListStorageAdapterBase<GroundItemOwnedByKey, GroundItemOwnedByData> adapter =
-                (com.elertan.remote.firebase.FirebaseKeyListStorageAdapterBase<GroundItemOwnedByKey, GroundItemOwnedByData>) storagePort;
-            ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> cache = adapter.getLocalCache();
-            groundItemOwnedByMap = new ConcurrentHashMap<>();
-            for (Map.Entry<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> entry : cache.entrySet()) {
+            for (Map.Entry<GroundItemOwnedByKey, Map<String, GroundItemOwnedByData>> entry : map.entrySet()) {
                 groundItemOwnedByMap.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
             }
-        }
+            setState(State.Ready);
+        });
     }
 
     @Override

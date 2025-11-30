@@ -1,14 +1,13 @@
 package com.elertan.remote;
 
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public interface KeyListStoragePort<K, V> extends AutoCloseable {
 
-    CompletableFuture<List<V>> read(K key);
+    CompletableFuture<Map<String, V>> read(K key);
 
-    CompletableFuture<Map<K, List<V>>> readAll();
+    CompletableFuture<Map<K, Map<String, V>>> readAll();
 
     CompletableFuture<String> add(K key, V value);
 
@@ -22,7 +21,7 @@ public interface KeyListStoragePort<K, V> extends AutoCloseable {
 
     interface Listener<K, V> {
 
-        void onFullUpdate(Map<K, List<V>> map);
+        void onFullUpdate(Map<K, Map<String, V>> map);
 
         void onAdd(K key, String entryKey, V value);
 
