@@ -116,6 +116,8 @@ public final class BUPlugin extends Plugin {
     private FaladorPartyRoomPolicy faladorPartyRoomPolicy;
     @Inject
     private PetDropService petDropService;
+    @Inject
+    private BUCommandService buCommandService;
 
     @Inject
     private Client client;
@@ -167,6 +169,7 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(playerVersusPlayerPolicy);
         lifecycleDependencies.add(faladorPartyRoomPolicy);
         lifecycleDependencies.add(petDropService);
+        lifecycleDependencies.add(buCommandService);
 
         lifecycleDependencies.add(chatMessageEventBroadcaster);
     }
@@ -278,6 +281,10 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onChatMessage(ChatMessage chatMessage) {
+        // Command service first - it may consume the event
+        if (buCommandService.onChatMessage(chatMessage)) {
+            return;
+        }
         buChatService.onChatMessage(chatMessage);
         petDropService.onChatMessage(chatMessage);
     }

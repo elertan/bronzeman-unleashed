@@ -257,4 +257,29 @@ public class PetDropService implements BUPluginLifecycle {
         );
         buEventService.publishEvent(event);
     }
+
+    /**
+     * Simulate a game message for testing pet detection.
+     * This bypasses the actual ChatMessage event and directly processes the message.
+     *
+     * @param message the message to simulate
+     */
+    public void simulateGameMessage(String message) {
+        log.debug("Simulating game message: {}", message);
+
+        // Check for collection log message first
+        Matcher collectionLogMatcher = COLLECTION_LOG_PATTERN.matcher(message);
+        if (collectionLogMatcher.find()) {
+            String itemName = collectionLogMatcher.group(1);
+            handleCollectionLogPet(itemName);
+            return;
+        }
+
+        // Check for pet drop messages
+        if (message.contains(PET_MESSAGE_FOLLOWING) ||
+            message.contains(PET_MESSAGE_BACKPACK) ||
+            message.contains(PET_MESSAGE_DUPLICATE)) {
+            handlePetDropMessage(message);
+        }
+    }
 }

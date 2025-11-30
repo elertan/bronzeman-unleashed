@@ -23,6 +23,8 @@ public interface BUPluginConfig extends Config {
     String partySection = "partySection";
     @ConfigSection(name = "Minigames", description = "Controls minigame behavior", position = 5)
     String minigameSection = "minigameSection";
+    @ConfigSection(name = "Debug", description = "Debug settings for testing", position = 99)
+    String debugSection = "debugSection";
     String SHOULD_AUTOMATICALLY_JOIN_PARTY_KEY = "shouldAutomaticallyJoinParty";
     String SHOULD_CHANGE_TO_PARTY_EVEN_IF_ALREADY_IN_PARTY = "shouldChangeToPartyEvenIfAlreadyInParty";
     String ACCOUNT_CONFIG_MAP_JSON_KEY = "accountConfigMapJson";
@@ -170,5 +172,10 @@ public interface BUPluginConfig extends Config {
     @ConfigItem(keyName = AUTO_OPEN_ACCOUNT_CONFIGURATION_DISABLED_FOR_ACCOUNT_HASHES_JSON_KEY, name = "No account configuration for account hashes json", description = "A list of account hashes to not automatically open up the account configuration for", hidden = true)
     default String autoOpenAccountConfigurationDisabledForAccountHashesJson() {
         return null;
+    }
+
+    @ConfigItem(keyName = "enableDebugCommands", name = "Enable debug commands", description = "Allows !bu: chat commands for testing (e.g. !bu:pet_following)", section = debugSection)
+    default boolean enableDebugCommands() {
+        return false;
     }
 }
