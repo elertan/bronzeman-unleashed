@@ -168,23 +168,16 @@ public class BUCommandService implements BUPluginLifecycle {
     }
 
     private void handlePetCollection(String petName) {
-        log.info("[CMD] handlePetCollection called with: '{}'", petName);
         if (petName == null || petName.isEmpty()) {
-            log.info("[CMD] petName is null/empty, showing usage");
             buChatService.sendMessage("Usage: !bu:pet_collection:<name>");
             return;
         }
-        log.info("[CMD] calling simulatePetMessage");
         simulatePetMessage("New item added to your collection log: " + petName);
     }
 
     private void simulatePetMessage(String message) {
-        log.info("[CMD] simulatePetMessage called with: '{}'", message);
-        log.info("[CMD] calling petDropService.simulateGameMessage");
         petDropService.simulateGameMessage(message);
-        log.info("[CMD] calling buChatService.sendMessage");
         buChatService.sendMessage("[Debug] Pet drop simulated");
-        log.info("[CMD] simulatePetMessage done");
     }
 
     @AllArgsConstructor
