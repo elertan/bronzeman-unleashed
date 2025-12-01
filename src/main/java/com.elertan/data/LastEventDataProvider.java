@@ -1,11 +1,12 @@
 package com.elertan.data;
 
 import com.elertan.event.BUEvent;
-import com.elertan.remote.ObjectStoragePort;
+import com.elertan.remote.ObjectListStoragePort;
 import com.elertan.remote.RemoteStorageService;
 import com.elertan.utils.StateListenerManager;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
@@ -19,8 +20,8 @@ public class LastEventDataProvider extends AbstractDataProvider {
     @Inject
     private RemoteStorageService remoteStorageService;
 
-    private ObjectStoragePort<BUEvent> storagePort;
-    private ObjectStoragePort.Listener<BUEvent> storagePortListener;
+    private ObjectListStoragePort<BUEvent> storagePort;
+    private ObjectListStoragePort.Listener<BUEvent> storagePortListener;
 
     public LastEventDataProvider() {
         super("LastEventDataProvider");
@@ -33,15 +34,20 @@ public class LastEventDataProvider extends AbstractDataProvider {
 
     @Override
     public void startUp() throws Exception {
-        storagePortListener = new ObjectStoragePort.Listener<BUEvent>() {
+        storagePortListener = new ObjectListStoragePort.Listener<BUEvent>() {
             @Override
-            public void onUpdate(BUEvent value) {
+            public void onFullUpdate(Map<String, BUEvent> map) {
+                // ignored - only care about individual adds
+            }
+
+            @Override
+            public void onAdd(String entryKey, BUEvent value) {
                 eventListeners.notifyListeners(value);
             }
 
             @Override
-            public void onDelete() {
-                // ignored
+            public void onRemove(String entryKey) {
+                // ignored - cleanup only
             }
         };
         super.startUp();
@@ -70,12 +76,30 @@ public class LastEventDataProvider extends AbstractDataProvider {
         eventListeners.removeListener(listener);
     }
 
-    public CompletableFuture<Void> update(BUEvent event) {
+    public CompletableFuture<String> add(BUEvent event) {
+        if (getState() == State.NotReady) {
+            CompletableFuture<String> future = new CompletableFuture<>();
+            future.completeExceptionally(new IllegalStateException("state is not ready"));
+            return future;
+        }
+        return storagePort.add(event);
+    }
+
+    public CompletableFuture<Map<String, BUEvent>> readAll() {
+        if (getState() == State.NotReady) {
+            CompletableFuture<Map<String, BUEvent>> future = new CompletableFuture<>();
+            future.completeExceptionally(new IllegalStateException("state is not ready"));
+            return future;
+        }
+        return storagePort.readAll();
+    }
+
+    public CompletableFuture<Void> remove(String entryKey) {
         if (getState() == State.NotReady) {
             CompletableFuture<Void> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("state is not ready"));
             return future;
         }
-        return storagePort.update(event);
+        return storagePort.remove(entryKey);
     }
 }
