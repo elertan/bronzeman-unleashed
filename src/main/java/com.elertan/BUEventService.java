@@ -8,6 +8,9 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 
@@ -16,8 +19,10 @@ import lombok.extern.slf4j.Slf4j;
 public class BUEventService implements BUPluginLifecycle {
 
     private static final int STALE_EVENT_THRESHOLD_SECONDS = 30;
+    private static final int CLEANUP_DELAY_SECONDS = 10;
 
     private final ConcurrentLinkedQueue<Consumer<BUEvent>> eventListeners = new ConcurrentLinkedQueue<>();
+    private ScheduledExecutorService scheduler;
     private final Consumer<BUEvent> lastEventListener = this::lastEventListener;
 
     @Inject
@@ -25,6 +30,7 @@ public class BUEventService implements BUPluginLifecycle {
 
     @Override
     public void startUp() throws Exception {
+        scheduler = Executors.newSingleThreadScheduledExecutor();
         lastEventDataProvider.addEventListener(lastEventListener);
 
         lastEventDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
@@ -39,6 +45,9 @@ public class BUEventService implements BUPluginLifecycle {
     @Override
     public void shutDown() throws Exception {
         lastEventDataProvider.removeEventListener(lastEventListener);
+        if (scheduler != null) {
+            scheduler.shutdown();
+        }
     }
 
     public void addEventListener(Consumer<BUEvent> eventListener) {
@@ -50,7 +59,21 @@ public class BUEventService implements BUPluginLifecycle {
     }
 
     public CompletableFuture<String> publishEvent(BUEvent event) {
-        return lastEventDataProvider.add(event);
+        return lastEventDataProvider.add(event).thenApply(entryKey -> {
+            if (entryKey != null) {
+                // Events use POST to create unique entries (prevents data races).
+                // Writer cleans up own entry after 10s - enough time for SSE propagation.
+                // Stale events (>30s) cleaned on startup as fallback.
+                scheduler.schedule(() -> {
+                    lastEventDataProvider.remove(entryKey)
+                        .exceptionally(ex -> {
+                            log.error("Failed to cleanup own event", ex);
+                            return null;
+                        });
+                }, CLEANUP_DELAY_SECONDS, TimeUnit.SECONDS);
+            }
+            return entryKey;
+        });
     }
 
     private void lastEventListener(BUEvent event) {
