@@ -176,7 +176,7 @@ public class BUCommandService implements BUPluginLifecycle {
     }
 
     private void simulatePetMessage(String message) {
-        petDropService.simulateGameMessage(message);
+        petDropService.handleGameMessage(message);
         buChatService.sendMessage("[Debug] Pet drop simulated");
     }
 

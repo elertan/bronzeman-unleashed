@@ -117,6 +117,7 @@ public class BUChatService implements BUPluginLifecycle {
             String message = chatMessage.getMessage();
             ParsedGameMessage parsedGameMessage = GameMessageParser.tryParseGameMessage(message);
             if (parsedGameMessage != null) {
+                // TODO: add BUEvent handling for clog unlock, consider putting this handler code after the transformer?
                 BUEvent event = GameMessageToEventTransformer.transformGameMessage(
                     parsedGameMessage,
                     client.getAccountHash()

@@ -3,7 +3,8 @@ plugins {
 }
 
 repositories {
-    mavenLocal()
+    // TODO: Fix maven local being broken
+    //mavenLocal()
     maven {
         url = 'https://repo.runelite.net'
         content {

@@ -2,20 +2,22 @@ package com.elertan;
 
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
+import com.elertan.chat.CollectionLogUnlockParsedGameMessage;
+import com.elertan.chat.GameMessageParser;
 import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.models.*;
 import com.elertan.overlays.ItemUnlockOverlay;
+import com.elertan.utils.ItemSearcher;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.ItemContainerChanged;
-import net.runelite.api.events.ItemSpawned;
+import net.runelite.api.events.*;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.events.ServerNpcLoot;
@@ -85,6 +87,9 @@ public class ItemUnlockService implements BUPluginLifecycle {
         ItemID.ARCEUUS_CORPSE_DRAGON_INITIAL
     );
 
+    // Items that can't be synced via collection log notifications because of non-unique names
+    private final static Set<String> IGNORED_ITEMS = ImmutableSet.of("Medallion fragment", "Ancient page");
+
     private static final Map<String, Integer> MAP_ITEM_NAMES = new HashMap<String, Integer>() {{
         // We need to map clue scrolls to a single item counterpart
         // Because each step has a different item id, and would pollute the item unlocks
@@ -143,6 +148,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private WorldService worldService;
     @Inject
     private ItemManager itemManager;
+    @Inject
+    private ItemSearcher itemSearcher;
     @Inject
     private BUPluginConfig buPluginConfig;
     @Inject
@@ -358,6 +365,61 @@ public class ItemUnlockService implements BUPluginLifecycle {
         }
 
         withErrorLogging(unlockItem(itemId), "Failed to unlock ground item");
+    }
+
+    // Code from: RuneProfile Plugin
+    // Repository: https://github.com/ReinhardtR/runeprofile-plugin
+    // License: BSD 2-Clause License
+    public void onChatMessage(ChatMessage chatMessage) {
+        if (chatMessage.getType() != ChatMessageType.GAMEMESSAGE
+            || client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) != 1) {
+            return;
+        }
+
+        // TODO: Consider whether to use the parser or handle this differently
+        CollectionLogUnlockParsedGameMessage parsedGameMessage =
+            GameMessageParser.tryParseCollectionLogUnlock(chatMessage.getMessage());
+
+        if (parsedGameMessage != null) {
+            String itemName = parsedGameMessage.getItemName();
+
+            if (IGNORED_ITEMS.contains(itemName)) {
+                log.debug("Ignoring collection log item with non-unique name: {}", itemName);
+                return;
+            }
+
+            Integer itemId = itemSearcher.findItemId(itemName);
+            if (itemId == null) {
+                log.debug("Failed to find item ID for: {}", itemName);
+                return;
+            }
+
+            unlockItem(itemId, null);
+            log.debug("Chat message found for new item: {}", itemName);
+        }
+    }
+
+    // Code from: RuneProfile Plugin
+    // Repository: https://github.com/ReinhardtR/runeprofile-plugin
+    // License: BSD 2-Clause License
+    // Handle collection log being opened(?) and unlock the item
+    public void onScriptPreFired(ScriptPreFired preFired) {
+        if (preFired.getScriptId() == 4100) {
+            // prevent reacting to scripts fired when opened from adventure log
+            // e.g. other plugins might fire the collection log script when viewing other players' collection logs
+            boolean isOpenedFromAdventureLog = client.getVarbitValue(VarbitID.COLLECTION_POH_HOST_BOOK_OPEN) == 1;
+            if (isOpenedFromAdventureLog) {
+                return;
+            }
+
+            int itemId = (int)preFired.getScriptEvent().getArguments()[1];
+
+            unlockItem(itemId, null).whenComplete((__, throwable) -> {
+                if (throwable != null) {
+                    log.error("Failed to unlock item in on script pre fired", throwable);
+                }
+            });
+        }
     }
 
     public void addNewUnlockedItemListener(Consumer<UnlockedItem> consumer) {
