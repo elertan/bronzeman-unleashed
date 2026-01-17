@@ -2,6 +2,8 @@ package com.elertan.utils;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -41,5 +43,18 @@ public final class AsyncUtils {
     public static <T> CompletableFuture<T> withErrorLogging(CompletableFuture<T> future, String message) {
         future.whenComplete(logError(message));
         return future;
+    }
+
+    /**
+     * Returns a Consumer that attaches error logging to a CompletableFuture.
+     * The original future is returned unchanged, just with logging attached.
+     * Useful when handling streams.
+     *
+     * @param message the error message prefix
+     * @param <T>     the result type
+     * @return a Consumer that attaches logging to a future
+     */
+    public static <T> Consumer<CompletableFuture<T>> addErrorLogging(String message) {
+        return (future) -> withErrorLogging(future, message);
     }
 }
