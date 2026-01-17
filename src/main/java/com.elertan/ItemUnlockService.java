@@ -373,8 +373,10 @@ public class ItemUnlockService implements BUPluginLifecycle {
             throw new IllegalStateException("State is not READY");
         }
 
+        // TODO: Should this also do itemId canonicalization?
+
         // Apply name mapping (same as unlockItem)
-        ItemComposition itemComposition = itemManager.getItemComposition(itemId);
+        ItemComposition itemComposition = client.getItemDefinition(itemId);
         Integer mappedItemId = MAP_ITEM_NAMES.get(itemComposition.getName());
         if (mappedItemId != null) {
             itemId = mappedItemId;
@@ -466,6 +468,15 @@ public class ItemUnlockService implements BUPluginLifecycle {
             return CompletableFuture.completedFuture(null);
         }
 
+        // TODO: Put this behind a game rule? Should this even be inside unlockItem?
+        // Skip placeholders
+        ItemComposition itemComposition = client.getItemDefinition(initialItemId);
+        // This method returns -1 if the item is NOT a placeholder
+        if (itemComposition.getPlaceholderTemplateId() != -1) {
+            future.complete(null);
+            return future;
+        }
+
         // We want the base item, not a noted item or similar
         int itemId = itemManager.canonicalize(initialItemId);
 
@@ -487,11 +498,10 @@ public class ItemUnlockService implements BUPluginLifecycle {
         // If necessary, we also need to map the item to a different one by name
         // for example clue scrolls have like 50 variations, but they're
         // essentially the same item
-        ItemComposition itemComposition = itemManager.getItemComposition(itemId);
         Integer nameMappedItemID = MAP_ITEM_NAMES.get(itemComposition.getName());
         if (nameMappedItemID != null) {
             itemId = nameMappedItemID;
-            itemComposition = itemManager.getItemComposition(itemId);
+            itemComposition = client.getItemDefinition(itemId);
         }
 
         try {
