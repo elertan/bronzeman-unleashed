@@ -256,6 +256,8 @@ public final class BUPlugin extends Plugin {
         achievementDiaryService.onGameStateChanged(event);
         itemUnlockService.onGameStateChanged(event);
         petDropService.onGameStateChanged(event);
+
+        grandExchangePolicy.onGameStateChanged(event);
     }
 
     @Subscribe
@@ -316,11 +318,13 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded event) {
+        grandExchangePolicy.onWidgetLoaded(event);
         shopPolicy.onWidgetLoaded(event);
     }
 
     @Subscribe
     public void onWidgetClosed(WidgetClosed event) {
+        grandExchangePolicy.onWidgetClosed(event);
         shopPolicy.onWidgetClosed(event);
     }
 

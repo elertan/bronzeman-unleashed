@@ -9,7 +9,11 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.events.WidgetClosed;
+import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 
@@ -23,6 +27,8 @@ public class GrandExchangePolicy extends PolicyBase {
     @Inject
     private ItemUnlockService itemUnlockService;
 
+    private boolean geInterfaceOpen;
+
     @Inject
     public GrandExchangePolicy(
         AccountConfigurationService accountConfigurationService,
@@ -31,8 +37,36 @@ public class GrandExchangePolicy extends PolicyBase {
         super(accountConfigurationService, gameRulesService, policyService);
     }
 
+    @Override
+    public void shutDown() throws Exception {
+        geInterfaceOpen = false;
+    }
+
+    public void onGameStateChanged(GameStateChanged event) {
+        if (event.getGameState() == GameState.LOGIN_SCREEN) {
+            geInterfaceOpen = false;
+        }
+    }
+
+    public void onWidgetLoaded(WidgetLoaded event) {
+        if (event.getGroupId() == InterfaceID.GE_OFFERS) {
+            geInterfaceOpen = true;
+        }
+    }
+
+    public void onWidgetClosed(WidgetClosed event) {
+        if (event.getGroupId() == InterfaceID.GE_OFFERS) {
+            geInterfaceOpen = false;
+        }
+    }
+
     public void onScriptPostFired(ScriptPostFired event) {
         if (!accountConfigurationService.isBronzemanEnabled()) {
+            return;
+        }
+
+        if (!geInterfaceOpen)
+        {
             return;
         }
 
