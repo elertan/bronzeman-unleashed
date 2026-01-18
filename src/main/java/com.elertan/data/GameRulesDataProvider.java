@@ -85,7 +85,7 @@ public class GameRulesDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<Void> updateGameRules(GameRules newGameRules) throws IllegalStateException {
-        if (getState() == State.NotReady) {
+        if (getState() != State.Ready) {
             throw new IllegalStateException("Not ready yet");
         }
         log.debug("Updating game rules: {}", newGameRules);

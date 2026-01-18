@@ -77,7 +77,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<String> add(BUEvent event) {
-        if (getState() == State.NotReady) {
+        if (getState() != State.Ready) {
             CompletableFuture<String> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("state is not ready"));
             return future;
@@ -86,7 +86,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<Map<String, BUEvent>> readAll() {
-        if (getState() == State.NotReady) {
+        if (getState() != State.Ready) {
             CompletableFuture<Map<String, BUEvent>> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("state is not ready"));
             return future;
@@ -95,7 +95,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<Void> remove(String entryKey) {
-        if (getState() == State.NotReady) {
+        if (getState() != State.Ready) {
             CompletableFuture<Void> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("state is not ready"));
             return future;
