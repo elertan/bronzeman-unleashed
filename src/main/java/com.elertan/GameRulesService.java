@@ -3,16 +3,14 @@ package com.elertan;
 import com.elertan.data.GameRulesDataProvider;
 import com.elertan.models.GameRules;
 import com.elertan.models.Member;
-import com.elertan.utils.ListenerUtils;
+import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +20,7 @@ import net.runelite.client.chat.ChatMessageBuilder;
 @Singleton
 public class GameRulesService implements BUPluginLifecycle {
 
-    private final ConcurrentLinkedQueue<Listener> listeners = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<BiConsumer<GameRules, GameRules>> listeners = new ConcurrentLinkedQueue<>();
     @Inject
     private GameRulesDataProvider gameRulesDataProvider;
     @Inject
@@ -35,78 +33,64 @@ public class GameRulesService implements BUPluginLifecycle {
     private State state = State.NotReady;
     @Getter
     private GameRules gameRules;
-    private final Consumer<GameRules> gameRulesListener = this::gameRulesListener;
+    private Subscription gameRulesSubscription;
 
     @Override
     public void startUp() throws Exception {
-        gameRulesDataProvider.addGameRulesListener(gameRulesListener);
+        gameRulesSubscription = gameRulesDataProvider.gameRules().subscribe(this::onGameRulesChanged);
     }
 
     @Override
     public void shutDown() throws Exception {
-        gameRulesDataProvider.removeGameRulesListener(gameRulesListener);
+        if (gameRulesSubscription != null) {
+            gameRulesSubscription.dispose();
+            gameRulesSubscription = null;
+        }
 
         gameRules = null;
         state = State.NotReady;
     }
 
-    public void addListener(Listener listener) {
+    /**
+     * Subscribe to game rules changes.
+     */
+    public Subscription subscribe(BiConsumer<GameRules, GameRules> listener) {
         listeners.add(listener);
-    }
-
-    public void removeListener(Listener listener) {
-        listeners.remove(listener);
-    }
-
-    public CompletableFuture<Void> waitUntilGameRulesReady(Duration timeout) {
-        return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
-            private Consumer<GameRules> listener;
+        return new Subscription() {
+            private boolean disposed = false;
 
             @Override
-            public boolean isReady() {
-                return gameRules != null;
-            }
-
-            @Override
-            public void addListener(Runnable notify) {
-                listener = gameRules -> notify.run();
-                gameRulesDataProvider.addGameRulesListener(listener);
-            }
-
-            @Override
-            public void removeListener() {
-                if (listener == null) {
-                    return;
+            public void dispose() {
+                if (!disposed) {
+                    listeners.remove(listener);
+                    disposed = true;
                 }
-                gameRulesDataProvider.removeGameRulesListener(listener);
-                listener = null;
             }
 
             @Override
-            public Duration getTimeout() {
-                return timeout;
+            public boolean isDisposed() {
+                return disposed;
             }
-        });
+        };
     }
 
-    private void gameRulesListener(GameRules gameRules) {
-        GameRules oldGameRules = this.gameRules;
-        this.gameRules = gameRules;
-        if (gameRules == null) {
+    private void onGameRulesChanged(GameRules newGameRules, GameRules oldGameRules) {
+        this.gameRules = newGameRules;
+        if (newGameRules == null) {
             setState(State.NotReady);
         } else {
             setState(State.Ready);
         }
 
-        if (gameRules != null && oldGameRules != null) {
+        if (newGameRules != null && oldGameRules != null) {
             {
                 ChatMessageBuilder builder = new ChatMessageBuilder();
                 builder.append("Game rules have been updated");
 
-                if (gameRules.getLastUpdatedByAccountHash() != null) {
+                if (newGameRules.getLastUpdatedByAccountHash() != null) {
                     Member member = null;
                     try {
-                        member = memberService.getMemberByAccountHash(gameRules.getLastUpdatedByAccountHash());
+                        member = memberService.getMemberByAccountHash(newGameRules.getLastUpdatedByAccountHash());
                     } catch (Exception e) {
                         // ignored
                     }
@@ -129,7 +113,7 @@ public class GameRulesService implements BUPluginLifecycle {
 
             Map<String, String> differences = generateGameRulesUpdateDifference(
                 oldGameRules,
-                gameRules
+                newGameRules
             );
             if (differences != null && !differences.isEmpty()) {
                 for (Map.Entry<String, String> entry : differences.entrySet()) {
@@ -145,9 +129,9 @@ public class GameRulesService implements BUPluginLifecycle {
 
         }
 
-        for (Listener listener : listeners) {
+        for (BiConsumer<GameRules, GameRules> listener : listeners) {
             try {
-                listener.onGameRulesUpdate(gameRules, oldGameRules);
+                listener.accept(newGameRules, oldGameRules);
             } catch (Exception e) {
                 log.error("Error while notifying listener on GameRulesService.", e);
             }
@@ -250,10 +234,5 @@ public class GameRulesService implements BUPluginLifecycle {
 
     public enum State {
         NotReady, Ready,
-    }
-
-    public interface Listener {
-
-        void onGameRulesUpdate(GameRules newGameRules, GameRules oldGameRules);
     }
 }

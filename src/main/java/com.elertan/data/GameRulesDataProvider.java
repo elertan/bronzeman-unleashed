@@ -3,28 +3,23 @@ package com.elertan.data;
 import com.elertan.models.GameRules;
 import com.elertan.remote.ObjectStoragePort;
 import com.elertan.remote.RemoteStorageService;
-import com.elertan.utils.StateListenerManager;
+import com.elertan.utils.Observable;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Singleton
 public class GameRulesDataProvider extends AbstractDataProvider {
 
-    private final StateListenerManager<GameRules> gameRulesListeners = new StateListenerManager<>("GameRulesDataProvider.gameRules");
+    private final Observable<GameRules> gameRules = new Observable<>("GameRulesDataProvider.gameRules");
 
     @Inject
     private RemoteStorageService remoteStorageService;
 
     private ObjectStoragePort<GameRules> storagePort;
     private ObjectStoragePort.Listener<GameRules> storagePortListener;
-
-    @Getter
-    private GameRules gameRules;
 
     public GameRulesDataProvider() {
         super("GameRulesDataProvider");
@@ -68,31 +63,36 @@ public class GameRulesDataProvider extends AbstractDataProvider {
 
     @Override
     protected void onRemoteStorageNotReady() {
-        setGameRules(null);
+        gameRules.set(null);
         if (storagePort != null) {
             storagePort.removeListener(storagePortListener);
             storagePort = null;
         }
     }
 
-    public void addGameRulesListener(Consumer<GameRules> listener) {
-        gameRulesListeners.addListener(listener);
+    /**
+     * Observable for game rules changes.
+     */
+    public Observable<GameRules> gameRules() {
+        return gameRules;
     }
 
-    public void removeGameRulesListener(Consumer<GameRules> listener) {
-        gameRulesListeners.removeListener(listener);
+    /**
+     * Get current game rules.
+     */
+    public GameRules getGameRules() {
+        return gameRules.get();
     }
 
-    public CompletableFuture<Void> updateGameRules(GameRules gameRules) throws IllegalStateException {
+    public CompletableFuture<Void> updateGameRules(GameRules newGameRules) throws IllegalStateException {
         if (getState() == State.NotReady) {
             throw new IllegalStateException("Not ready yet");
         }
-        log.debug("Updating game rules: {}", gameRules);
-        return storagePort.update(gameRules);
+        log.debug("Updating game rules: {}", newGameRules);
+        return storagePort.update(newGameRules);
     }
 
-    private void setGameRules(GameRules gameRules) {
-        this.gameRules = gameRules;
-        gameRulesListeners.notifyListeners(gameRules);
+    private void setGameRules(GameRules newGameRules) {
+        gameRules.set(newGameRules);
     }
 }

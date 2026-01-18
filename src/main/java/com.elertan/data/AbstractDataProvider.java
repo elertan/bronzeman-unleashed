@@ -2,12 +2,10 @@ package com.elertan.data;
 
 import com.elertan.BUPluginLifecycle;
 import com.elertan.remote.RemoteStorageService;
-import com.elertan.utils.ListenerUtils;
-import com.elertan.utils.StateListenerManager;
+import com.elertan.utils.Observable;
+import com.elertan.utils.Subscription;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -17,14 +15,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class AbstractDataProvider implements BUPluginLifecycle {
 
-    private final StateListenerManager<State> stateListeners;
-    private final Consumer<RemoteStorageService.State> remoteStorageServiceStateListener = this::onRemoteStorageStateChanged;
-
-    @Getter
-    private State state = State.NotReady;
+    private final Observable<State> state;
+    private Subscription remoteStorageSubscription;
 
     protected AbstractDataProvider(String name) {
-        this.stateListeners = new StateListenerManager<>(name);
+        this.state = new Observable<>(name + ".state");
     }
 
     /**
@@ -46,70 +41,51 @@ public abstract class AbstractDataProvider implements BUPluginLifecycle {
 
     @Override
     public void startUp() throws Exception {
-        getRemoteStorageService().addStateListener(remoteStorageServiceStateListener);
-        if (getRemoteStorageService().getState() == RemoteStorageService.State.Ready) {
-            onRemoteStorageReady();
-        }
+        remoteStorageSubscription = getRemoteStorageService().state().subscribeImmediate(
+            (remoteState, old) -> onRemoteStorageStateChanged(remoteState)
+        );
     }
 
     @Override
     public void shutDown() throws Exception {
-        getRemoteStorageService().removeStateListener(remoteStorageServiceStateListener);
+        if (remoteStorageSubscription != null) {
+            remoteStorageSubscription.dispose();
+            remoteStorageSubscription = null;
+        }
         onRemoteStorageNotReady();
-        state = State.NotReady;
+        state.set(State.NotReady);
     }
 
-    public void addStateListener(Consumer<State> listener) {
-        stateListeners.addListener(listener);
+    /**
+     * Observable for state changes.
+     */
+    public Observable<State> state() {
+        return state;
     }
 
-    public void removeStateListener(Consumer<State> listener) {
-        stateListeners.removeListener(listener);
+    /**
+     * Get current state.
+     */
+    public State getState() {
+        return state.get();
     }
 
-    public CompletableFuture<Void> waitUntilReady(Duration timeout) {
-        return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
-            Consumer<State> listener;
-
-            @Override
-            public boolean isReady() {
-                return getState() == State.Ready;
-            }
-
-            @Override
-            public void addListener(Runnable notify) {
-                listener = s -> notify.run();
-                addStateListener(listener);
-            }
-
-            @Override
-            public void removeListener() {
-                if (listener != null) {
-                    removeStateListener(listener);
-                    listener = null;
-                }
-            }
-
-            @Override
-            public Duration getTimeout() {
-                return timeout;
-            }
-        });
+    /**
+     * Wait until this data provider is ready.
+     */
+    public CompletableFuture<State> waitUntilReady(Duration timeout) {
+        return state.waitUntilReady(timeout);
     }
 
     protected void setState(State newState) {
-        if (this.state == newState) {
-            return;
-        }
-        this.state = newState;
-        stateListeners.notifyListeners(newState);
+        state.set(newState);
     }
 
     private void onRemoteStorageStateChanged(RemoteStorageService.State remoteState) {
         if (remoteState == RemoteStorageService.State.NotReady) {
             onRemoteStorageNotReady();
             setState(State.NotReady);
-        } else {
+        } else if (remoteState == RemoteStorageService.State.Ready) {
             onRemoteStorageReady();
         }
     }

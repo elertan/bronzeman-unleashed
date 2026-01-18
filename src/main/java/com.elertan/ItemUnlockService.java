@@ -2,6 +2,7 @@ package com.elertan;
 
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
+import com.elertan.data.AbstractDataProvider;
 import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.models.*;
 import com.elertan.overlays.ItemUnlockOverlay;
@@ -27,6 +28,7 @@ import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldResult;
 import net.runelite.http.api.worlds.WorldType;
 
+import com.elertan.utils.Subscription;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -161,7 +163,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private MinigameService minigameService;
-    private final Consumer<UnlockedItemsDataProvider.State> unlockedItemDataProviderStateListener = this::unlockedItemDataProviderStateListener;
+    private Subscription unlockedItemDataProviderStateSubscription;
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private volatile boolean hasNotifiedPlayerOfNonSupportedWorldType = false;
     private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
@@ -262,7 +264,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
             }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
-        unlockedItemsDataProvider.addStateListener(unlockedItemDataProviderStateListener);
+        unlockedItemDataProviderStateSubscription = unlockedItemsDataProvider.state()
+            .subscribe(state -> unlockedItemDataProviderStateListener(state));
         accountConfigurationService.addCurrentAccountConfigurationChangeListener(
             currentAccountConfigurationChangeListener);
     }
@@ -271,7 +274,10 @@ public class ItemUnlockService implements BUPluginLifecycle {
     public void shutDown() throws Exception {
         accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
             currentAccountConfigurationChangeListener);
-        unlockedItemsDataProvider.removeStateListener(unlockedItemDataProviderStateListener);
+        if (unlockedItemDataProviderStateSubscription != null) {
+            unlockedItemDataProviderStateSubscription.dispose();
+            unlockedItemDataProviderStateSubscription = null;
+        }
         unlockedItemsDataProvider.removeUnlockedItemsMapListener(unlockedItemsMapListener);
     }
 
@@ -553,8 +559,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
         return !hasUnsupportedWorldType;
     }
 
-    private void unlockedItemDataProviderStateListener(UnlockedItemsDataProvider.State state) {
-        if (state != UnlockedItemsDataProvider.State.Ready) {
+    private void unlockedItemDataProviderStateListener(AbstractDataProvider.State state) {
+        if (state != AbstractDataProvider.State.Ready) {
             return;
         }
 //        if (hasUnlockedItemDataProviderReadyStateBeenSeen) {

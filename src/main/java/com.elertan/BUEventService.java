@@ -2,16 +2,16 @@ package com.elertan;
 
 import com.elertan.data.LastEventDataProvider;
 import com.elertan.event.BUEvent;
+import com.elertan.utils.Observable;
+import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -21,9 +21,11 @@ public class BUEventService implements BUPluginLifecycle {
     private static final int STALE_EVENT_THRESHOLD_SECONDS = 30;
     private static final int CLEANUP_DELAY_SECONDS = 10;
 
-    private final ConcurrentLinkedQueue<Consumer<BUEvent>> eventListeners = new ConcurrentLinkedQueue<>();
+    // Note: This observable is event-based (transient), not stateful.
+    // It holds the "last event" and notifies on each new event.
+    private final Observable<BUEvent> lastEvent = new Observable<>("BUEventService.lastEvent");
     private ScheduledExecutorService scheduler;
-    private final Consumer<BUEvent> lastEventListener = this::lastEventListener;
+    private Subscription lastEventDataProviderSubscription;
 
     @Inject
     private LastEventDataProvider lastEventDataProvider;
@@ -31,7 +33,8 @@ public class BUEventService implements BUPluginLifecycle {
     @Override
     public void startUp() throws Exception {
         scheduler = Executors.newSingleThreadScheduledExecutor();
-        lastEventDataProvider.addEventListener(lastEventListener);
+        lastEventDataProviderSubscription = lastEventDataProvider.events()
+            .subscribe(event -> lastEvent.set(event));
 
         lastEventDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
             if (throwable != null) {
@@ -44,18 +47,20 @@ public class BUEventService implements BUPluginLifecycle {
 
     @Override
     public void shutDown() throws Exception {
-        lastEventDataProvider.removeEventListener(lastEventListener);
+        if (lastEventDataProviderSubscription != null) {
+            lastEventDataProviderSubscription.dispose();
+            lastEventDataProviderSubscription = null;
+        }
         if (scheduler != null) {
             scheduler.shutdown();
         }
     }
 
-    public void addEventListener(Consumer<BUEvent> eventListener) {
-        eventListeners.add(eventListener);
-    }
-
-    public void removeEventListener(Consumer<BUEvent> eventListener) {
-        eventListeners.remove(eventListener);
+    /**
+     * Observable for event notifications.
+     */
+    public Observable<BUEvent> lastEvent() {
+        return lastEvent;
     }
 
     public CompletableFuture<String> publishEvent(BUEvent event) {
@@ -74,16 +79,6 @@ public class BUEventService implements BUPluginLifecycle {
             }
             return entryKey;
         });
-    }
-
-    private void lastEventListener(BUEvent event) {
-        for (Consumer<BUEvent> listener : eventListeners) {
-            try {
-                listener.accept(event);
-            } catch (Exception e) {
-                log.error("error in listener for last event listener", e);
-            }
-        }
     }
 
     private void cleanupStaleEvents() {

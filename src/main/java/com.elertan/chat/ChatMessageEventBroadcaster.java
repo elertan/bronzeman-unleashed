@@ -17,11 +17,11 @@ import com.elertan.event.TotalLevelAchievementBUEvent;
 import com.elertan.event.ValuableLootBUEvent;
 import com.elertan.models.Member;
 import com.google.common.collect.ImmutableMap;
+import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -59,19 +59,22 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
         .put(BUEventType.PetDrop, this::transformPetDropEvent)
         .build();
 
-    private final Consumer<BUEvent> eventListener = this::eventListener;
+    private Subscription eventSubscription;
 
     @Override
     public void startUp() throws Exception {
-        buEventService.addEventListener(eventListener);
+        eventSubscription = buEventService.lastEvent().subscribe(this::onEvent);
     }
 
     @Override
     public void shutDown() throws Exception {
-        buEventService.removeEventListener(eventListener);
+        if (eventSubscription != null) {
+            eventSubscription.dispose();
+            eventSubscription = null;
+        }
     }
 
-    private void eventListener(BUEvent event) {
+    private void onEvent(BUEvent event) {
         BUEventType type = event.getType();
         Function<BUEvent, CompletableFuture<String>> chatMessageTransformer = eventToChatMessageTransformers.get(
             type);

@@ -3,19 +3,20 @@ package com.elertan.data;
 import com.elertan.event.BUEvent;
 import com.elertan.remote.ObjectListStoragePort;
 import com.elertan.remote.RemoteStorageService;
-import com.elertan.utils.StateListenerManager;
+import com.elertan.utils.Observable;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Singleton
 public class LastEventDataProvider extends AbstractDataProvider {
 
-    private final StateListenerManager<BUEvent> eventListeners = new StateListenerManager<>("LastEventDataProvider.events");
+    // Note: This observable is event-based (transient), not stateful.
+    // It holds the "last event" and notifies on each new event.
+    private final Observable<BUEvent> events = new Observable<>("LastEventDataProvider.events");
 
     @Inject
     private RemoteStorageService remoteStorageService;
@@ -42,7 +43,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
 
             @Override
             public void onAdd(String entryKey, BUEvent value) {
-                eventListeners.notifyListeners(value);
+                events.set(value);
             }
 
             @Override
@@ -68,12 +69,11 @@ public class LastEventDataProvider extends AbstractDataProvider {
         }
     }
 
-    public void addEventListener(Consumer<BUEvent> listener) {
-        eventListeners.addListener(listener);
-    }
-
-    public void removeEventListener(Consumer<BUEvent> listener) {
-        eventListeners.removeListener(listener);
+    /**
+     * Observable for event notifications.
+     */
+    public Observable<BUEvent> events() {
+        return events;
     }
 
     public CompletableFuture<String> add(BUEvent event) {
