@@ -48,7 +48,7 @@ public class UnlockedItemsScreenViewModel extends BaseViewModel {
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
 
-        unlockedItemsDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
+        unlockedItemsDataProvider.await(null).whenComplete((__, throwable) -> {
             if (throwable != null) {
                 return;
             }

@@ -95,7 +95,7 @@ public class RemoteStorageService implements BUPluginLifecycle {
     /**
      * Wait until remote storage is ready (state == State.Ready).
      */
-    public CompletableFuture<State> waitUntilReady(Duration timeout) {
+    public CompletableFuture<State> await(Duration timeout) {
         return waitForValue(state, State.Ready, timeout);
     }
 

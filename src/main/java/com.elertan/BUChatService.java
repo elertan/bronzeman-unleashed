@@ -224,7 +224,7 @@ public class BUChatService implements BUPluginLifecycle {
     }
 
     public CompletableFuture<Boolean> waitForIsChatboxTransparentSet(Duration timeout) {
-        return isChatboxTransparent.waitUntilReady(timeout);
+        return isChatboxTransparent.await(timeout);
     }
 
     private void setIsChatboxTransparent(Boolean isTransparent) {

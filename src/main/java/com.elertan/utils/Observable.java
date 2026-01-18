@@ -106,7 +106,7 @@ public final class Observable<T> {
      * @param timeout timeout duration, or null for no timeout
      * @return future that completes with the value when ready
      */
-    public CompletableFuture<T> waitUntilReady(@Nullable Duration timeout) {
+    public CompletableFuture<T> await(@Nullable Duration timeout) {
         CompletableFuture<T> future = new CompletableFuture<>();
 
         // Complete immediately if already ready

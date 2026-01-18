@@ -40,7 +40,7 @@ Subscription sub = state.subscribe(newVal -> handleChange(newVal));
 state.set(State.Ready);
 
 // Wait until ready with timeout
-CompletableFuture<State> future = state.waitUntilReady(Duration.ofSeconds(10));
+CompletableFuture<State> future = state.await(Duration.ofSeconds(10));
 
 // Cleanup
 sub.dispose();

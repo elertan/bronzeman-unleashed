@@ -14,7 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Base class for data providers that depend on RemoteStorageService.
- * Handles common state management, listener lifecycle, and waitUntilReady pattern.
+ * Handles common state management, listener lifecycle, and await pattern.
  */
 @Slf4j
 public abstract class AbstractDataProvider implements BUPluginLifecycle {
@@ -73,7 +73,7 @@ public abstract class AbstractDataProvider implements BUPluginLifecycle {
     /**
      * Wait until this data provider is ready (state == State.Ready).
      */
-    public CompletableFuture<State> waitUntilReady(Duration timeout) {
+    public CompletableFuture<State> await(Duration timeout) {
         return waitForValue(state, State.Ready, timeout);
     }
 

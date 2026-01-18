@@ -66,7 +66,7 @@ public class GameRulesService implements BUPluginLifecycle {
      * @return future that completes when game rules are ready
      */
     public CompletableFuture<GameRules> waitUntilGameRulesReady(Duration timeout) {
-        return gameRules.waitUntilReady(timeout);
+        return gameRules.await(timeout);
     }
 
     private void onGameRulesChanged(GameRules newGameRules, GameRules oldGameRules) {

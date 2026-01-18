@@ -36,9 +36,9 @@ public class BUEventService implements BUPluginLifecycle {
         lastEventDataProviderSubscription = lastEventDataProvider.events()
             .subscribe(event -> lastEvent.set(event));
 
-        lastEventDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
+        lastEventDataProvider.await(null).whenComplete((__, throwable) -> {
             if (throwable != null) {
-                log.error("LastEventDataProvider waitUntilReady failed", throwable);
+                log.error("LastEventDataProvider await failed", throwable);
                 return;
             }
             cleanupStaleEvents();

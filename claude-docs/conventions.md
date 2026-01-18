@@ -192,7 +192,7 @@ public class MyParsedGameMessage extends ParsedGameMessage {
 ## Async Patterns
 
 - Use `CompletableFuture<T>` for async operations
-- Use `waitUntilReady(Duration timeout)` to wait for initialization
+- Use `await(Duration timeout)` to wait for initialization
 - Run UI updates on EDT via `SwingUtilities.invokeLater()`
 - Run client operations on client thread via `clientThread.invoke()`
 

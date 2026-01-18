@@ -39,7 +39,7 @@ Enforce game rules by intercepting game events:
 Manage data state and Firebase synchronization:
 - Extend `AbstractDataProvider`
 - Depend on `RemoteStorageService`
-- Provide `waitUntilReady()` for async initialization
+- Provide `await()` for async initialization
 
 ### 5. Remote Storage Layer
 Firebase Realtime Database abstraction:

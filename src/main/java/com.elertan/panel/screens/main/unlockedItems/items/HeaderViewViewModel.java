@@ -67,7 +67,7 @@ public class HeaderViewViewModel implements AutoCloseable {
         };
         membersDataProvider.addMemberMapListener(memberMapListener);
 
-        membersDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
+        membersDataProvider.await(null).whenComplete((__, throwable) -> {
             if (throwable != null) {
                 return;
             }

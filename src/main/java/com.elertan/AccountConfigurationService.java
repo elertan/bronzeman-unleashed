@@ -165,7 +165,7 @@ public class AccountConfigurationService implements BUPluginLifecycle {
 
     public CompletableFuture<AccountConfiguration> waitUntilCurrentAccountConfigurationReady(
         Duration timeout) {
-        return currentAccountConfiguration.waitUntilReady(timeout);
+        return currentAccountConfiguration.await(timeout);
     }
 
     private void initializeFromConfig() {

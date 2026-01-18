@@ -172,12 +172,12 @@ public class MemberService implements BUPluginLifecycle {
         // When we have an account, we want to wait until the members are ready
         // if we have no members, we add ourselves as the owner
         // if we do have members, but not us, we add ourselves as a member
-        membersDataProvider.waitUntilReady(null)
-            .whenComplete((void1, waitUntilReadyThrowable) -> {
-                if (waitUntilReadyThrowable != null) {
+        membersDataProvider.await(null)
+            .whenComplete((void1, awaitThrowable) -> {
+                if (awaitThrowable != null) {
                     log.error(
                         "member service error whilst waiting till members data provider to become ready",
-                        waitUntilReadyThrowable
+                        awaitThrowable
                     );
                     return;
                 }
