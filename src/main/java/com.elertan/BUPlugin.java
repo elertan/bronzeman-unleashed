@@ -288,7 +288,6 @@ public final class BUPlugin extends Plugin {
             return;
         }
         buChatService.onChatMessage(chatMessage);
-        itemUnlockService.onChatMessage(chatMessage);
         petDropService.onChatMessage(chatMessage);
     }
 
