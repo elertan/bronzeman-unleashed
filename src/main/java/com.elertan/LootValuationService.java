@@ -50,7 +50,7 @@ public class LootValuationService implements BUPluginLifecycle {
         if (itemStacks == null) {
             return;
         }
-        GameRules gameRules = gameRulesService.getGameRules();
+        GameRules gameRules = gameRulesService.getGameRules().get();
         if (gameRules == null) {
             return;
         }

@@ -48,7 +48,7 @@ public class PolicyBase implements BUPluginLifecycle {
             return new PolicyContext(null, false);
         }
 
-        GameRules gameRules = gameRulesService.getGameRules();
+        GameRules gameRules = gameRulesService.getGameRules().get();
         boolean gameRulesNotLoaded = gameRules == null;
 
         if (gameRulesNotLoaded) {

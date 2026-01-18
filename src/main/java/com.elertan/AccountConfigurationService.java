@@ -1,7 +1,7 @@
 package com.elertan;
 
 import com.elertan.models.AccountConfiguration;
-import com.elertan.utils.ListenerUtils;
+import com.elertan.utils.Observable;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
@@ -12,8 +12,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +30,7 @@ public class AccountConfigurationService implements BUPluginLifecycle {
     }.getType();
     private static final Type ACCOUNT_CONFIGURATION_MAP_TYPE = new TypeToken<Map<Long, AccountConfiguration>>() {
     }.getType();
-    private final ConcurrentLinkedQueue<Consumer<AccountConfiguration>> currentAccountConfigurationChangeListeners = new ConcurrentLinkedQueue<>();
+    private final Observable<AccountConfiguration> currentAccountConfiguration = Observable.empty();
     @Inject
     private Client client;
     @Inject
@@ -59,6 +57,7 @@ public class AccountConfigurationService implements BUPluginLifecycle {
         accountConfigurationMap = null;
         lastStoredAccountConfigurationMapJson = null;
         lastCurrentAccountConfiguration = null;
+        currentAccountConfiguration.clear();
     }
 
     @Subscribe
@@ -117,17 +116,14 @@ public class AccountConfigurationService implements BUPluginLifecycle {
         }
         isInitialCurrentAccountConfigurationDeterminedAfterAccountHash = false;
         lastCurrentAccountConfiguration = accountConfiguration;
-        notifyCurrentAccountConfigurationChange(accountConfiguration);
+        currentAccountConfiguration.set(accountConfiguration);
     }
 
-    public void addCurrentAccountConfigurationChangeListener(
-        Consumer<AccountConfiguration> listener) {
-        currentAccountConfigurationChangeListeners.add(listener);
-    }
-
-    public void removeCurrentAccountConfigurationChangeListener(
-        Consumer<AccountConfiguration> listener) {
-        currentAccountConfigurationChangeListeners.remove(listener);
+    /**
+     * Observable for current account configuration changes.
+     */
+    public Observable<AccountConfiguration> currentAccountConfiguration() {
+        return currentAccountConfiguration;
     }
 
     // Requires: client thread (uses client.getAccountHash())
@@ -167,44 +163,9 @@ public class AccountConfigurationService implements BUPluginLifecycle {
         return isReady() && getCurrentAccountConfiguration() != null;
     }
 
-    public CompletableFuture<Void> waitUntilCurrentAccountConfigurationReady(
+    public CompletableFuture<AccountConfiguration> waitUntilCurrentAccountConfigurationReady(
         Duration timeout) {
-        return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
-            private Consumer<AccountConfiguration> listener;
-
-            @Override
-            public boolean isReady() {
-                return accountConfigurationMap != null;
-            }
-
-            @Override
-            public void addListener(Runnable notify) {
-                listener = accountConfiguration -> notify.run();
-                addCurrentAccountConfigurationChangeListener(listener);
-            }
-
-            @Override
-            public void removeListener() {
-                removeCurrentAccountConfigurationChangeListener(listener);
-                listener = null;
-            }
-
-            @Override
-            public Duration getTimeout() {
-                return timeout;
-            }
-        });
-    }
-
-    private void notifyCurrentAccountConfigurationChange(
-        AccountConfiguration accountConfiguration) {
-        for (Consumer<AccountConfiguration> listener : currentAccountConfigurationChangeListeners) {
-            try {
-                listener.accept(accountConfiguration);
-            } catch (Exception e) {
-                // ignored
-            }
-        }
+        return currentAccountConfiguration.await(timeout);
     }
 
     private void initializeFromConfig() {
@@ -258,7 +219,7 @@ public class AccountConfigurationService implements BUPluginLifecycle {
             return;
         }
         lastCurrentAccountConfiguration = accountConfiguration;
-        notifyCurrentAccountConfigurationChange(accountConfiguration);
+        currentAccountConfiguration.set(accountConfiguration);
     }
 
     private synchronized void storeAccountConfigurationMap() {

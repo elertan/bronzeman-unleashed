@@ -9,13 +9,13 @@ import com.elertan.event.*;
 import com.elertan.models.Member;
 import com.elertan.utils.AsyncUtils;
 import com.google.common.collect.ImmutableMap;
+import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.chat.ChatMessageBuilder;
@@ -53,19 +53,22 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
             .put(BUEventType.PetDrop, this::transformPetDropEvent)
             .build();
 
-    private final Consumer<BUEvent> eventListener = this::eventListener;
+    private Subscription eventSubscription;
 
     @Override
     public void startUp() throws Exception {
-        buEventService.addEventListener(eventListener);
+        eventSubscription = buEventService.getLastEvent().subscribe(this::onEvent);
     }
 
     @Override
     public void shutDown() throws Exception {
-        buEventService.removeEventListener(eventListener);
+        if (eventSubscription != null) {
+            eventSubscription.dispose();
+            eventSubscription = null;
+        }
     }
 
-    private void eventListener(BUEvent event) {
+    private void onEvent(BUEvent event) {
         BUEventType type = event.getType();
         BiFunction<BUEvent, Member, CompletableFuture<String>> chatMessageTransformer =
             eventToChatMessageTransformers.get(type);

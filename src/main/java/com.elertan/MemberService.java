@@ -15,8 +15,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import com.elertan.utils.Subscription;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.Player;
@@ -35,7 +35,7 @@ public class MemberService implements BUPluginLifecycle {
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private MembersDataProvider membersDataProvider;
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
+    private Subscription accountConfigSubscription;
     @Inject
     private BUChatService buChatService;
     @Inject
@@ -103,23 +103,25 @@ public class MemberService implements BUPluginLifecycle {
             }
         };
 
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::currentAccountConfigurationChangeListener);
         membersDataProvider.addMemberMapListener(memberMapListener);
     }
 
     @Override
     public void shutDown() throws Exception {
         membersDataProvider.removeMemberMapListener(memberMapListener);
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        if (accountConfigSubscription != null) {
+            accountConfigSubscription.dispose();
+            accountConfigSubscription = null;
+        }
     }
 
     public Member getMemberByName(String playerName) {
         if (playerName == null) {
             return null;
         }
-        if (membersDataProvider.getState() != MembersDataProvider.State.Ready) {
+        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready) {
             throw new IllegalStateException("Member data provider is not ready");
         }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
@@ -136,7 +138,7 @@ public class MemberService implements BUPluginLifecycle {
     }
 
     public Member getMemberByAccountHash(long accountHash) {
-        if (membersDataProvider.getState() != MembersDataProvider.State.Ready) {
+        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready) {
             throw new IllegalStateException("Member data provider is not ready");
         }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
@@ -151,7 +153,7 @@ public class MemberService implements BUPluginLifecycle {
     }
 
     public boolean isPlayingAlone() {
-        if (membersDataProvider.getState() != MembersDataProvider.State.Ready) {
+        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready) {
             throw new IllegalStateException("Member data provider is not ready");
         }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
@@ -170,12 +172,12 @@ public class MemberService implements BUPluginLifecycle {
         // When we have an account, we want to wait until the members are ready
         // if we have no members, we add ourselves as the owner
         // if we do have members, but not us, we add ourselves as a member
-        membersDataProvider.waitUntilReady(null)
-            .whenComplete((void1, waitUntilReadyThrowable) -> {
-                if (waitUntilReadyThrowable != null) {
+        membersDataProvider.await(null)
+            .whenComplete((void1, awaitThrowable) -> {
+                if (awaitThrowable != null) {
                     log.error(
                         "member service error whilst waiting till members data provider to become ready",
-                        waitUntilReadyThrowable
+                        awaitThrowable
                     );
                     return;
                 }

@@ -108,7 +108,7 @@ public class ItemUnlockOverlay extends Overlay {
 
     public void enqueueShowUnlock(int itemId, long acquiredByAccountHash, Integer droppedByNPCId) {
         // We need members information for acquired by, waiting just in case
-        membersDataProvider.waitUntilReady(null)
+        membersDataProvider.await(null)
             .whenComplete((__, throwable) -> {
                 if (throwable != null) {
                     log.error("error waiting for members data provider to complete");

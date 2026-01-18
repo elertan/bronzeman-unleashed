@@ -97,9 +97,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(this::cleanupExpiredGroundItems, 10, 10, TimeUnit.SECONDS);
 
-        groundItemOwnedByDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
+        groundItemOwnedByDataProvider.await(null).whenComplete((__, throwable) -> {
             if (throwable != null) {
-                log.error("GroundItemOwnedByDataProvider waitUntilReady failed", throwable);
+                log.error("GroundItemOwnedByDataProvider await failed", throwable);
                 return;
             }
 

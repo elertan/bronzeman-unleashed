@@ -27,10 +27,6 @@ public class MembersDataProvider extends AbstractDataProvider {
     private KeyValueStoragePort.Listener<Long, Member> storagePortListener;
     private ConcurrentHashMap<Long, Member> membersMap = new ConcurrentHashMap<>();
 
-    public MembersDataProvider() {
-        super("MembersDataProvider");
-    }
-
     @Override
     protected RemoteStorageService getRemoteStorageService() {
         return remoteStorageService;

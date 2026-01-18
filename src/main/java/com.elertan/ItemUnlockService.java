@@ -2,6 +2,7 @@ package com.elertan;
 
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
+import com.elertan.data.AbstractDataProvider;
 import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.models.*;
 import com.elertan.overlays.ItemUnlockOverlay;
@@ -26,11 +27,10 @@ import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldResult;
 import net.runelite.http.api.worlds.WorldType;
 
+import com.elertan.utils.Subscription;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
 
 import static com.elertan.utils.AsyncUtils.addErrorLogging;
 import static com.elertan.utils.AsyncUtils.withErrorLogging;
@@ -84,7 +84,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
         ItemID.ARCEUUS_CORPSE_DRAGON_INITIAL
     );
 
-    private static final Map<String, Integer> MAP_ITEM_NAMES = new HashMap<String, Integer>() {{
+    private static final Map<String, Integer> MAP_ITEM_NAMES = new HashMap<>() {{
         // We need to map clue scrolls to a single item counterpart
         // Because each step has a different item id, and would pollute the item unlocks
         put("Clue scroll (beginner)", ItemID.TRAIL_CLUE_BEGINNER);
@@ -133,7 +133,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
         WorldType.FRESH_START_WORLD,
         WorldType.LAST_MAN_STANDING
     );
-    private final ConcurrentLinkedQueue<Consumer<UnlockedItem>> newUnlockedItemListeners = new ConcurrentLinkedQueue<>();
+    private Subscription stateSubscription;
+    private Subscription accountConfigSubscription;
     @Inject
     private Client client;
     @Inject
@@ -160,10 +161,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private MinigameService minigameService;
-    private final Consumer<UnlockedItemsDataProvider.State> unlockedItemDataProviderStateListener = this::unlockedItemDataProviderStateListener;
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private volatile boolean hasNotifiedPlayerOfNonSupportedWorldType = false;
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
 
     @Override
     public void startUp() throws Exception {
@@ -229,13 +228,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     );
                 }
 
-                for (Consumer<UnlockedItem> listener : newUnlockedItemListeners) {
-                    try {
-                        listener.accept(unlockedItem);
-                    } catch (Exception ex) {
-                        log.error("unlockedItemListener: onUpdate", ex);
-                    }
-                }
             }
 
             @Override
@@ -261,16 +253,16 @@ public class ItemUnlockService implements BUPluginLifecycle {
             }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
-        unlockedItemsDataProvider.addStateListener(unlockedItemDataProviderStateListener);
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        stateSubscription = unlockedItemsDataProvider.getState()
+            .subscribe(state -> unlockedItemDataProviderStateListener(state));
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::currentAccountConfigurationChangeListener);
     }
 
     @Override
     public void shutDown() throws Exception {
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
-        unlockedItemsDataProvider.removeStateListener(unlockedItemDataProviderStateListener);
+        stateSubscription.dispose();
+        accountConfigSubscription.dispose();
         unlockedItemsDataProvider.removeUnlockedItemsMapListener(unlockedItemsMapListener);
     }
 
@@ -379,25 +371,12 @@ public class ItemUnlockService implements BUPluginLifecycle {
         withErrorLogging(unlockItem(itemId), "Failed to unlock item in on script pre fired");
     }
 
-    public void addNewUnlockedItemListener(Consumer<UnlockedItem> consumer) {
-        newUnlockedItemListeners.add(consumer);
-    }
-
-    public void removeNewUnlockedItemListener(Consumer<UnlockedItem> consumer) {
-        newUnlockedItemListeners.remove(consumer);
-    }
-
-    public boolean hasUnlockedItem(int itemId) throws IllegalStateException {
+    public boolean hasUnlockedItem(int initialItemId) throws IllegalStateException {
         if (unlockedItemsDataProviderNotReady()) {
             throw new IllegalStateException("State is not READY");
         }
 
-        // Apply name mapping (same as unlockItem)
-        ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-        Integer mappedItemId = MAP_ITEM_NAMES.get(itemComposition.getName());
-        if (mappedItemId != null) {
-            itemId = mappedItemId;
-        }
+        int itemId = canonicalizeItemId(initialItemId);
 
         if (AUTO_UNLOCKED_ITEMS.contains(itemId)) {
 //            log.info("Item with id {} is auto unlocked", itemId);
@@ -428,7 +407,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
     }
 
     private boolean unlockedItemsDataProviderNotReady() {
-        return unlockedItemsDataProvider.getState() != UnlockedItemsDataProvider.State.Ready;
+        return unlockedItemsDataProvider.getState().get() != UnlockedItemsDataProvider.State.Ready;
     }
 
     private void currentAccountConfigurationChangeListener(
@@ -438,7 +417,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
         }
         checkAndNotifyNonSupportedWorldType();
     }
-
 
     private void checkAndNotifyNonSupportedWorldType() {
         boolean isSupported;
@@ -485,43 +463,26 @@ public class ItemUnlockService implements BUPluginLifecycle {
             return CompletableFuture.completedFuture(null);
         }
 
-        // We want the base item, not a noted item or similar
-        int itemId = itemManager.canonicalize(initialItemId);
-
-        // If necessary, we also need to map the item to a different one
-        // for example ensouled heads have multiple variations of the same item
-        // one that you can re-animate, and one you cannot.
-        // We don't want to unlock these multiple times
-        if (ITEM_MAPPING_ITEM_IDS.contains(itemId)) {
-            Collection<ItemMapping> mapping = ItemMapping.map(itemId);
-            if (mapping == null || mapping.isEmpty()) {
-                Exception ex = new Exception("Failed to map item id " + itemId);
-                return CompletableFuture.failedFuture(ex);
-            }
-            final Optional<ItemMapping> optMap = mapping.stream().findFirst();
-            final ItemMapping map = optMap.orElse(null);
-            itemId = map.getTradeableItem();
+        // Skip placeholders
+        ItemComposition initialItemComposition = client.getItemDefinition(initialItemId);
+        // This method returns -1 if the item is NOT a placeholder
+        if (initialItemComposition.getPlaceholderTemplateId() != -1) {
+            return CompletableFuture.completedFuture(null);
         }
 
-        // If necessary, we also need to map the item to a different one by name
-        // for example clue scrolls have like 50 variations, but they're
-        // essentially the same item
-        ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-        Integer nameMappedItemID = MAP_ITEM_NAMES.get(itemComposition.getName());
-        if (nameMappedItemID != null) {
-            itemId = nameMappedItemID;
-            itemComposition = itemManager.getItemComposition(itemId);
-        }
-
+        int itemId;
         try {
+            itemId = canonicalizeItemId(initialItemId);
+
             if (hasUnlockedItem(itemId)) {
-//                log.info("Item with id {} is already unlocked", itemId);
                 return CompletableFuture.completedFuture(null);
             }
         } catch (Exception ex) {
             return CompletableFuture.failedFuture(ex);
         }
 
+        // Get new item definition after canonicalization
+        ItemComposition itemComposition = client.getItemDefinition(itemId);
         final boolean fIsTradeable = itemComposition.isTradeable();
         final String fItemName = itemComposition.getName();
         final int fItemId = itemId;
@@ -530,7 +491,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
         return gameRulesService
             .waitUntilGameRulesReady(null)
             .thenCompose(__ -> {
-                GameRules gameRules = gameRulesService.getGameRules();
+                GameRules gameRules = gameRulesService.getGameRules().get();
                 log.debug(
                     "is only for traded items: {} - is tradeable: {}",
                     gameRules.isOnlyForTradeableItems(),
@@ -554,6 +515,30 @@ public class ItemUnlockService implements BUPluginLifecycle {
             });
     }
 
+    private int canonicalizeItemId(int initialItemId) {
+        // We want the base item, not a noted item or similar
+        int itemId = itemManager.canonicalize(initialItemId);
+
+        // If necessary, we also need to map the item to a different one
+        // for example ensouled heads have multiple variations of the same item
+        // one that you can re-animate, and one you cannot.
+        // We don't want to unlock these multiple times
+        if (ITEM_MAPPING_ITEM_IDS.contains(itemId)) {
+            Collection<ItemMapping> mappings = ItemMapping.map(itemId);
+            if (mappings == null || mappings.isEmpty()) {
+                throw new RuntimeException("Failed to map item id " + itemId);
+            }
+            final ItemMapping mapping = mappings.stream().findFirst().get();
+            itemId = mapping.getTradeableItem();
+        }
+
+        // If necessary, we also need to map the item to a different one by name
+        // for example clue scrolls have like 50 variations, but they're
+        // essentially the same item
+        String itemName = client.getItemDefinition(itemId).getName();
+        return MAP_ITEM_NAMES.getOrDefault(itemName, itemId);
+    }
+
     private boolean isCurrentWorldSupportedForUnlockingItems() throws Exception {
         int worldNumber = client.getWorld();
         WorldResult worldResult = worldService.getWorlds();
@@ -571,8 +556,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
         return !hasUnsupportedWorldType;
     }
 
-    private void unlockedItemDataProviderStateListener(UnlockedItemsDataProvider.State state) {
-        if (state != UnlockedItemsDataProvider.State.Ready) {
+    private void unlockedItemDataProviderStateListener(AbstractDataProvider.State state) {
+        if (state != AbstractDataProvider.State.Ready) {
             return;
         }
 //        if (hasUnlockedItemDataProviderReadyStateBeenSeen) {
