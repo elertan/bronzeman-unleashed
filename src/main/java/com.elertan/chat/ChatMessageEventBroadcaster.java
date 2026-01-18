@@ -48,6 +48,7 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
             .put(BUEventType.CombatTaskAchievement, this::transformCombatTaskAchievementEvent)
             .put(BUEventType.QuestCompletionAchievement, this::transformQuestCompletionAchievementEvent)
             .put(BUEventType.DiaryCompletionAchievement, this::transformDiaryCompletionAchievementEvent)
+            .put(BUEventType.CollectionLogUnlockAchievement, this::transformCollectionLogAchievementEvent)
             .put(BUEventType.ValuableLoot, this::transformValuableLootEvent)
             .put(BUEventType.PetDrop, this::transformPetDropEvent)
             .build();
@@ -233,6 +234,18 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
         builder.append(" has completed the " +  tierText + " tier of the ");
         builder.append(config.chatHighlightColor(), areaText);
         builder.append(" diary.");
+
+        return CompletableFuture.completedFuture(builder.build());
+    }
+
+    private CompletableFuture<String> transformCollectionLogAchievementEvent(BUEvent event, Member member) {
+        CollectionLogUnlockAchievementBUEvent e = (CollectionLogUnlockAchievementBUEvent) event;
+
+        ChatMessageBuilder builder = new ChatMessageBuilder();
+        builder.append("New item added to ");
+        builder.append(config.chatPlayerNameColor(), member.getName());
+        builder.append("'s collection log: ");
+        builder.append(config.chatHighlightColor(), e.getItemName());
 
         return CompletableFuture.completedFuture(builder.build());
     }

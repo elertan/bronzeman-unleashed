@@ -1,12 +1,6 @@
 package com.elertan.event;
 
-import com.elertan.chat.CombatLevelUpParsedGameMessage;
-import com.elertan.chat.CombatTaskParsedGameMessage;
-import com.elertan.chat.ParsedGameMessage;
-import com.elertan.chat.ParsedGameMessageType;
-import com.elertan.chat.QuestCompletionParsedGameMessage;
-import com.elertan.chat.SkillLevelUpParsedGameMessage;
-import com.elertan.chat.TotalLevelParsedGameMessage;
+import com.elertan.chat.*;
 import com.elertan.models.ISOOffsetDateTime;
 import com.google.common.collect.ImmutableSet;
 import java.time.OffsetDateTime;
@@ -17,6 +11,7 @@ public class GameMessageToEventTransformer {
 
     private static final EnumMap<ParsedGameMessageType, Transformer> TRANSFORMERS = new EnumMap<>(
         ParsedGameMessageType.class);
+
     private static final Set<Integer> SHARE_SKILL_LEVEL_UP_OF_SET = ImmutableSet.of(
         10,
         20,
@@ -93,10 +88,14 @@ public class GameMessageToEventTransformer {
             ParsedGameMessageType.QuestCompletion,
             GameMessageToEventTransformer::transformQuestCompletion
         );
+        TRANSFORMERS.put(
+            ParsedGameMessageType.CollectionLogUnlock,
+            GameMessageToEventTransformer::transformCollectionLogUnlock
+        );
     }
 
-    public static BUEvent transformGameMessage(ParsedGameMessage gameMessage,
-        long dispatchedFromAccountHash) {
+    public static BUEvent transformGameMessage(
+        ParsedGameMessage gameMessage, long dispatchedFromAccountHash) {
         if (gameMessage == null) {
             return null;
         }
@@ -105,11 +104,13 @@ public class GameMessageToEventTransformer {
         if (transformer == null) {
             return null;
         }
-        return transformer.apply(gameMessage, dispatchedFromAccountHash);
+
+        ISOOffsetDateTime timestamp = new ISOOffsetDateTime(OffsetDateTime.now());
+        return transformer.apply(gameMessage, dispatchedFromAccountHash, timestamp);
     }
 
-    private static BUEvent transformSkillLevelUp(ParsedGameMessage gameMessage,
-        long dispatchedFromAccountHash) {
+    private static BUEvent transformSkillLevelUp(
+        ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
         SkillLevelUpParsedGameMessage m = (SkillLevelUpParsedGameMessage) gameMessage;
 
         int level = m.getLevel();
@@ -117,24 +118,22 @@ public class GameMessageToEventTransformer {
             return null;
         }
 
-        ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
         return new SkillLevelUpAchievementBUEvent(
             dispatchedFromAccountHash,
-            now,
+            timestamp,
             m.getSkill(),
             level
         );
     }
 
-    private static BUEvent transformTotalLevel(ParsedGameMessage gameMessage,
-        long dispatchedFromAccountHash) {
+    private static BUEvent transformTotalLevel(
+        ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
         TotalLevelParsedGameMessage m = (TotalLevelParsedGameMessage) gameMessage;
-        ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
-        return new TotalLevelAchievementBUEvent(dispatchedFromAccountHash, now, m.getTotalLevel());
+        return new TotalLevelAchievementBUEvent(dispatchedFromAccountHash, timestamp, m.getTotalLevel());
     }
 
-    private static BUEvent transformCombatLevelUp(ParsedGameMessage gameMessage,
-        long dispatchedFromAccountHash) {
+    private static BUEvent transformCombatLevelUp(
+        ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
         CombatLevelUpParsedGameMessage m = (CombatLevelUpParsedGameMessage) gameMessage;
 
         int level = m.getLevel();
@@ -142,36 +141,38 @@ public class GameMessageToEventTransformer {
             return null;
         }
 
-        ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
         return new CombatLevelUpAchievementBUEvent(
             dispatchedFromAccountHash,
-            now,
+            timestamp,
             level
         );
     }
 
-    private static BUEvent transformCombatTask(ParsedGameMessage gameMessage,
-        long dispatchedFromAccountHash) {
+    private static BUEvent transformCombatTask(
+        ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
         CombatTaskParsedGameMessage m = (CombatTaskParsedGameMessage) gameMessage;
-        ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
         return new CombatTaskAchievementBUEvent(
             dispatchedFromAccountHash,
-            now,
+            timestamp,
             m.getTier(),
             m.getName()
         );
     }
 
-    private static BUEvent transformQuestCompletion(ParsedGameMessage gameMessage,
-        long dispatchedFromAccountHash) {
+    private static BUEvent transformQuestCompletion(
+        ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
         QuestCompletionParsedGameMessage m = (QuestCompletionParsedGameMessage) gameMessage;
-        ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
-        return new QuestCompletionAchievementBUEvent(dispatchedFromAccountHash, now, m.getName());
+        return new QuestCompletionAchievementBUEvent(dispatchedFromAccountHash, timestamp, m.getName());
+    }
+
+    private static BUEvent transformCollectionLogUnlock(
+        ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
+        CollectionLogUnlockParsedGameMessage m = (CollectionLogUnlockParsedGameMessage) gameMessage;
+        return new CollectionLogUnlockAchievementBUEvent(dispatchedFromAccountHash, timestamp, m.getItemName());
     }
 
     @FunctionalInterface
     interface Transformer {
-
-        BUEvent apply(ParsedGameMessage gameMessage, long dispatchedFromAccountHash);
+        BUEvent apply(ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp);
     }
 }

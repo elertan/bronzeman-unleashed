@@ -16,12 +16,16 @@ public class BUEventGson {
         REGISTRY.put(BUEventType.TotalLevelAchievement, TotalLevelAchievementBUEvent.class);
         REGISTRY.put(BUEventType.CombatTaskAchievement, CombatTaskAchievementBUEvent.class);
         REGISTRY.put(
+            BUEventType.QuestCompletionAchievement,
+            QuestCompletionAchievementBUEvent.class
+        );
+        REGISTRY.put(
             BUEventType.DiaryCompletionAchievement,
             DiaryCompletionAchievementBUEvent.class
         );
         REGISTRY.put(
-            BUEventType.QuestCompletionAchievement,
-            QuestCompletionAchievementBUEvent.class
+            BUEventType.CollectionLogUnlockAchievement,
+            CollectionLogUnlockAchievementBUEvent.class
         );
         REGISTRY.put(BUEventType.ValuableLoot, ValuableLootBUEvent.class);
         REGISTRY.put(BUEventType.PetDrop, PetDropBUEvent.class);
