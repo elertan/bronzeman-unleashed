@@ -19,12 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class AbstractDataProvider implements BUPluginLifecycle {
 
-    private final Observable<State> state;
+    private final Observable<State> state = Observable.of(State.NotReady);
     private Subscription remoteStorageSubscription;
-
-    protected AbstractDataProvider(String name) {
-        this.state = new Observable<>(name + ".state", State.NotReady);
-    }
 
     /**
      * Subclasses must provide the RemoteStorageService instance.
@@ -95,7 +91,8 @@ public abstract class AbstractDataProvider implements BUPluginLifecycle {
             return future;
         }
 
-        // Subscribe to value changes
+        // Array wrapper needed because lambdas require effectively final variables,
+        // but we need to reference the subscription inside the lambda itself
         Subscription[] subscriptionHolder = new Subscription[1];
         subscriptionHolder[0] = observable.subscribe((newValue, oldValue) -> {
             if (newValue == targetValue && !future.isDone()) {

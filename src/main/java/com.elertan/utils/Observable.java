@@ -25,30 +25,35 @@ public final class Observable<T> {
     // ConcurrentLinkedQueue allows thread-safe iteration without locking,
     // enabling listeners to be added/removed while notifying
     private final ConcurrentLinkedQueue<BiConsumer<T, T>> listeners = new ConcurrentLinkedQueue<>();
-    private final String name;
     private volatile T value;
     // Tracks whether set() has been called at least once (ready state)
     private final AtomicBoolean hasBeenSet = new AtomicBoolean(false);
 
+    private Observable() {
+    }
+
     /**
      * Creates observable without initial value. Starts in NotReady state.
      *
-     * @param name name for logging
+     * @param <T> the value type
+     * @return new Observable in NotReady state
      */
-    public Observable(String name) {
-        this.name = name;
+    public static <T> Observable<T> empty() {
+        return new Observable<>();
     }
 
     /**
      * Creates observable with initial value. Starts in Ready state.
      *
-     * @param name         name for logging
-     * @param initialValue the initial value
+     * @param <T>   the value type
+     * @param value the initial value (can be null)
+     * @return new Observable in Ready state
      */
-    public Observable(String name, T initialValue) {
-        this.name = name;
-        this.value = initialValue;
-        this.hasBeenSet.set(true);
+    public static <T> Observable<T> of(T value) {
+        Observable<T> observable = new Observable<>();
+        observable.value = value;
+        observable.hasBeenSet.set(true);
+        return observable;
     }
 
     /**
@@ -132,7 +137,7 @@ public final class Observable<T> {
                 if (!future.isDone()) {
                     subscriptionHolder[0].dispose();
                     future.completeExceptionally(
-                        new TimeoutException("Timeout waiting for " + name + " to become ready"));
+                        new TimeoutException("Timeout waiting for Observable to become ready"));
                 }
             }, timeout.toMillis(), TimeUnit.MILLISECONDS);
             // Ensure scheduler is shutdown when future completes (success, timeout, or cancellation)
@@ -179,7 +184,7 @@ public final class Observable<T> {
             try {
                 listener.accept(value, null);
             } catch (Exception e) {
-                log.error("{}: immediate listener error", name, e);
+                log.error("Observable immediate listener error", e);
             }
         }
         return subscription;
@@ -200,7 +205,7 @@ public final class Observable<T> {
                 listener.accept(newValue, oldValue);
             } catch (Exception e) {
                 // Log error but continue notifying other listeners
-                log.error("{}: listener notification error", name, e);
+                log.error("Observable listener notification error", e);
             }
         }
     }

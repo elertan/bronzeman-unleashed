@@ -23,7 +23,7 @@ public class BUEventService implements BUPluginLifecycle {
 
     // Note: This observable is event-based (transient), not stateful.
     // It holds the "last event" and notifies on each new event.
-    private final Observable<BUEvent> lastEvent = new Observable<>("BUEventService.lastEvent");
+    private final Observable<BUEvent> lastEvent = Observable.empty();
     private ScheduledExecutorService scheduler;
     private Subscription lastEventDataProviderSubscription;
 

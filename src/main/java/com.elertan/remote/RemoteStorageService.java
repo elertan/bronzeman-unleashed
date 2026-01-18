@@ -38,7 +38,7 @@ import okhttp3.OkHttpClient;
 @Singleton
 public class RemoteStorageService implements BUPluginLifecycle {
 
-    private final Observable<State> state = new Observable<>("RemoteStorageService.state", State.NotReady);
+    private final Observable<State> state = Observable.of(State.NotReady);
     private Subscription accountConfigSubscription;
     @Inject
     private OkHttpClient httpClient;
@@ -113,7 +113,8 @@ public class RemoteStorageService implements BUPluginLifecycle {
             return future;
         }
 
-        // Subscribe to value changes
+        // Array wrapper needed because lambdas require effectively final variables,
+        // but we need to reference the subscription inside the lambda itself
         Subscription[] subscriptionHolder = new Subscription[1];
         subscriptionHolder[0] = observable.subscribe((newValue, oldValue) -> {
             if (newValue == targetValue && !future.isDone()) {

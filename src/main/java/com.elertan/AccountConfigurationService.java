@@ -30,7 +30,7 @@ public class AccountConfigurationService implements BUPluginLifecycle {
     }.getType();
     private static final Type ACCOUNT_CONFIGURATION_MAP_TYPE = new TypeToken<Map<Long, AccountConfiguration>>() {
     }.getType();
-    private final Observable<AccountConfiguration> currentAccountConfiguration = new Observable<>("AccountConfigurationService.currentAccountConfiguration");
+    private final Observable<AccountConfiguration> currentAccountConfiguration = Observable.empty();
     @Inject
     private Client client;
     @Inject

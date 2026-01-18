@@ -20,7 +20,7 @@ import net.runelite.client.chat.ChatMessageBuilder;
 @Singleton
 public class GameRulesService implements BUPluginLifecycle {
 
-    private final Observable<GameRules> gameRules = new Observable<>("GameRulesService.gameRules");
+    private final Observable<GameRules> gameRules = Observable.empty();
     @Inject
     private GameRulesDataProvider gameRulesDataProvider;
     @Inject

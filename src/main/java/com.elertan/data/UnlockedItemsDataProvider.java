@@ -25,10 +25,6 @@ public class UnlockedItemsDataProvider extends AbstractDataProvider {
     private KeyValueStoragePort.Listener<Integer, UnlockedItem> storagePortListener;
     private ConcurrentHashMap<Integer, UnlockedItem> unlockedItemsMap;
 
-    public UnlockedItemsDataProvider() {
-        super("UnlockedItemsDataProvider");
-    }
-
     @Override
     protected RemoteStorageService getRemoteStorageService() {
         return remoteStorageService;

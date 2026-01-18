@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 @Singleton
 public class GameRulesDataProvider extends AbstractDataProvider {
 
-    private final Observable<GameRules> gameRules = new Observable<>("GameRulesDataProvider.gameRules");
+    private final Observable<GameRules> gameRules = Observable.empty();
 
     @Inject
     private RemoteStorageService remoteStorageService;
@@ -21,9 +21,6 @@ public class GameRulesDataProvider extends AbstractDataProvider {
     private ObjectStoragePort<GameRules> storagePort;
     private ObjectStoragePort.Listener<GameRules> storagePortListener;
 
-    public GameRulesDataProvider() {
-        super("GameRulesDataProvider");
-    }
 
     @Override
     protected RemoteStorageService getRemoteStorageService() {

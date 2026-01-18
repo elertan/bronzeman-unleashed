@@ -16,7 +16,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
 
     // Note: This observable is event-based (transient), not stateful.
     // It holds the "last event" and notifies on each new event.
-    private final Observable<BUEvent> events = new Observable<>("LastEventDataProvider.events");
+    private final Observable<BUEvent> events = Observable.empty();
 
     @Inject
     private RemoteStorageService remoteStorageService;
@@ -24,9 +24,6 @@ public class LastEventDataProvider extends AbstractDataProvider {
     private ObjectListStoragePort<BUEvent> storagePort;
     private ObjectListStoragePort.Listener<BUEvent> storagePortListener;
 
-    public LastEventDataProvider() {
-        super("LastEventDataProvider");
-    }
 
     @Override
     protected RemoteStorageService getRemoteStorageService() {

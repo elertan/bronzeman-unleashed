@@ -24,8 +24,11 @@ Helper classes for common operations.
 Thread-safe observable value with built-in subscriptions and ready state:
 
 ```java
-// Create observable (starts NotReady)
-Observable<State> state = new Observable<>("ServiceState");
+// Create observable without initial value (starts NotReady)
+Observable<BUEvent> events = Observable.empty();
+
+// Create observable with initial value (starts Ready)
+Observable<State> state = Observable.of(State.NotReady);
 
 // Subscribe to changes (receives new and old value)
 Subscription sub = state.subscribe((newVal, oldVal) -> handleChange(newVal));

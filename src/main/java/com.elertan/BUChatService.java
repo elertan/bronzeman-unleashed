@@ -48,7 +48,7 @@ public class BUChatService implements BUPluginLifecycle {
         ChatMessageType.FRIENDSCHAT,
         ChatMessageType.PRIVATECHAT
     );
-    private final Observable<Boolean> isChatboxTransparent = new Observable<>("BUChatService.isChatboxTransparent");
+    private final Observable<Boolean> isChatboxTransparent = Observable.empty();
     @Inject
     private Client client;
     @Inject
