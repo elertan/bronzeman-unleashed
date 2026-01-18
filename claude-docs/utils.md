@@ -8,8 +8,9 @@ Helper classes for common operations.
 |------|-------------|
 | `utils/AsyncUtils.java` | Async/threading utilities |
 | `utils/JsonUtils.java` | JSON serialization helpers |
-| `utils/ListenerUtils.java` | Listener pattern helpers |
-| `utils/StateListenerManager.java` | Manages state listeners with notifications |
+| `utils/Observable.java` | Thread-safe observable value with subscriptions |
+| `utils/CompositeSubscription.java` | Manages multiple subscriptions |
+| `utils/Subscription.java` | Subscription interface |
 | `utils/OffsetDateTimeUtils.java` | Date/time utilities |
 | `utils/TextUtils.java` | String utilities |
 | `utils/TickUtils.java` | Game tick utilities |
@@ -18,29 +19,43 @@ Helper classes for common operations.
 
 ## Key Utilities
 
-### ListenerUtils
+### Observable
 
-Wait for async state:
+Thread-safe observable value with built-in subscriptions and ready state:
 
 ```java
-CompletableFuture<Void> future = ListenerUtils.waitUntilReady(
-    new WaitUntilReadyContext() {
-        boolean isReady() { return service.isReady(); }
-        void addListener(Runnable notify) { service.addListener(notify); }
-        void removeListener() { service.removeListener(); }
-        Duration getTimeout() { return Duration.ofSeconds(10); }
-    }
+// Create observable
+Observable<State> state = new Observable<>("ServiceState", State.NotReady);
+
+// Subscribe to changes (receives old and new value)
+Subscription sub = state.subscribe((oldVal, newVal) -> handleChange(newVal));
+
+// Subscribe with only new value
+Subscription sub = state.subscribe(newVal -> handleChange(newVal));
+
+// Update value (notifies subscribers)
+state.set(State.Ready);
+
+// Wait until ready with timeout
+CompletableFuture<Void> future = state.waitUntilReady(
+    val -> val == State.Ready,
+    Duration.ofSeconds(10)
 );
+
+// Cleanup
+sub.dispose();
 ```
 
-### StateListenerManager
+### CompositeSubscription
 
-Manage listeners with thread-safe notifications:
+Manage multiple subscriptions:
 
 ```java
-StateListenerManager<State> listeners = new StateListenerManager<>("MyService");
-listeners.addListener(state -> handleStateChange(state));
-listeners.notifyListeners(State.Ready);
+CompositeSubscription subs = new CompositeSubscription();
+subs.add(observable1.subscribe(...));
+subs.add(observable2.subscribe(...));
+// Later: dispose all at once
+subs.dispose();
 ```
 
 ### BUImageUtil
