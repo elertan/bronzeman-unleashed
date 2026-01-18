@@ -28,10 +28,6 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
     @Getter
     private ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap;
 
-    public GroundItemOwnedByDataProvider() {
-        super("GroundItemOwnedByDataProvider");
-    }
-
     @Override
     protected RemoteStorageService getRemoteStorageService() {
         return remoteStorageService;

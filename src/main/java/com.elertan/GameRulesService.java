@@ -3,7 +3,8 @@ package com.elertan;
 import com.elertan.data.GameRulesDataProvider;
 import com.elertan.models.GameRules;
 import com.elertan.models.Member;
-import com.elertan.utils.ListenerUtils;
+import com.elertan.utils.Observable;
+import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.Duration;
@@ -11,8 +12,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +21,8 @@ import net.runelite.client.chat.ChatMessageBuilder;
 @Singleton
 public class GameRulesService implements BUPluginLifecycle {
 
-    private final ConcurrentLinkedQueue<Listener> listeners = new ConcurrentLinkedQueue<>();
+    @Getter
+    private final Observable<GameRules> gameRules = Observable.empty();
     @Inject
     private GameRulesDataProvider gameRulesDataProvider;
     @Inject
@@ -31,82 +31,43 @@ public class GameRulesService implements BUPluginLifecycle {
     private BUPluginConfig buPluginConfig;
     @Inject
     private MemberService memberService;
-    @Getter
-    private State state = State.NotReady;
-    @Getter
-    private GameRules gameRules;
-    private final Consumer<GameRules> gameRulesListener = this::gameRulesListener;
+    private Subscription gameRulesSubscription;
 
     @Override
     public void startUp() throws Exception {
-        gameRulesDataProvider.addGameRulesListener(gameRulesListener);
+        gameRulesSubscription = gameRulesDataProvider.getGameRules().subscribe(this::onGameRulesChanged);
     }
 
     @Override
     public void shutDown() throws Exception {
-        gameRulesDataProvider.removeGameRulesListener(gameRulesListener);
-
-        gameRules = null;
-        state = State.NotReady;
-    }
-
-    public void addListener(Listener listener) {
-        listeners.add(listener);
-    }
-
-    public void removeListener(Listener listener) {
-        listeners.remove(listener);
-    }
-
-    public CompletableFuture<Void> waitUntilGameRulesReady(Duration timeout) {
-        return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
-            private Consumer<GameRules> listener;
-
-            @Override
-            public boolean isReady() {
-                return gameRules != null;
-            }
-
-            @Override
-            public void addListener(Runnable notify) {
-                listener = gameRules -> notify.run();
-                gameRulesDataProvider.addGameRulesListener(listener);
-            }
-
-            @Override
-            public void removeListener() {
-                if (listener == null) {
-                    return;
-                }
-                gameRulesDataProvider.removeGameRulesListener(listener);
-                listener = null;
-            }
-
-            @Override
-            public Duration getTimeout() {
-                return timeout;
-            }
-        });
-    }
-
-    private void gameRulesListener(GameRules gameRules) {
-        GameRules oldGameRules = this.gameRules;
-        this.gameRules = gameRules;
-        if (gameRules == null) {
-            setState(State.NotReady);
-        } else {
-            setState(State.Ready);
+        if (gameRulesSubscription != null) {
+            gameRulesSubscription.dispose();
+            gameRulesSubscription = null;
         }
+        gameRules.clear();
+    }
 
-        if (gameRules != null && oldGameRules != null) {
+    /**
+     * Wait until game rules are ready.
+     *
+     * @param timeout timeout duration
+     * @return future that completes when game rules are ready
+     */
+    public CompletableFuture<GameRules> waitUntilGameRulesReady(Duration timeout) {
+        return gameRules.await(timeout);
+    }
+
+    private void onGameRulesChanged(GameRules newGameRules, GameRules oldGameRules) {
+        // Notify chat of game rules update (only when transitioning between non-null values)
+        if (newGameRules != null && oldGameRules != null) {
             {
                 ChatMessageBuilder builder = new ChatMessageBuilder();
                 builder.append("Game rules have been updated");
 
-                if (gameRules.getLastUpdatedByAccountHash() != null) {
+                if (newGameRules.getLastUpdatedByAccountHash() != null) {
                     Member member = null;
                     try {
-                        member = memberService.getMemberByAccountHash(gameRules.getLastUpdatedByAccountHash());
+                        member = memberService.getMemberByAccountHash(newGameRules.getLastUpdatedByAccountHash());
                     } catch (Exception e) {
                         // ignored
                     }
@@ -115,13 +76,6 @@ public class GameRulesService implements BUPluginLifecycle {
                         builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
                     }
                 }
-//                if (gameRules.getLastUpdatedAt() != null) {
-//                    builder.append(" at ");
-//                    ISOOffsetDateTime lastUpdatedAt = gameRules.getLastUpdatedAt();
-//                    String formattedMoment = lastUpdatedAt.getValue()
-//                        .format(DateTimeFormatter.ISO_LOCAL_TIME);
-//                    builder.append(buPluginConfig.chatHighlightColor(), formattedMoment);
-//                }
                 builder.append(".");
 
                 buChatService.sendMessage(builder.build());
@@ -129,7 +83,7 @@ public class GameRulesService implements BUPluginLifecycle {
 
             Map<String, String> differences = generateGameRulesUpdateDifference(
                 oldGameRules,
-                gameRules
+                newGameRules
             );
             if (differences != null && !differences.isEmpty()) {
                 for (Map.Entry<String, String> entry : differences.entrySet()) {
@@ -142,16 +96,10 @@ public class GameRulesService implements BUPluginLifecycle {
                     buChatService.sendMessage(builder.build());
                 }
             }
-
         }
 
-        for (Listener listener : listeners) {
-            try {
-                listener.onGameRulesUpdate(gameRules, oldGameRules);
-            } catch (Exception e) {
-                log.error("Error while notifying listener on GameRulesService.", e);
-            }
-        }
+        // Observable set() will notify listeners with (new, old)
+        gameRules.set(newGameRules);
     }
 
     private Map<String, String> generateGameRulesUpdateDifference(GameRules oldGameRules,
@@ -239,21 +187,5 @@ public class GameRulesService implements BUPluginLifecycle {
             differences.put("Party password", "*hidden see config*");
         }
         return differences;
-    }
-
-    private void setState(State state) {
-        if (this.state == state) {
-            return;
-        }
-        this.state = state;
-    }
-
-    public enum State {
-        NotReady, Ready,
-    }
-
-    public interface Listener {
-
-        void onGameRulesUpdate(GameRules newGameRules, GameRules oldGameRules);
     }
 }

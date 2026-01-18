@@ -1,7 +1,7 @@
 ---
 date: 2026-01-18
 design-spec: ../designs/unified-observable-pattern.md
-status: ready
+status: completed
 executor: planspec:impl-spec-executor
 ---
 

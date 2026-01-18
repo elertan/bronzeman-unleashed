@@ -42,7 +42,7 @@ public class ConfigScreenViewModel {
         this.gameRulesDataProvider = gameRulesDataProvider;
         this.navigateToMainScreen = navigateToMainScreen;
         propsSupplier = () -> {
-            GameRules gameRules = gameRulesService.getGameRules();
+            GameRules gameRules = gameRulesService.getGameRules().get();
             Member member = null;
             try {
                 member = memberService.getMyMember();
@@ -65,7 +65,7 @@ public class ConfigScreenViewModel {
                     log.error("error waiting for game rules to be ready", throwable);
                     return;
                 }
-                setGameRules(gameRulesService.getGameRules());
+                setGameRules(gameRulesService.getGameRules().get());
                 gameRulesEditorViewModelPropsProperty.set(propsSupplier.get());
             });
     }

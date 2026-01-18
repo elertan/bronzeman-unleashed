@@ -76,7 +76,7 @@ public class MainViewViewModel implements AutoCloseable {
         membersDataProvider.addMemberMapListener(memberMapListener);
         membersMap = new Property<>(membersDataProvider.getMembersMap());
 
-        membersDataProvider.waitUntilReady(null).whenComplete((__, throwable) -> {
+        membersDataProvider.await(null).whenComplete((__, throwable) -> {
             if (throwable != null) {
                 return;
             }

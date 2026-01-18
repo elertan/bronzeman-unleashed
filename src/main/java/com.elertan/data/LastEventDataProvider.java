@@ -3,19 +3,22 @@ package com.elertan.data;
 import com.elertan.event.BUEvent;
 import com.elertan.remote.ObjectListStoragePort;
 import com.elertan.remote.RemoteStorageService;
-import com.elertan.utils.StateListenerManager;
+import com.elertan.utils.Observable;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Singleton
 public class LastEventDataProvider extends AbstractDataProvider {
 
-    private final StateListenerManager<BUEvent> eventListeners = new StateListenerManager<>("LastEventDataProvider.events");
+    // Note: This observable is event-based (transient), not stateful.
+    // It holds the "last event" and notifies on each new event.
+    @Getter
+    private final Observable<BUEvent> events = Observable.empty();
 
     @Inject
     private RemoteStorageService remoteStorageService;
@@ -23,9 +26,6 @@ public class LastEventDataProvider extends AbstractDataProvider {
     private ObjectListStoragePort<BUEvent> storagePort;
     private ObjectListStoragePort.Listener<BUEvent> storagePortListener;
 
-    public LastEventDataProvider() {
-        super("LastEventDataProvider");
-    }
 
     @Override
     protected RemoteStorageService getRemoteStorageService() {
@@ -42,7 +42,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
 
             @Override
             public void onAdd(String entryKey, BUEvent value) {
-                eventListeners.notifyListeners(value);
+                events.set(value);
             }
 
             @Override
@@ -68,16 +68,8 @@ public class LastEventDataProvider extends AbstractDataProvider {
         }
     }
 
-    public void addEventListener(Consumer<BUEvent> listener) {
-        eventListeners.addListener(listener);
-    }
-
-    public void removeEventListener(Consumer<BUEvent> listener) {
-        eventListeners.removeListener(listener);
-    }
-
     public CompletableFuture<String> add(BUEvent event) {
-        if (getState() == State.NotReady) {
+        if (getState().get() != State.Ready) {
             CompletableFuture<String> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("state is not ready"));
             return future;
@@ -86,7 +78,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<Map<String, BUEvent>> readAll() {
-        if (getState() == State.NotReady) {
+        if (getState().get() != State.Ready) {
             CompletableFuture<Map<String, BUEvent>> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("state is not ready"));
             return future;
@@ -95,7 +87,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<Void> remove(String entryKey) {
-        if (getState() == State.NotReady) {
+        if (getState().get() != State.Ready) {
             CompletableFuture<Void> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("state is not ready"));
             return future;

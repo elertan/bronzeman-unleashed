@@ -11,7 +11,7 @@ public abstract class AbstractDataProvider implements BUPluginLifecycle {
     // State management
     State getState();  // NotReady, Ready
     void addStateListener(Consumer<State> listener);
-    CompletableFuture<Void> waitUntilReady(Duration timeout);
+    CompletableFuture<Void> await(Duration timeout);
 
     // Subclass overrides
     protected abstract RemoteStorageService getRemoteStorageService();
@@ -47,7 +47,7 @@ public abstract class AbstractDataProvider implements BUPluginLifecycle {
 
 ```java
 // Wait for data to be ready
-dataProvider.waitUntilReady(Duration.ofSeconds(10))
+dataProvider.await(Duration.ofSeconds(10))
     .thenAccept(v -> {
         // Data is now available
         Map<String, UnlockedItem> items = dataProvider.getUnlockedItems();

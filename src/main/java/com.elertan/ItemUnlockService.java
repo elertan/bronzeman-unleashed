@@ -2,6 +2,7 @@ package com.elertan;
 
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
+import com.elertan.data.AbstractDataProvider;
 import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.models.*;
 import com.elertan.overlays.ItemUnlockOverlay;
@@ -27,11 +28,10 @@ import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldResult;
 import net.runelite.http.api.worlds.WorldType;
 
+import com.elertan.utils.Subscription;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
 
 import static com.elertan.utils.AsyncUtils.addErrorLogging;
 import static com.elertan.utils.AsyncUtils.withErrorLogging;
@@ -134,7 +134,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
         WorldType.FRESH_START_WORLD,
         WorldType.LAST_MAN_STANDING
     );
-    private final ConcurrentLinkedQueue<Consumer<UnlockedItem>> newUnlockedItemListeners = new ConcurrentLinkedQueue<>();
+    private Subscription stateSubscription;
+    private Subscription accountConfigSubscription;
     @Inject
     private Client client;
     @Inject
@@ -161,10 +162,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private MinigameService minigameService;
-    private final Consumer<UnlockedItemsDataProvider.State> unlockedItemDataProviderStateListener = this::unlockedItemDataProviderStateListener;
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private volatile boolean hasNotifiedPlayerOfNonSupportedWorldType = false;
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
 
     @Override
     public void startUp() throws Exception {
@@ -230,13 +229,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     );
                 }
 
-                for (Consumer<UnlockedItem> listener : newUnlockedItemListeners) {
-                    try {
-                        listener.accept(unlockedItem);
-                    } catch (Exception ex) {
-                        log.error("unlockedItemListener: onUpdate", ex);
-                    }
-                }
             }
 
             @Override
@@ -262,16 +254,16 @@ public class ItemUnlockService implements BUPluginLifecycle {
             }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
-        unlockedItemsDataProvider.addStateListener(unlockedItemDataProviderStateListener);
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        stateSubscription = unlockedItemsDataProvider.getState()
+            .subscribe(state -> unlockedItemDataProviderStateListener(state));
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::currentAccountConfigurationChangeListener);
     }
 
     @Override
     public void shutDown() throws Exception {
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
-        unlockedItemsDataProvider.removeStateListener(unlockedItemDataProviderStateListener);
+        stateSubscription.dispose();
+        accountConfigSubscription.dispose();
         unlockedItemsDataProvider.removeUnlockedItemsMapListener(unlockedItemsMapListener);
     }
 
@@ -360,14 +352,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
         withErrorLogging(unlockItem(itemId), "Failed to unlock ground item");
     }
 
-    public void addNewUnlockedItemListener(Consumer<UnlockedItem> consumer) {
-        newUnlockedItemListeners.add(consumer);
-    }
-
-    public void removeNewUnlockedItemListener(Consumer<UnlockedItem> consumer) {
-        newUnlockedItemListeners.remove(consumer);
-    }
-
     public boolean hasUnlockedItem(int initialItemId) throws IllegalStateException {
         if (unlockedItemsDataProviderNotReady()) {
             throw new IllegalStateException("State is not READY");
@@ -404,7 +388,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
     }
 
     private boolean unlockedItemsDataProviderNotReady() {
-        return unlockedItemsDataProvider.getState() != UnlockedItemsDataProvider.State.Ready;
+        return unlockedItemsDataProvider.getState().get() != UnlockedItemsDataProvider.State.Ready;
     }
 
     private void currentAccountConfigurationChangeListener(
@@ -488,7 +472,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
         return gameRulesService
             .waitUntilGameRulesReady(null)
             .thenCompose(__ -> {
-                GameRules gameRules = gameRulesService.getGameRules();
+                GameRules gameRules = gameRulesService.getGameRules().get();
                 log.debug(
                     "is only for traded items: {} - is tradeable: {}",
                     gameRules.isOnlyForTradeableItems(),
@@ -553,8 +537,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
         return !hasUnsupportedWorldType;
     }
 
-    private void unlockedItemDataProviderStateListener(UnlockedItemsDataProvider.State state) {
-        if (state != UnlockedItemsDataProvider.State.Ready) {
+    private void unlockedItemDataProviderStateListener(AbstractDataProvider.State state) {
+        if (state != AbstractDataProvider.State.Ready) {
             return;
         }
 //        if (hasUnlockedItemDataProviderReadyStateBeenSeen) {

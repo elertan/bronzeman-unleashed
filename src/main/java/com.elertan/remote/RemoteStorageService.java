@@ -17,9 +17,15 @@ import com.elertan.remote.firebase.storageAdapters.GroundItemOwnedByKeyListStora
 import com.elertan.remote.firebase.storageAdapters.LastEventFirebaseObjectListStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.MembersFirebaseKeyValueStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.UnlockedItemsFirebaseKeyValueStorageAdapter;
-import com.elertan.utils.StateListenerManager;
+import com.elertan.utils.Observable;
+import com.elertan.utils.Subscription;
 import com.google.gson.Gson;
-import java.util.function.Consumer;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.Getter;
@@ -32,7 +38,9 @@ import okhttp3.OkHttpClient;
 @Singleton
 public class RemoteStorageService implements BUPluginLifecycle {
 
-    private final StateListenerManager<State> stateListeners = new StateListenerManager<>("RemoteStorageService");
+    @Getter
+    private final Observable<State> state = Observable.of(State.NotReady);
+    private Subscription accountConfigSubscription;
     @Inject
     private OkHttpClient httpClient;
     @Inject
@@ -41,8 +49,6 @@ public class RemoteStorageService implements BUPluginLifecycle {
     private Gson gson;
     @Inject
     private AccountConfigurationService accountConfigurationService;
-    @Getter
-    private State state = State.NotReady;
     private FirebaseRealtimeDatabase firebaseRealtimeDatabase;
     @Getter
     private KeyValueStoragePort<Long, Member> membersStoragePort;
@@ -54,12 +60,11 @@ public class RemoteStorageService implements BUPluginLifecycle {
     private ObjectListStoragePort<BUEvent> lastEventStoragePort;
     @Getter
     private KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
 
     @Override
     public void startUp() {
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::useAccountConfiguration);
         if (accountConfigurationService.isReady() && client.getGameState() == GameState.LOGGED_IN) {
             useAccountConfiguration(accountConfigurationService.getCurrentAccountConfiguration());
         }
@@ -68,29 +73,62 @@ public class RemoteStorageService implements BUPluginLifecycle {
     @Override
     public void shutDown() throws Exception {
         clearCurrentDataport();
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
-    }
-
-    public void addStateListener(Consumer<State> listener) {
-        stateListeners.addListener(listener);
-    }
-
-    public void removeStateListener(Consumer<State> listener) {
-        stateListeners.removeListener(listener);
-    }
-
-    private void setState(State state) {
-        if (this.state == state) {
-            return;
+        if (accountConfigSubscription != null) {
+            accountConfigSubscription.dispose();
+            accountConfigSubscription = null;
         }
-        this.state = state;
-        stateListeners.notifyListeners(state);
     }
 
-    private void currentAccountConfigurationChangeListener(
-        AccountConfiguration accountConfiguration) {
-        useAccountConfiguration(accountConfiguration);
+    /**
+     * Wait until remote storage is ready (state == State.Ready).
+     */
+    public CompletableFuture<State> await(Duration timeout) {
+        return waitForValue(state, State.Ready, timeout);
+    }
+
+    /**
+     * Waits for an Observable to emit a specific target value.
+     * Returns immediately if already at target, otherwise subscribes and waits.
+     * Includes race condition protection by re-checking after subscribe.
+     */
+    private static <T> CompletableFuture<T> waitForValue(Observable<T> observable, T targetValue, Duration timeout) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+
+        // Fast path: already at target value
+        if (observable.get() == targetValue) {
+            future.complete(targetValue);
+            return future;
+        }
+
+        // Array wrapper needed because lambdas require effectively final variables,
+        // but we need to reference the subscription inside the lambda itself
+        Subscription[] subscriptionHolder = new Subscription[1];
+        subscriptionHolder[0] = observable.subscribe((newValue, oldValue) -> {
+            if (newValue == targetValue && !future.isDone()) {
+                subscriptionHolder[0].dispose();
+                future.complete(newValue);
+            }
+        });
+
+        // Race condition check: value may have changed between get() and subscribe()
+        if (observable.get() == targetValue && !future.isDone()) {
+            subscriptionHolder[0].dispose();
+            future.complete(targetValue);
+        }
+
+        // Timeout handling
+        if (timeout != null) {
+            ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+            scheduler.schedule(() -> {
+                if (!future.isDone()) {
+                    subscriptionHolder[0].dispose();
+                    future.completeExceptionally(new TimeoutException("Timeout waiting for value"));
+                }
+            }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+            future.whenComplete((result, ex) -> scheduler.shutdown());
+        }
+
+        return future;
     }
 
     private void useAccountConfiguration(AccountConfiguration accountConfiguration) {
@@ -107,11 +145,11 @@ public class RemoteStorageService implements BUPluginLifecycle {
         FirebaseRealtimeDatabaseURL url = accountConfiguration.getFirebaseRealtimeDatabaseURL();
         configureFromFirebaseRealtimeDatabase(url);
 
-        setState(State.Ready);
+        state.set(State.Ready);
     }
 
     private void clearCurrentDataport() throws Exception {
-        setState(State.NotReady);
+        state.set(State.NotReady);
 
         if (groundItemOwnedByStoragePort != null) {
             groundItemOwnedByStoragePort.close();
