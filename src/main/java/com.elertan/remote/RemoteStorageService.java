@@ -18,10 +18,10 @@ import com.elertan.remote.firebase.storageAdapters.LastEventFirebaseObjectListSt
 import com.elertan.remote.firebase.storageAdapters.MembersFirebaseKeyValueStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.UnlockedItemsFirebaseKeyValueStorageAdapter;
 import com.elertan.utils.Observable;
+import com.elertan.utils.Subscription;
 import com.google.gson.Gson;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.Getter;
@@ -35,7 +35,7 @@ import okhttp3.OkHttpClient;
 public class RemoteStorageService implements BUPluginLifecycle {
 
     private final Observable<State> state = new Observable<>("RemoteStorageService.state");
-    private final Consumer<AccountConfiguration> accountConfigListener = this::onAccountConfigurationChanged;
+    private Subscription accountConfigSubscription;
     @Inject
     private OkHttpClient httpClient;
     @Inject
@@ -58,7 +58,8 @@ public class RemoteStorageService implements BUPluginLifecycle {
 
     @Override
     public void startUp() {
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(accountConfigListener);
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::useAccountConfiguration);
         if (accountConfigurationService.isReady() && client.getGameState() == GameState.LOGGED_IN) {
             useAccountConfiguration(accountConfigurationService.getCurrentAccountConfiguration());
         }
@@ -67,11 +68,10 @@ public class RemoteStorageService implements BUPluginLifecycle {
     @Override
     public void shutDown() throws Exception {
         clearCurrentDataport();
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(accountConfigListener);
-    }
-
-    private void onAccountConfigurationChanged(AccountConfiguration config) {
-        useAccountConfiguration(config);
+        if (accountConfigSubscription != null) {
+            accountConfigSubscription.dispose();
+            accountConfigSubscription = null;
+        }
     }
 
     /**

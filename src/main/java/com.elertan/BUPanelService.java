@@ -3,9 +3,9 @@ package com.elertan;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.panel.BUPanel;
 import com.elertan.panel.BUPanelViewModel;
+import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ClientToolbar;
@@ -29,8 +29,7 @@ public class BUPanelService implements BUPluginLifecycle {
 
     private BUPanel buPanel;
     private NavigationButton panelNavigationButton;
-
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
+    private Subscription accountConfigSubscription;
 
     @Override
     public void startUp() {
@@ -43,14 +42,16 @@ public class BUPanelService implements BUPluginLifecycle {
             .build();
         clientToolbar.addNavigation(panelNavigationButton);
 
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::currentAccountConfigurationChangeListener);
     }
 
     @Override
     public void shutDown() throws Exception {
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        if (accountConfigSubscription != null) {
+            accountConfigSubscription.dispose();
+            accountConfigSubscription = null;
+        }
 
         clientToolbar.removeNavigation(panelNavigationButton);
         panelNavigationButton = null;

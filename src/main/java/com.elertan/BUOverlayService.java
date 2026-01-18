@@ -2,9 +2,9 @@ package com.elertan;
 
 import com.elertan.models.AccountConfiguration;
 import com.elertan.overlays.ItemUnlockOverlay;
+import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.overlay.OverlayManager;
 
@@ -20,20 +20,22 @@ public class BUOverlayService implements BUPluginLifecycle {
     @Inject
     private AccountConfigurationService accountConfigurationService;
 
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
+    private Subscription accountConfigSubscription;
 
     @Override
     public void startUp() throws Exception {
         overlayManager.add(itemUnlockOverlay);
 
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::currentAccountConfigurationChangeListener);
     }
 
     @Override
     public void shutDown() throws Exception {
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        if (accountConfigSubscription != null) {
+            accountConfigSubscription.dispose();
+            accountConfigSubscription = null;
+        }
 
         itemUnlockOverlay.clear();
         overlayManager.remove(itemUnlockOverlay);

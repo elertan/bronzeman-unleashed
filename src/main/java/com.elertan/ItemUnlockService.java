@@ -28,12 +28,11 @@ import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldResult;
 import net.runelite.http.api.worlds.WorldType;
 
+import com.elertan.utils.CompositeSubscription;
 import com.elertan.utils.Subscription;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
 
 import static com.elertan.utils.AsyncUtils.addErrorLogging;
 import static com.elertan.utils.AsyncUtils.withErrorLogging;
@@ -136,7 +135,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
         WorldType.FRESH_START_WORLD,
         WorldType.LAST_MAN_STANDING
     );
-    private final ConcurrentLinkedQueue<Consumer<UnlockedItem>> newUnlockedItemListeners = new ConcurrentLinkedQueue<>();
+    private final CompositeSubscription subscriptions = new CompositeSubscription();
     @Inject
     private Client client;
     @Inject
@@ -163,10 +162,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private MinigameService minigameService;
-    private Subscription unlockedItemDataProviderStateSubscription;
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private volatile boolean hasNotifiedPlayerOfNonSupportedWorldType = false;
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
 
     @Override
     public void startUp() throws Exception {
@@ -232,13 +229,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     );
                 }
 
-                for (Consumer<UnlockedItem> listener : newUnlockedItemListeners) {
-                    try {
-                        listener.accept(unlockedItem);
-                    } catch (Exception ex) {
-                        log.error("unlockedItemListener: onUpdate", ex);
-                    }
-                }
             }
 
             @Override
@@ -264,20 +254,15 @@ public class ItemUnlockService implements BUPluginLifecycle {
             }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
-        unlockedItemDataProviderStateSubscription = unlockedItemsDataProvider.state()
-            .subscribe(state -> unlockedItemDataProviderStateListener(state));
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        subscriptions.add(unlockedItemsDataProvider.state()
+            .subscribe(state -> unlockedItemDataProviderStateListener(state)));
+        subscriptions.add(accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::currentAccountConfigurationChangeListener));
     }
 
     @Override
     public void shutDown() throws Exception {
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
-        if (unlockedItemDataProviderStateSubscription != null) {
-            unlockedItemDataProviderStateSubscription.dispose();
-            unlockedItemDataProviderStateSubscription = null;
-        }
+        subscriptions.dispose();
         unlockedItemsDataProvider.removeUnlockedItemsMapListener(unlockedItemsMapListener);
     }
 
@@ -364,14 +349,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
         }
 
         withErrorLogging(unlockItem(itemId), "Failed to unlock ground item");
-    }
-
-    public void addNewUnlockedItemListener(Consumer<UnlockedItem> consumer) {
-        newUnlockedItemListeners.add(consumer);
-    }
-
-    public void removeNewUnlockedItemListener(Consumer<UnlockedItem> consumer) {
-        newUnlockedItemListeners.remove(consumer);
     }
 
     public boolean hasUnlockedItem(int initialItemId) throws IllegalStateException {
