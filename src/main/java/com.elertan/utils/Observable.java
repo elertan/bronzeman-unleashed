@@ -136,8 +136,9 @@ public final class Observable<T> {
                     future.completeExceptionally(
                         new TimeoutException("Timeout waiting for " + name + " to become ready"));
                 }
-                scheduler.shutdown();
             }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+            // Ensure scheduler is shutdown when future completes (success, timeout, or cancellation)
+            future.whenComplete((result, ex) -> scheduler.shutdown());
         }
 
         return future;
