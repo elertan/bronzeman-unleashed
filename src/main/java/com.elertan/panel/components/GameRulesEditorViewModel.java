@@ -134,21 +134,21 @@ public class GameRulesEditorViewModel extends BaseViewModel {
             return;
         }
 
-        GameRules newGameRules = new GameRules(
-            props.getAccountHash(),
-            new ISOOffsetDateTime(OffsetDateTime.now()),
-            onlyForTradeableItemsProperty.get(),
-            restrictGroundItemsProperty.get(),
-            preventTradeOutsideGroupProperty.get(),
-            preventTradeLockedItemsProperty.get(),
-            preventGrandExchangeBuyOffersProperty.get(),
-            preventPlayedOwnedHouseProperty.get(),
-            restrictPlayerVersusPlayerLootProperty.get(),
-            restrictFaladorPartyRoomBalloonsProperty.get(),
-            shareAchievementNotificationsProperty.get(),
-            valuableLootNotificationThresholdProperty.get(),
-            partyPasswordProperty.get()
-        );
+        GameRules newGameRules = GameRules.builder()
+            .lastUpdatedByAccountHash(props.getAccountHash())
+            .lastUpdatedAt(new ISOOffsetDateTime(OffsetDateTime.now()))
+            .onlyForTradeableItems(onlyForTradeableItemsProperty.get())
+            .restrictGroundItems(restrictGroundItemsProperty.get())
+            .preventTradeOutsideGroup(preventTradeOutsideGroupProperty.get())
+            .preventTradeLockedItems(preventTradeLockedItemsProperty.get())
+            .preventGrandExchangeBuyOffers(preventGrandExchangeBuyOffersProperty.get())
+            .preventPlayerOwnedHouse(preventPlayedOwnedHouseProperty.get())
+            .restrictPlayerVersusPlayerLoot(restrictPlayerVersusPlayerLootProperty.get())
+            .restrictFaladorPartyRoomBalloons(restrictFaladorPartyRoomBalloonsProperty.get())
+            .shareAchievementNotifications(shareAchievementNotificationsProperty.get())
+            .valuableLootNotificationThreshold(valuableLootNotificationThresholdProperty.get())
+            .partyPassword(partyPasswordProperty.get())
+            .build();
         props.onGameRulesChanged.accept(newGameRules);
     }
 

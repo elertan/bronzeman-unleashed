@@ -3,13 +3,14 @@ package com.elertan.event;
 import com.elertan.models.AchievementDiaryArea;
 import com.elertan.models.AchievementDiaryTier;
 import com.elertan.models.ISOOffsetDateTime;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
+@Getter
+@EqualsAndHashCode(callSuper = true)
 public class DiaryCompletionAchievementBUEvent extends BUEvent {
 
-    @Getter
     private final AchievementDiaryTier tier;
-    @Getter
     private final AchievementDiaryArea area;
 
     public DiaryCompletionAchievementBUEvent(

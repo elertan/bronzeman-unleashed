@@ -9,9 +9,9 @@ public abstract class BUEvent {
 
     @JsonAdapter(AccountHashJsonAdapter.class)
     @Getter
-    long dispatchedFromAccountHash;
+    private final long dispatchedFromAccountHash;
     @Getter
-    ISOOffsetDateTime timestamp;
+    private final ISOOffsetDateTime timestamp;
 
     public BUEvent(long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
         this.dispatchedFromAccountHash = dispatchedFromAccountHash;
