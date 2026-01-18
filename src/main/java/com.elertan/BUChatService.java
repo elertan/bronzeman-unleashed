@@ -128,8 +128,8 @@ public class BUChatService implements BUPluginLifecycle {
             return;
         }
 
-        withErrorLogging( buEventService.publishEvent(event), "error publishing game message event")
-            .thenAccept((__) -> log.info("published game message event"));
+        withErrorLogging(buEventService.publishEvent(event), "error publishing game message event")
+            .thenRun(() -> log.info("published game message event"));
     }
 
     public void onScriptCallbackEvent(ScriptCallbackEvent scriptCallbackEvent) {
