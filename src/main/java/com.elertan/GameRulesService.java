@@ -6,9 +6,11 @@ import com.elertan.models.Member;
 import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -72,6 +74,16 @@ public class GameRulesService implements BUPluginLifecycle {
                 return disposed;
             }
         };
+    }
+
+    /**
+     * Wait until game rules are ready.
+     *
+     * @param timeout timeout duration
+     * @return future that completes when game rules are ready
+     */
+    public CompletableFuture<GameRules> waitUntilGameRulesReady(Duration timeout) {
+        return gameRulesDataProvider.gameRules().waitUntilReady(timeout);
     }
 
     private void onGameRulesChanged(GameRules newGameRules, GameRules oldGameRules) {
