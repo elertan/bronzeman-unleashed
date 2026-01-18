@@ -24,23 +24,20 @@ Helper classes for common operations.
 Thread-safe observable value with built-in subscriptions and ready state:
 
 ```java
-// Create observable
-Observable<State> state = new Observable<>("ServiceState", State.NotReady);
+// Create observable (starts NotReady)
+Observable<State> state = new Observable<>("ServiceState");
 
-// Subscribe to changes (receives old and new value)
-Subscription sub = state.subscribe((oldVal, newVal) -> handleChange(newVal));
+// Subscribe to changes (receives new and old value)
+Subscription sub = state.subscribe((newVal, oldVal) -> handleChange(newVal));
 
 // Subscribe with only new value
 Subscription sub = state.subscribe(newVal -> handleChange(newVal));
 
-// Update value (notifies subscribers)
+// Update value (notifies subscribers, first call sets ready)
 state.set(State.Ready);
 
 // Wait until ready with timeout
-CompletableFuture<Void> future = state.waitUntilReady(
-    val -> val == State.Ready,
-    Duration.ofSeconds(10)
-);
+CompletableFuture<State> future = state.waitUntilReady(Duration.ofSeconds(10));
 
 // Cleanup
 sub.dispose();
