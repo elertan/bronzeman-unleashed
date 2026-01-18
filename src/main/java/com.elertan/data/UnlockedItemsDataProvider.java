@@ -118,7 +118,7 @@ public class UnlockedItemsDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<Void> addUnlockedItem(UnlockedItem unlockedItem) {
-        if (getState() != State.Ready) {
+        if (getState().get() != State.Ready) {
             CompletableFuture<Void> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("State is not ready"));
             return future;
@@ -128,7 +128,7 @@ public class UnlockedItemsDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<Void> removeUnlockedItemById(int itemId) {
-        if (getState() != State.Ready) {
+        if (getState().get() != State.Ready) {
             CompletableFuture<Void> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("State is not ready"));
             return future;

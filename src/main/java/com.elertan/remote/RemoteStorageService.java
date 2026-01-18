@@ -38,6 +38,7 @@ import okhttp3.OkHttpClient;
 @Singleton
 public class RemoteStorageService implements BUPluginLifecycle {
 
+    @Getter
     private final Observable<State> state = Observable.of(State.NotReady);
     private Subscription accountConfigSubscription;
     @Inject
@@ -76,20 +77,6 @@ public class RemoteStorageService implements BUPluginLifecycle {
             accountConfigSubscription.dispose();
             accountConfigSubscription = null;
         }
-    }
-
-    /**
-     * Observable for state changes.
-     */
-    public Observable<State> state() {
-        return state;
-    }
-
-    /**
-     * Get current state.
-     */
-    public State getState() {
-        return state.get();
     }
 
     /**

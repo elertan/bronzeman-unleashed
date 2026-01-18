@@ -7,12 +7,14 @@ import com.elertan.utils.Observable;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.concurrent.CompletableFuture;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Singleton
 public class GameRulesDataProvider extends AbstractDataProvider {
 
+    @Getter
     private final Observable<GameRules> gameRules = Observable.empty();
 
     @Inject
@@ -67,22 +69,8 @@ public class GameRulesDataProvider extends AbstractDataProvider {
         }
     }
 
-    /**
-     * Observable for game rules changes.
-     */
-    public Observable<GameRules> gameRules() {
-        return gameRules;
-    }
-
-    /**
-     * Get current game rules.
-     */
-    public GameRules getGameRules() {
-        return gameRules.get();
-    }
-
     public CompletableFuture<Void> updateGameRules(GameRules newGameRules) throws IllegalStateException {
-        if (getState() != State.Ready) {
+        if (getState().get() != State.Ready) {
             throw new IllegalStateException("Not ready yet");
         }
         log.debug("Updating game rules: {}", newGameRules);

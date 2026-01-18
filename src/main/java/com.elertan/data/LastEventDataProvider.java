@@ -8,6 +8,7 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -16,6 +17,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
 
     // Note: This observable is event-based (transient), not stateful.
     // It holds the "last event" and notifies on each new event.
+    @Getter
     private final Observable<BUEvent> events = Observable.empty();
 
     @Inject
@@ -66,15 +68,8 @@ public class LastEventDataProvider extends AbstractDataProvider {
         }
     }
 
-    /**
-     * Observable for event notifications.
-     */
-    public Observable<BUEvent> events() {
-        return events;
-    }
-
     public CompletableFuture<String> add(BUEvent event) {
-        if (getState() != State.Ready) {
+        if (getState().get() != State.Ready) {
             CompletableFuture<String> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("state is not ready"));
             return future;
@@ -83,7 +78,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<Map<String, BUEvent>> readAll() {
-        if (getState() != State.Ready) {
+        if (getState().get() != State.Ready) {
             CompletableFuture<Map<String, BUEvent>> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("state is not ready"));
             return future;
@@ -92,7 +87,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<Void> remove(String entryKey) {
-        if (getState() != State.Ready) {
+        if (getState().get() != State.Ready) {
             CompletableFuture<Void> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("state is not ready"));
             return future;

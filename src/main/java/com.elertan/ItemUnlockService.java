@@ -254,7 +254,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
             }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
-        stateSubscription = unlockedItemsDataProvider.state()
+        stateSubscription = unlockedItemsDataProvider.getState()
             .subscribe(state -> unlockedItemDataProviderStateListener(state));
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
@@ -388,7 +388,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
     }
 
     private boolean unlockedItemsDataProviderNotReady() {
-        return unlockedItemsDataProvider.getState() != UnlockedItemsDataProvider.State.Ready;
+        return unlockedItemsDataProvider.getState().get() != UnlockedItemsDataProvider.State.Ready;
     }
 
     private void currentAccountConfigurationChangeListener(
@@ -472,7 +472,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
         return gameRulesService
             .waitUntilGameRulesReady(null)
             .thenCompose(__ -> {
-                GameRules gameRules = gameRulesService.getGameRules();
+                GameRules gameRules = gameRulesService.getGameRules().get();
                 log.debug(
                     "is only for traded items: {} - is tradeable: {}",
                     gameRules.isOnlyForTradeableItems(),

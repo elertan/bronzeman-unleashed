@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -23,6 +24,7 @@ public class BUEventService implements BUPluginLifecycle {
 
     // Note: This observable is event-based (transient), not stateful.
     // It holds the "last event" and notifies on each new event.
+    @Getter
     private final Observable<BUEvent> lastEvent = Observable.empty();
     private ScheduledExecutorService scheduler;
     private Subscription lastEventDataProviderSubscription;
@@ -33,7 +35,7 @@ public class BUEventService implements BUPluginLifecycle {
     @Override
     public void startUp() throws Exception {
         scheduler = Executors.newSingleThreadScheduledExecutor();
-        lastEventDataProviderSubscription = lastEventDataProvider.events()
+        lastEventDataProviderSubscription = lastEventDataProvider.getEvents()
             .subscribe(event -> lastEvent.set(event));
 
         lastEventDataProvider.await(null).whenComplete((__, throwable) -> {
@@ -54,13 +56,6 @@ public class BUEventService implements BUPluginLifecycle {
         if (scheduler != null) {
             scheduler.shutdown();
         }
-    }
-
-    /**
-     * Observable for event notifications.
-     */
-    public Observable<BUEvent> lastEvent() {
-        return lastEvent;
     }
 
     public CompletableFuture<String> publishEvent(BUEvent event) {

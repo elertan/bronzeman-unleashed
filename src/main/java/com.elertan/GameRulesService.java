@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.chat.ChatMessageBuilder;
 
@@ -20,6 +21,7 @@ import net.runelite.client.chat.ChatMessageBuilder;
 @Singleton
 public class GameRulesService implements BUPluginLifecycle {
 
+    @Getter
     private final Observable<GameRules> gameRules = Observable.empty();
     @Inject
     private GameRulesDataProvider gameRulesDataProvider;
@@ -33,7 +35,7 @@ public class GameRulesService implements BUPluginLifecycle {
 
     @Override
     public void startUp() throws Exception {
-        gameRulesSubscription = gameRulesDataProvider.gameRules().subscribe(this::onGameRulesChanged);
+        gameRulesSubscription = gameRulesDataProvider.getGameRules().subscribe(this::onGameRulesChanged);
     }
 
     @Override
@@ -43,20 +45,6 @@ public class GameRulesService implements BUPluginLifecycle {
             gameRulesSubscription = null;
         }
         gameRules.clear();
-    }
-
-    /**
-     * Observable for game rules changes.
-     */
-    public Observable<GameRules> gameRules() {
-        return gameRules;
-    }
-
-    /**
-     * Get current game rules.
-     */
-    public GameRules getGameRules() {
-        return gameRules.get();
     }
 
     /**

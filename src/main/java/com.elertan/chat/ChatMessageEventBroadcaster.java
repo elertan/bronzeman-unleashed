@@ -63,7 +63,7 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
 
     @Override
     public void startUp() throws Exception {
-        eventSubscription = buEventService.lastEvent().subscribe(this::onEvent);
+        eventSubscription = buEventService.getLastEvent().subscribe(this::onEvent);
     }
 
     @Override

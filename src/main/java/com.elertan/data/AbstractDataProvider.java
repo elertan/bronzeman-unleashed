@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -19,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class AbstractDataProvider implements BUPluginLifecycle {
 
+    @Getter
     private final Observable<State> state = Observable.of(State.NotReady);
     private Subscription remoteStorageSubscription;
 
@@ -41,7 +43,7 @@ public abstract class AbstractDataProvider implements BUPluginLifecycle {
 
     @Override
     public void startUp() throws Exception {
-        remoteStorageSubscription = getRemoteStorageService().state().subscribeImmediate(
+        remoteStorageSubscription = getRemoteStorageService().getState().subscribeImmediate(
             (remoteState, old) -> onRemoteStorageStateChanged(remoteState)
         );
     }
@@ -54,20 +56,6 @@ public abstract class AbstractDataProvider implements BUPluginLifecycle {
         }
         onRemoteStorageNotReady();
         state.set(State.NotReady);
-    }
-
-    /**
-     * Observable for state changes.
-     */
-    public Observable<State> state() {
-        return state;
-    }
-
-    /**
-     * Get current state.
-     */
-    public State getState() {
-        return state.get();
     }
 
     /**

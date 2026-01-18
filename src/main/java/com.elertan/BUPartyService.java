@@ -53,7 +53,7 @@ public class BUPartyService implements BUPluginLifecycle {
                     log.debug(
                         "Waited after login for game rules to be ready, attempting to join party if configured");
 
-                    GameRules gameRules = gameRulesService.getGameRules();
+                    GameRules gameRules = gameRulesService.getGameRules().get();
                     String partyPassword = gameRules.getPartyPassword();
                     if (partyPassword == null || partyPassword.isEmpty()) {
                         log.debug("No party password set, not attempting to join party");

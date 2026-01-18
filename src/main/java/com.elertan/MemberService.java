@@ -121,7 +121,7 @@ public class MemberService implements BUPluginLifecycle {
         if (playerName == null) {
             return null;
         }
-        if (membersDataProvider.getState() != MembersDataProvider.State.Ready) {
+        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready) {
             throw new IllegalStateException("Member data provider is not ready");
         }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
@@ -138,7 +138,7 @@ public class MemberService implements BUPluginLifecycle {
     }
 
     public Member getMemberByAccountHash(long accountHash) {
-        if (membersDataProvider.getState() != MembersDataProvider.State.Ready) {
+        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready) {
             throw new IllegalStateException("Member data provider is not ready");
         }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
@@ -153,7 +153,7 @@ public class MemberService implements BUPluginLifecycle {
     }
 
     public boolean isPlayingAlone() {
-        if (membersDataProvider.getState() != MembersDataProvider.State.Ready) {
+        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready) {
             throw new IllegalStateException("Member data provider is not ready");
         }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();

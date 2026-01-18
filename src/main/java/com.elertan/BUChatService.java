@@ -14,6 +14,7 @@ import com.elertan.utils.TextUtils;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import lombok.Getter;
 import java.awt.Color;
 import java.time.Duration;
 import java.util.Set;
@@ -48,6 +49,7 @@ public class BUChatService implements BUPluginLifecycle {
         ChatMessageType.FRIENDSCHAT,
         ChatMessageType.PRIVATECHAT
     );
+    @Getter
     private final Observable<Boolean> isChatboxTransparent = Observable.empty();
     @Inject
     private Client client;
@@ -214,13 +216,6 @@ public class BUChatService implements BUPluginLifecycle {
                     chatMessageManager.queue(queuedMessage);
                 });
             });
-    }
-
-    /**
-     * Observable for chatbox transparency state.
-     */
-    public Observable<Boolean> isChatboxTransparent() {
-        return isChatboxTransparent;
     }
 
     public CompletableFuture<Boolean> waitForIsChatboxTransparentSet(Duration timeout) {
