@@ -3,31 +3,31 @@ plugins {
 }
 
 repositories {
-    mavenLocal()
     maven {
         url = 'https://repo.runelite.net'
+        content {
+            includeGroupByRegex("net\\.runelite.*")
+        }
     }
     mavenCentral()
 }
 
-def runeLiteVersion = 'latest.release'
-//def runeLiteVersion = '1.11.25'
-
 dependencies {
-    compileOnly group: 'net.runelite', name: 'client', version: runeLiteVersion
+    compileOnly 'net.runelite:client:latest.release'
 
     compileOnly 'org.projectlombok:lombok:1.18.4'
     annotationProcessor 'org.projectlombok:lombok:1.18.4'
 
     testImplementation 'junit:junit:4.12'
-    testImplementation group: 'net.runelite', name: 'client', version: runeLiteVersion
-    testImplementation group: 'net.runelite', name: 'jshell', version: runeLiteVersion
+    testImplementation 'net.runelite:client:latest.release'
+    testImplementation 'net.runelite:jshell:latest.release'
 }
 
 group = 'com.elertan'
 version = '0.0.1'
-sourceCompatibility = '1.8'
 
-tasks.withType(JavaCompile) {
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << '-Xlint:unchecked' << '-Xlint:deprecation'
     options.encoding = 'UTF-8'
+    options.release.set(11)
 }

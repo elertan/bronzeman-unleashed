@@ -16,10 +16,10 @@ import com.elertan.policies.ShopPolicy;
 import com.elertan.policies.TradePolicy;
 import com.elertan.remote.RemoteStorageService;
 import com.google.inject.Inject;
+import com.elertan.utils.Subscription;
 import com.google.inject.Provides;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.events.AccountHashChanged;
@@ -128,7 +128,7 @@ public final class BUPlugin extends Plugin {
 
     private boolean started;
     private List<BUPluginLifecycle> lifecycleDependencies;
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
+    private Subscription accountConfigSubscription;
 
     @Inject
     private void initLifecycleDependencies() {
@@ -186,8 +186,8 @@ public final class BUPlugin extends Plugin {
         initLifecycleDependencies();
 
         try {
-            accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-                currentAccountConfigurationChangeListener);
+            accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+                .subscribe(this::currentAccountConfigurationChangeListener);
 
             for (BUPluginLifecycle lifecycleDependency : lifecycleDependencies) {
                 lifecycleDependency.startUp();
@@ -212,9 +212,10 @@ public final class BUPlugin extends Plugin {
                     lifecycleDependencies.get(i).shutDown();
                 }
 
-                accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-                    currentAccountConfigurationChangeListener
-                );
+                if (accountConfigSubscription != null) {
+                    accountConfigSubscription.dispose();
+                    accountConfigSubscription = null;
+                }
 
                 log.debug("BU: shutdown ok");
             } else {
@@ -256,6 +257,8 @@ public final class BUPlugin extends Plugin {
         achievementDiaryService.onGameStateChanged(event);
         itemUnlockService.onGameStateChanged(event);
         petDropService.onGameStateChanged(event);
+
+        grandExchangePolicy.onGameStateChanged(event);
     }
 
     @Subscribe
@@ -316,11 +319,13 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded event) {
+        grandExchangePolicy.onWidgetLoaded(event);
         shopPolicy.onWidgetLoaded(event);
     }
 
     @Subscribe
     public void onWidgetClosed(WidgetClosed event) {
+        grandExchangePolicy.onWidgetClosed(event);
         shopPolicy.onWidgetClosed(event);
     }
 

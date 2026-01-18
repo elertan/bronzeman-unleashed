@@ -1,17 +1,16 @@
 package com.elertan.event;
 
 import com.elertan.models.ISOOffsetDateTime;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
+@Getter
+@EqualsAndHashCode(callSuper = true)
 public class ValuableLootBUEvent extends BUEvent {
 
-    @Getter
     private final int itemId;
-    @Getter
     private final int quantity;
-    @Getter
     private final int pricePerItem;
-    @Getter
     private final int npcId;
 
     public ValuableLootBUEvent(long dispatchedFromAccountHash, ISOOffsetDateTime isoOffsetDateTime,

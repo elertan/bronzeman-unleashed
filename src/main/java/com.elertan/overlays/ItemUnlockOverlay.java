@@ -22,6 +22,7 @@ import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.NPCComposition;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.config.RuneLiteConfig;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.Overlay;
@@ -48,6 +49,8 @@ public class ItemUnlockOverlay extends Overlay {
     private final ConcurrentLinkedQueue<UnlockToast> queue = new ConcurrentLinkedQueue<>();
     @Inject
     private ItemManager itemManager;
+    @Inject
+    private RuneLiteConfig runeLiteConfig;
     @Inject
     private BUPluginConfig config;
     @Inject
@@ -105,7 +108,7 @@ public class ItemUnlockOverlay extends Overlay {
 
     public void enqueueShowUnlock(int itemId, long acquiredByAccountHash, Integer droppedByNPCId) {
         // We need members information for acquired by, waiting just in case
-        membersDataProvider.waitUntilReady(null)
+        membersDataProvider.await(null)
             .whenComplete((__, throwable) -> {
                 if (throwable != null) {
                     log.error("error waiting for members data provider to complete");
@@ -314,20 +317,25 @@ public class ItemUnlockOverlay extends Overlay {
     }
 
     private void drawFrame(Graphics2D g, int x, int y, int w, int h) {
-        // Outline
+        // Border outline
         g.setColor(new Color(45, 45, 45));
         g.fillRect(x, y, w, h);
 
-        // Outer
-        g.setColor(config.unlockOverlayFrameOuterColor());
+        // Border
+        Color runeliteOverlayColor = runeLiteConfig.overlayBackgroundColor();
+        Color borderColor = config.unlockOverlayFrameBorderColor();
+        // Fall back to a brighter version of the RuneLite overlay color
+        if (borderColor == null)
+            borderColor = runeliteOverlayColor.brighter();
+        g.setColor(borderColor);
         g.fillRect(x + 1, y + 1, w - 2, h - 2);
 
-        // Inner outline
+        // Content outline
         g.setColor(new Color(45, 45, 45));
         g.fillRect(x + 5, y + 5, w - 10, h - 10);
 
-        // Inner
-        g.setColor(config.unlockOverlayFrameInnerColor());
+        // Content
+        g.setColor(runeliteOverlayColor);
         g.fillRect(x + 6, y + 6, w - 12, h - 12);
     }
 

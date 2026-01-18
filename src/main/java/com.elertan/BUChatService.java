@@ -8,18 +8,17 @@ import com.elertan.event.BUEvent;
 import com.elertan.event.GameMessageToEventTransformer;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.models.Member;
-import com.elertan.utils.ListenerUtils;
-import com.elertan.utils.StateListenerManager;
+import com.elertan.utils.Observable;
+import com.elertan.utils.Subscription;
 import com.elertan.utils.TextUtils;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import lombok.Getter;
 import java.awt.Color;
 import java.time.Duration;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -50,7 +49,8 @@ public class BUChatService implements BUPluginLifecycle {
         ChatMessageType.FRIENDSCHAT,
         ChatMessageType.PRIVATECHAT
     );
-    private final StateListenerManager<Boolean> isChatboxTransparentListeners = new StateListenerManager<>("BUChatService.isChatboxTransparent");
+    @Getter
+    private final Observable<Boolean> isChatboxTransparent = Observable.empty();
     @Inject
     private Client client;
     @Inject
@@ -67,7 +67,7 @@ public class BUChatService implements BUPluginLifecycle {
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private BUResourceService buResourceService;
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
+    private Subscription accountConfigSubscription;
     @Inject
     private MemberService memberService;
     @Inject
@@ -76,12 +76,11 @@ public class BUChatService implements BUPluginLifecycle {
     private ChatMessageProvider chatMessageProvider;
     @Inject
     private BUSoundHelper buSoundHelper;
-    private Boolean isChatboxTransparent = null;
 
     @Override
     public void startUp() throws Exception {
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::currentAccountConfigurationChangeListener);
 
         manageIconOnChatbox(false);
     }
@@ -89,8 +88,11 @@ public class BUChatService implements BUPluginLifecycle {
     @Override
     public void shutDown() throws Exception {
         manageIconOnChatbox(true);
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        if (accountConfigSubscription != null) {
+            accountConfigSubscription.dispose();
+            accountConfigSubscription = null;
+        }
+        isChatboxTransparent.clear();
     }
 
     public void onChatMessage(ChatMessage chatMessage) {
@@ -187,7 +189,8 @@ public class BUChatService implements BUPluginLifecycle {
                     if (messageChatIcon == null) {
                         throw new IllegalStateException("Chat icon has not been set");
                     }
-                    Color chatColor = isChatboxTransparent ? config.chatColorTransparent()
+                    Boolean isTransparent = isChatboxTransparent.get();
+                    Color chatColor = Boolean.TRUE.equals(isTransparent) ? config.chatColorTransparent()
                         : config.chatColorOpaque();
 
                     ChatMessageBuilder builder = new ChatMessageBuilder();
@@ -215,47 +218,13 @@ public class BUChatService implements BUPluginLifecycle {
             });
     }
 
-    public void addIsChatboxTransparentListener(Consumer<Boolean> listener) {
-        isChatboxTransparentListeners.addListener(listener);
+    public CompletableFuture<Boolean> waitForIsChatboxTransparentSet(Duration timeout) {
+        return isChatboxTransparent.await(timeout);
     }
 
-    public void removeIsChatboxTransparentListener(Consumer<Boolean> listener) {
-        isChatboxTransparentListeners.removeListener(listener);
-    }
-
-    public CompletableFuture<Void> waitForIsChatboxTransparentSet(Duration timeout) {
-        return ListenerUtils.waitUntilReady(new ListenerUtils.WaitUntilReadyContext() {
-            Consumer<Boolean> listener;
-
-            @Override
-            public boolean isReady() {
-                return isChatboxTransparent != null;
-            }
-
-            @Override
-            public void addListener(Runnable notify) {
-                addIsChatboxTransparentListener(isChatboxTransparent -> notify.run());
-            }
-
-            @Override
-            public void removeListener() {
-                removeIsChatboxTransparentListener(listener);
-            }
-
-            @Override
-            public Duration getTimeout() {
-                return timeout;
-            }
-        });
-    }
-
-    private void setIsChatboxTransparent(Boolean isChatboxTransparent) {
-        if (Objects.equals(this.isChatboxTransparent, isChatboxTransparent)) {
-            return;
-        }
-        this.isChatboxTransparent = isChatboxTransparent;
-        log.debug("isChatboxTransparent set to {}", isChatboxTransparent);
-        isChatboxTransparentListeners.notifyListeners(isChatboxTransparent);
+    private void setIsChatboxTransparent(Boolean isTransparent) {
+        log.debug("isChatboxTransparent set to {}", isTransparent);
+        isChatboxTransparent.set(isTransparent);
     }
 
     private void currentAccountConfigurationChangeListener(

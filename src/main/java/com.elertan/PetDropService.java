@@ -110,12 +110,6 @@ public class PetDropService implements BUPluginLifecycle {
                 petItemIds.add(petItemId);
             }
             petsLoaded = true;
-            log.info("[CMD] Loaded {} pet item IDs", petItemIds.size());
-            for (int petItemId : petItemIds) {
-                ItemComposition comp = itemManager.getItemComposition(petItemId);
-                String petName = TextUtils.sanitizeItemName(comp.getName());
-                log.info("[CMD]   Pet: '{}' (id: {})", petName, petItemId);
-            }
         } catch (Exception e) {
             log.error("Failed to load pet item IDs", e);
         }
@@ -196,19 +190,14 @@ public class PetDropService implements BUPluginLifecycle {
 
     private void handleCollectionLogPet(String itemName) {
         String cleanName = TextUtils.sanitizeItemName(itemName);
-        log.info("[CMD] handleCollectionLogPet called with: '{}' -> '{}', petItemIds size: {}", itemName, cleanName, petItemIds.size());
-        // Check if this item name matches a pet
-        // We need to verify it's actually a pet since collection log fires for all items
         for (int petItemId : petItemIds) {
             ItemComposition comp = itemManager.getItemComposition(petItemId);
             String petName = TextUtils.sanitizeItemName(comp.getName());
             if (cleanName.equals(petName)) {
-                log.info("[CMD] Found matching pet: {} (id: {})", petName, petItemId);
                 emitPetDropEvent(petItemId, false);
                 return;
             }
         }
-        log.info("[CMD] No matching pet found for: '{}'", cleanName);
     }
 
     private void handlePetDropMessage(String message) {
@@ -273,7 +262,6 @@ public class PetDropService implements BUPluginLifecycle {
     }
 
     private void emitPetDropEvent(@Nullable Integer petItemId, boolean isDuplicate) {
-        log.info("[CMD] emitPetDropEvent called with itemId: {}, isDuplicate: {}", petItemId, isDuplicate);
         PetDropBUEvent event = new PetDropBUEvent(
             client.getAccountHash(),
             new ISOOffsetDateTime(OffsetDateTime.now()),
@@ -281,7 +269,6 @@ public class PetDropService implements BUPluginLifecycle {
             isDuplicate
         );
         buEventService.publishEvent(event);
-        log.info("[CMD] emitPetDropEvent done");
     }
 
     /**
@@ -291,22 +278,13 @@ public class PetDropService implements BUPluginLifecycle {
      * @param message the message to simulate
      */
     public void simulateGameMessage(String message) {
-        log.info("[CMD] PetDropService.simulateGameMessage called with: '{}'", message);
-
-        // Check for collection log message first
         Matcher collectionLogMatcher = COLLECTION_LOG_PATTERN.matcher(message);
-        log.info("[CMD] collectionLogMatcher.find(): {}", collectionLogMatcher.find());
-        // Reset matcher since find() consumes state
-        collectionLogMatcher.reset();
         if (collectionLogMatcher.find()) {
             String itemName = collectionLogMatcher.group(1);
-            log.info("[CMD] matched collection log, itemName: '{}'", itemName);
             handleCollectionLogPet(itemName);
-            log.info("[CMD] handleCollectionLogPet done");
             return;
         }
 
-        // Check for pet drop messages
         if (message.contains(PET_MESSAGE_FOLLOWING) ||
             message.contains(PET_MESSAGE_BACKPACK) ||
             message.contains(PET_MESSAGE_DUPLICATE)) {

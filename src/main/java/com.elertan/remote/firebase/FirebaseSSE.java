@@ -1,10 +1,11 @@
 package com.elertan.remote.firebase;
 
 import com.google.gson.JsonElement;
-import java.util.Objects;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 @Getter
+@EqualsAndHashCode
 public final class FirebaseSSE {
 
     private final FirebaseSSEType type;
@@ -23,23 +24,4 @@ public final class FirebaseSSE {
             + "}";
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (!(o instanceof FirebaseSSE)) {
-            return false;
-        }
-        FirebaseSSE that = (FirebaseSSE) o;
-        return Objects.equals(type, that.type) && Objects.equals(path, that.path) && Objects.equals(
-            data,
-            that.data
-        );
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(path, data);
-    }
 }

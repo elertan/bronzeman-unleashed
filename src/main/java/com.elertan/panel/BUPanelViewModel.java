@@ -3,10 +3,10 @@ package com.elertan.panel;
 import com.elertan.AccountConfigurationService;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.ui.Property;
+import com.elertan.utils.Subscription;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -15,15 +15,12 @@ import net.runelite.api.GameState;
 public final class BUPanelViewModel implements AutoCloseable {
 
     public final Property<Screen> screen = new Property<>(Screen.WAIT_FOR_LOGIN);
-    private final Consumer<AccountConfiguration> currentAccountConfigurationChangeListener = this::currentAccountConfigurationChangeListener;
-    private final AccountConfigurationService accountConfigurationService;
+    private Subscription accountConfigSubscription;
 
     private BUPanelViewModel(AccountConfigurationService accountConfigurationService,
         Client client) {
-        this.accountConfigurationService = accountConfigurationService;
-
-        accountConfigurationService.addCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::currentAccountConfigurationChangeListener);
 
         if (accountConfigurationService.isReady() && client.getGameState() == GameState.LOGGED_IN) {
             setScreenForAccountConfiguration(accountConfigurationService.getCurrentAccountConfiguration());
@@ -32,8 +29,10 @@ public final class BUPanelViewModel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        accountConfigurationService.removeCurrentAccountConfigurationChangeListener(
-            currentAccountConfigurationChangeListener);
+        if (accountConfigSubscription != null) {
+            accountConfigSubscription.dispose();
+            accountConfigSubscription = null;
+        }
     }
 
     private void currentAccountConfigurationChangeListener(

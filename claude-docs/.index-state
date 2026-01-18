@@ -1,0 +1,14 @@
+{
+  "hash": "a1cd0aefda59be2b47dcf9309f2c8ebb41b7f578",
+  "indexed_at": "2025-12-29T23:50:00Z",
+  "status": "complete",
+  "classification": "small",
+  "layers": ["plugin-core", "services", "policies", "data-providers", "remote-storage", "ui-panel", "overlays"],
+  "discovered_categories": ["core", "services", "policies", "models", "events", "chat", "data", "remote", "panel", "overlays", "utils", "ui"],
+  "counts": {
+    "reusables": 127,
+    "workflows": 12,
+    "patterns": 8
+  },
+  "version": "3.0"
+}

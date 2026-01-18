@@ -7,6 +7,7 @@ import com.google.gson.stream.JsonWriter;
 import java.io.IOException;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.coords.WorldPoint;
@@ -14,20 +15,16 @@ import net.runelite.api.coords.WorldPoint;
 @Slf4j
 @Builder
 @AllArgsConstructor
+@Getter
+@EqualsAndHashCode
 @JsonAdapter(GroundItemOwnedByKey.Adapter.class)
 public class GroundItemOwnedByKey implements Comparable<GroundItemOwnedByKey> {
 
-    @Getter
     private final int itemId;
-    @Getter
     private final int world;
-    @Getter
     private final int worldViewId;
-    @Getter
     private final int plane;
-    @Getter
     private final int worldX;
-    @Getter
     private final int worldY;
 
     public static GroundItemOwnedByKey of(int itemId, int world, int worldViewId, WorldPoint worldPoint) {
@@ -94,28 +91,6 @@ public class GroundItemOwnedByKey implements Comparable<GroundItemOwnedByKey> {
         sb.append(", key='").append(key).append('\'');
         sb.append('}');
         return sb.toString();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        GroundItemOwnedByKey that = (GroundItemOwnedByKey) o;
-        return itemId == that.itemId &&
-            world == that.world &&
-            worldViewId == that.worldViewId &&
-            plane == that.plane &&
-            worldX == that.worldX &&
-            worldY == that.worldY;
-    }
-
-    @Override
-    public int hashCode() {
-        return toKey().hashCode();
     }
 
     @Override

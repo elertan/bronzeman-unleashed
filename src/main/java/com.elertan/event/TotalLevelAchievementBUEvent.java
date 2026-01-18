@@ -1,11 +1,13 @@
 package com.elertan.event;
 
 import com.elertan.models.ISOOffsetDateTime;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
+@Getter
+@EqualsAndHashCode(callSuper = true)
 public class TotalLevelAchievementBUEvent extends BUEvent {
 
-    @Getter
     private final int totalLevel;
 
     public TotalLevelAchievementBUEvent(

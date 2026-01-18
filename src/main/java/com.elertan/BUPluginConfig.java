@@ -45,14 +45,9 @@ public interface BUPluginConfig extends Config {
         return false;
     }
 
-    @ConfigItem(keyName = "unlockOverlayFrameOuterColor", name = "Frame outer color", description = "The color used to draw the outer frame", section = overlaySection)
-    default Color unlockOverlayFrameOuterColor() {
-        return new Color(95, 85, 68);
-    }
-
-    @ConfigItem(keyName = "unlockOverlayFrameInnerColor", name = "Frame inner color", description = "The color used to draw the inner frame", section = overlaySection)
-    default Color unlockOverlayFrameInnerColor() {
-        return new Color(81, 69, 54);
+    @ConfigItem(keyName = "unlockOverlayFrameBorderColor", name = "Frame border color", description = "The color used to draw the frame border", section = overlaySection)
+    default Color unlockOverlayFrameBorderColor() {
+        return null;
     }
 
     @ConfigItem(keyName = "unlockOverlayItemTextColor", name = "Item text color", description = "The color used to draw the item text", section = overlaySection)

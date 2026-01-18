@@ -1,13 +1,14 @@
 package com.elertan.event;
 
 import com.elertan.models.ISOOffsetDateTime;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
+@Getter
+@EqualsAndHashCode(callSuper = true)
 public class CombatTaskAchievementBUEvent extends BUEvent {
 
-    @Getter
     private final String tier;
-    @Getter
     private final String name;
 
     public CombatTaskAchievementBUEvent(
