@@ -9,7 +9,6 @@ Helper classes for common operations.
 | `utils/AsyncUtils.java` | Async/threading utilities |
 | `utils/JsonUtils.java` | JSON serialization helpers |
 | `utils/Observable.java` | Thread-safe observable value with subscriptions |
-| `utils/CompositeSubscription.java` | Manages multiple subscriptions |
 | `utils/Subscription.java` | Subscription interface |
 | `utils/OffsetDateTimeUtils.java` | Date/time utilities |
 | `utils/TextUtils.java` | String utilities |
@@ -44,18 +43,6 @@ CompletableFuture<State> future = state.await(Duration.ofSeconds(10));
 
 // Cleanup
 sub.dispose();
-```
-
-### CompositeSubscription
-
-Manage multiple subscriptions:
-
-```java
-CompositeSubscription subs = new CompositeSubscription();
-subs.add(observable1.subscribe(...));
-subs.add(observable2.subscribe(...));
-// Later: dispose all at once
-subs.dispose();
 ```
 
 ### BUImageUtil

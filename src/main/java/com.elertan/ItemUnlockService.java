@@ -28,7 +28,6 @@ import net.runelite.http.api.worlds.World;
 import net.runelite.http.api.worlds.WorldResult;
 import net.runelite.http.api.worlds.WorldType;
 
-import com.elertan.utils.CompositeSubscription;
 import com.elertan.utils.Subscription;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -135,7 +134,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
         WorldType.FRESH_START_WORLD,
         WorldType.LAST_MAN_STANDING
     );
-    private final CompositeSubscription subscriptions = new CompositeSubscription();
+    private Subscription stateSubscription;
+    private Subscription accountConfigSubscription;
     @Inject
     private Client client;
     @Inject
@@ -254,15 +254,16 @@ public class ItemUnlockService implements BUPluginLifecycle {
             }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
-        subscriptions.add(unlockedItemsDataProvider.state()
-            .subscribe(state -> unlockedItemDataProviderStateListener(state)));
-        subscriptions.add(accountConfigurationService.currentAccountConfiguration()
-            .subscribe(this::currentAccountConfigurationChangeListener));
+        stateSubscription = unlockedItemsDataProvider.state()
+            .subscribe(state -> unlockedItemDataProviderStateListener(state));
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::currentAccountConfigurationChangeListener);
     }
 
     @Override
     public void shutDown() throws Exception {
-        subscriptions.dispose();
+        stateSubscription.dispose();
+        accountConfigSubscription.dispose();
         unlockedItemsDataProvider.removeUnlockedItemsMapListener(unlockedItemsMapListener);
     }
 
