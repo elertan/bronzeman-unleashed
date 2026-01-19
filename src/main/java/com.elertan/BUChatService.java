@@ -29,7 +29,7 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.VarbitID;
-import net.runelite.api.widgets.ComponentID;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
@@ -253,7 +253,7 @@ public class BUChatService implements BUPluginLifecycle {
 
         AccountConfiguration accountConfiguration = accountConfigurationService.getCurrentAccountConfiguration();
 
-        Widget chatboxInput = client.getWidget(ComponentID.CHATBOX_INPUT);
+        Widget chatboxInput = client.getWidget(InterfaceID.Chatbox.INPUT);
         if (chatboxInput == null) {
             return;
         }

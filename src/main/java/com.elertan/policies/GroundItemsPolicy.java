@@ -344,9 +344,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         final int sceneX = event.getParam0();
         final int sceneY = event.getParam1();
         final int itemId = event.getId();
-        final int plane = client.getPlane();
+        WorldView worldView = client.getTopLevelWorldView();
+        final int plane = worldView.getPlane();
 
-        Scene scene = client.getScene();
+        Scene scene = worldView.getScene();
         if (scene == null) {
             return null;
         }
