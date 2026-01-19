@@ -1,7 +1,7 @@
 ---
 date: 2026-01-19
 design-spec: ../designs/lombok-boilerplate-reduction.md
-status: in-progress
+status: completed
 executor: planspec:impl-spec-executor
 ---
 
