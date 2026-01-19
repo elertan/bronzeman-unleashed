@@ -231,6 +231,7 @@ public class MainViewViewModel implements AutoCloseable {
 
     }
 
+    @SuppressWarnings("unchecked")
     private void allUnlockedItemsListener(PropertyChangeEvent propertyChangeEvent) {
         List<UnlockedItem> newUnlockedItems = (List<UnlockedItem>) propertyChangeEvent.getNewValue();
         onNewUnlockedItems(newUnlockedItems);
