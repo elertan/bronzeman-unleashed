@@ -332,6 +332,13 @@ public class ItemUnlockService implements BUPluginLifecycle {
         TileItem tileItem = event.getItem();
         Tile tile = event.getTile();
 
+        // Only unlock items that belong to us (our drops when inventory is full)
+        // Ignore items dropped by other players
+        int ownership = tileItem.getOwnership();
+        if (ownership != TileItem.OWNERSHIP_SELF && ownership != TileItem.OWNERSHIP_GROUP) {
+            return;
+        }
+
         Player localPlayer = client.getLocalPlayer();
         if (localPlayer == null) {
             return;
