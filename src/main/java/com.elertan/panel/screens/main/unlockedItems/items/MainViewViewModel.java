@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import javax.swing.JOptionPane;
-import lombok.Getter;
+import lombok.Value;
 import net.runelite.api.Client;
 import net.runelite.api.NPCComposition;
 import net.runelite.client.callback.ClientThread;
@@ -312,23 +312,12 @@ public class MainViewViewModel implements AutoCloseable {
         }
     }
 
+    @Value
     public static class ListItem {
 
-        @Getter
-        private final UnlockedItem item;
-        @Getter
-        private final Member acquiredByMember;
-        @Getter
-        private final AsyncBufferedImage icon;
-        @Getter
-        private final String droppedByNPCName;
-
-        private ListItem(UnlockedItem item, Member acquiredByMember, AsyncBufferedImage icon,
-            String droppedByNPCName) {
-            this.item = item;
-            this.acquiredByMember = acquiredByMember;
-            this.icon = icon;
-            this.droppedByNPCName = droppedByNPCName;
-        }
+        UnlockedItem item;
+        Member acquiredByMember;
+        AsyncBufferedImage icon;
+        String droppedByNPCName;
     }
 }

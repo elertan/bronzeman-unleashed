@@ -4,8 +4,7 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.events.ChatMessage;
@@ -180,14 +179,13 @@ public class BUCommandService implements BUPluginLifecycle {
         buChatService.sendMessage("[Debug] Pet drop simulated");
     }
 
-    @AllArgsConstructor
-    @Getter
+    @Value
     private static class CommandInfo {
 
-        private final String name;
-        private final String description;
-        private final String args;
-        private final CommandHandler handler;
+        String name;
+        String description;
+        String args;
+        CommandHandler handler;
     }
 
     @FunctionalInterface

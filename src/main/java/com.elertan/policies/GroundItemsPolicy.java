@@ -26,9 +26,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 import lombok.NonNull;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
@@ -455,14 +454,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
     }
 
-    @AllArgsConstructor
+    @Value
     private static class GetClickedTileItemOutput {
 
-        @Getter
-        @NonNull
-        private Tile tile;
-        @Getter
-        @NonNull
-        private TileItem tileItem;
+        @NonNull Tile tile;
+        @NonNull TileItem tileItem;
     }
 }
