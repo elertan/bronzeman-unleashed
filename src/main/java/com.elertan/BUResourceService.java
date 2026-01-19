@@ -10,6 +10,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.ImageIcon;
 import lombok.Getter;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.IndexedSprite;
@@ -142,13 +143,9 @@ public class BUResourceService implements BUPluginLifecycle {
         return future;
     }
 
+    @Value
     public static class BUModIcons {
 
-        @Getter
-        final private int chatIconId;
-
-        public BUModIcons(int chatIconId) {
-            this.chatIconId = chatIconId;
-        }
+        int chatIconId;
     }
 }

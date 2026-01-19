@@ -9,7 +9,7 @@ import com.google.inject.Singleton;
 import java.beans.PropertyChangeListener;
 import java.time.OffsetDateTime;
 import java.util.function.Consumer;
-import lombok.Getter;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -158,28 +158,13 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         GameRulesEditorViewModel create(Props initialProps);
     }
 
+    @Value
     public static class Props {
 
-        @Getter
-        private final long accountHash;
-        @Getter
-        private final GameRules gameRules;
-        @Getter
-        private final Consumer<GameRules> onGameRulesChanged;
-        @Getter
-        private final boolean isViewOnlyMode;
-
-        public Props(
-            long accountHash,
-            GameRules gameRules,
-            Consumer<GameRules> onGameRulesChanged,
-            boolean isViewOnlyMode
-        ) {
-            this.accountHash = accountHash;
-            this.gameRules = gameRules;
-            this.onGameRulesChanged = onGameRulesChanged;
-            this.isViewOnlyMode = isViewOnlyMode;
-        }
+        long accountHash;
+        GameRules gameRules;
+        Consumer<GameRules> onGameRulesChanged;
+        boolean isViewOnlyMode;
     }
 
     @Singleton

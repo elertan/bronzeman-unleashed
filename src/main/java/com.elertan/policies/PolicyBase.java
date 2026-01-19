@@ -8,9 +8,8 @@ import com.elertan.models.AccountConfiguration;
 import com.elertan.models.GameRules;
 import java.util.function.Function;
 import javax.annotation.Nullable;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 import lombok.NonNull;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -58,14 +57,11 @@ public class PolicyBase implements BUPluginLifecycle {
         return new PolicyContext(gameRules, gameRulesNotLoaded);
     }
 
-    @AllArgsConstructor
+    @Value
     public static class PolicyContext {
 
-        @Getter
-        @Nullable
-        private final GameRules gameRules;
-        @Getter
-        private final boolean mustEnforceStrictPolicies;
+        @Nullable GameRules gameRules;
+        boolean mustEnforceStrictPolicies;
 
         public boolean shouldApplyForRules(
             Function<@NonNull GameRules, @NonNull Boolean> rulesApplier) {
