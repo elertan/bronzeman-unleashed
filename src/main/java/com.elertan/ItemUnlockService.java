@@ -161,6 +161,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private MinigameService minigameService;
+    @Inject
+    private CollectionLogService collectionLogService;
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private volatile boolean hasNotifiedPlayerOfNonSupportedWorldType = false;
 
@@ -170,14 +172,25 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
             @Override
             public void onUpdate(UnlockedItem unlockedItem) {
-                // We can consider these to be newly unlocked items
+                // Defer overlay to client thread to:
+                // 1. Ensure any collection log chat messages from the same tick are processed first
+                // 2. Safely access client.getAccountHash()
+                clientThread.invokeLater(() -> {
+                    boolean isLocalPlayer = client.getAccountHash() == unlockedItem.getAcquiredByAccountHash();
 
-                itemUnlockOverlay.enqueueShowUnlock(
-                    unlockedItem.getId(),
-                    unlockedItem.getAcquiredByAccountHash(),
-                    unlockedItem.getDroppedByNPCId()
-                );
+                    if (isLocalPlayer && collectionLogService.tryConsumeOverlaySuppression(unlockedItem.getName())) {
+                        // Suppress overlay - native collection log UI already shows it
+                        return;
+                    }
 
+                    itemUnlockOverlay.enqueueShowUnlock(
+                        unlockedItem.getId(),
+                        unlockedItem.getAcquiredByAccountHash(),
+                        unlockedItem.getDroppedByNPCId()
+                    );
+                });
+
+                // Chat notification - keep existing code below unchanged
                 boolean hideChat = buPluginConfig.hideUnlockChatInMinigames() && minigameService.isInMinigameOrInstance();
                 if (buPluginConfig.showItemUnlocksInChat() && !hideChat) {
                     buChatService.getItemIconTagIfEnabled(unlockedItem.getId())
