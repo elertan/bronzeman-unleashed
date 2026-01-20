@@ -118,6 +118,8 @@ public final class BUPlugin extends Plugin {
     private PetDropService petDropService;
     @Inject
     private BUCommandService buCommandService;
+    @Inject
+    private CollectionLogService collectionLogService;
 
     @Inject
     private Client client;
@@ -160,6 +162,7 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(lootValuationService);
         lifecycleDependencies.add(policyService);
         lifecycleDependencies.add(achievementDiaryService);
+        lifecycleDependencies.add(collectionLogService);
         // Policies
         lifecycleDependencies.add(grandExchangePolicy);
         lifecycleDependencies.add(tradePolicy);
@@ -257,6 +260,7 @@ public final class BUPlugin extends Plugin {
         achievementDiaryService.onGameStateChanged(event);
         itemUnlockService.onGameStateChanged(event);
         petDropService.onGameStateChanged(event);
+        collectionLogService.onGameStateChanged(event);
 
         grandExchangePolicy.onGameStateChanged(event);
     }
@@ -264,6 +268,7 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onGameTick(GameTick event) {
         petDropService.onGameTick(event);
+        collectionLogService.onGameTick(event);
     }
 
     @Subscribe

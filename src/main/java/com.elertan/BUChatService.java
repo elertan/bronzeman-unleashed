@@ -2,6 +2,7 @@ package com.elertan;
 
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
+import com.elertan.chat.CollectionLogUnlockParsedGameMessage;
 import com.elertan.chat.GameMessageParser;
 import com.elertan.chat.ParsedGameMessage;
 import com.elertan.event.BUEvent;
@@ -72,6 +73,8 @@ public class BUChatService implements BUPluginLifecycle {
     private ChatMessageProvider chatMessageProvider;
     @Inject
     private BUSoundHelper buSoundHelper;
+    @Inject
+    private CollectionLogService collectionLogService;
 
     @Override
     public void startUp() throws Exception {
@@ -119,6 +122,13 @@ public class BUChatService implements BUPluginLifecycle {
             GameMessageParser.tryParseGameMessage(chatMessage.getMessage());
         if (parsedGameMessage == null) {
             return;
+        }
+
+        // Track collection log unlocks for overlay suppression (must be synchronous, before async publish)
+        if (parsedGameMessage instanceof CollectionLogUnlockParsedGameMessage) {
+            CollectionLogUnlockParsedGameMessage clogMessage =
+                (CollectionLogUnlockParsedGameMessage) parsedGameMessage;
+            collectionLogService.addRecentCollectionLogUnlock(clogMessage.getItemName());
         }
 
         BUEvent event = GameMessageToEventTransformer.transformGameMessage(
