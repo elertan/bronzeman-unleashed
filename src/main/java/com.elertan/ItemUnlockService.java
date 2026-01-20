@@ -12,11 +12,10 @@ import com.google.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.ItemContainerChanged;
-import net.runelite.api.events.ItemSpawned;
+import net.runelite.api.events.*;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.events.ServerNpcLoot;
@@ -357,6 +356,26 @@ public class ItemUnlockService implements BUPluginLifecycle {
         }
 
         withErrorLogging(unlockItem(itemId), "Failed to unlock ground item");
+    }
+
+    // Code from: RuneProfile Plugin
+    // Repository: https://github.com/ReinhardtR/runeprofile-plugin
+    // License: BSD 2-Clause License
+    // Unlock all unlocked items from the collection log when the interface is opened
+    public void onScriptPreFired(ScriptPreFired preFired) {
+        if (preFired.getScriptId() != 4100) {
+            return;
+        }
+
+        // prevent reacting to scripts fired when opened from adventure log
+        // e.g. other plugins might fire the collection log script when viewing other players' collection logs
+        boolean isOpenedFromAdventureLog = client.getVarbitValue(VarbitID.COLLECTION_POH_HOST_BOOK_OPEN) == 1;
+        if (isOpenedFromAdventureLog) {
+            return;
+        }
+
+        int itemId = (int)preFired.getScriptEvent().getArguments()[1];
+        withErrorLogging(unlockItem(itemId), "Failed to unlock item in on script pre fired");
     }
 
     public boolean hasUnlockedItem(int initialItemId) throws IllegalStateException {

@@ -5,5 +5,6 @@ public enum ParsedGameMessageType {
     CombatLevelUp,
     TotalLevel,
     CombatTask,
-    QuestCompletion
+    QuestCompletion,
+    CollectionLogUnlock
 }

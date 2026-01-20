@@ -1,5 +1,7 @@
 package com.elertan;
 
+import com.elertan.chat.CollectionLogUnlockParsedGameMessage;
+import com.elertan.chat.GameMessageParser;
 import com.elertan.event.PetDropBUEvent;
 import com.elertan.models.ISOOffsetDateTime;
 import com.elertan.utils.TextUtils;
@@ -8,7 +10,6 @@ import com.google.inject.Singleton;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
@@ -170,22 +171,7 @@ public class PetDropService implements BUPluginLifecycle {
         }
 
         String message = event.getMessage();
-
-        // Check for collection log message first (gives exact pet name for first-time drops)
-        Matcher collectionLogMatcher = COLLECTION_LOG_PATTERN.matcher(message);
-        if (collectionLogMatcher.find()) {
-            String itemName = collectionLogMatcher.group(1);
-            // Check if this is a pet by looking up the item
-            handleCollectionLogPet(itemName);
-            return;
-        }
-
-        // Check for pet drop messages
-        if (message.contains(PET_MESSAGE_FOLLOWING) ||
-            message.contains(PET_MESSAGE_BACKPACK) ||
-            message.contains(PET_MESSAGE_DUPLICATE)) {
-            handlePetDropMessage(message);
-        }
+        handleGameMessage(message);
     }
 
     private void handleCollectionLogPet(String itemName) {
@@ -272,16 +258,16 @@ public class PetDropService implements BUPluginLifecycle {
     }
 
     /**
-     * Simulate a game message for testing pet detection. This bypasses the actual ChatMessage event
-     * and directly processes the message.
+     * Handle a game message
      *
-     * @param message the message to simulate
+     * @param message the message to handle
      */
-    public void simulateGameMessage(String message) {
-        Matcher collectionLogMatcher = COLLECTION_LOG_PATTERN.matcher(message);
-        if (collectionLogMatcher.find()) {
-            String itemName = collectionLogMatcher.group(1);
-            handleCollectionLogPet(itemName);
+    public void handleGameMessage(String message) {
+        // Check for collection log message first (gives exact pet name for first-time drops)
+        CollectionLogUnlockParsedGameMessage parsedGameMessage =
+            GameMessageParser.tryParseCollectionLogUnlock(message);
+        if (parsedGameMessage != null) {
+            handleCollectionLogPet(parsedGameMessage.getItemName());
             return;
         }
 

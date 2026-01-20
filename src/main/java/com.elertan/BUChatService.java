@@ -35,9 +35,9 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
-import net.runelite.client.game.ChatIconManager;
-import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.ColorUtil;
+
+import static com.elertan.utils.AsyncUtils.withErrorLogging;
 
 @Slf4j
 @Singleton
@@ -57,10 +57,6 @@ public class BUChatService implements BUPluginLifecycle {
     private ClientThread clientThread;
     @Inject
     private ChatMessageManager chatMessageManager;
-    @Inject
-    private ChatIconManager chatIconManager;
-    @Inject
-    private ItemManager itemManager;
     @Inject
     private BUPluginConfig config;
     @Inject
@@ -115,26 +111,25 @@ public class BUChatService implements BUPluginLifecycle {
             addIconToChatMessage(chatMessage);
         }
 
-        if (chatMessageType == ChatMessageType.GAMEMESSAGE) {
-            String message = chatMessage.getMessage();
-            ParsedGameMessage parsedGameMessage = GameMessageParser.tryParseGameMessage(message);
-            if (parsedGameMessage != null) {
-                BUEvent event = GameMessageToEventTransformer.transformGameMessage(
-                    parsedGameMessage,
-                    client.getAccountHash()
-                );
-                if (event != null) {
-                    buEventService.publishEvent(event).whenComplete((__, throwable) -> {
-                        if (throwable != null) {
-                            log.error("error publishing game message event", throwable);
-                            return;
-                        }
-
-                        log.info("published game message event");
-                    });
-                }
-            }
+        if (chatMessageType != ChatMessageType.GAMEMESSAGE) {
+            return;
         }
+
+        ParsedGameMessage parsedGameMessage =
+            GameMessageParser.tryParseGameMessage(chatMessage.getMessage());
+        if (parsedGameMessage == null) {
+            return;
+        }
+
+        BUEvent event = GameMessageToEventTransformer.transformGameMessage(
+            parsedGameMessage, client.getAccountHash());
+
+        if (event == null) {
+            return;
+        }
+
+        withErrorLogging(buEventService.publishEvent(event), "error publishing game message event")
+            .thenRun(() -> log.info("published game message event"));
     }
 
     public void onScriptCallbackEvent(ScriptCallbackEvent scriptCallbackEvent) {

@@ -342,6 +342,7 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onScriptPreFired(ScriptPreFired event) {
+        itemUnlockService.onScriptPreFired(event);
         playerOwnedHousePolicy.onScriptPreFired(event);
     }
 
