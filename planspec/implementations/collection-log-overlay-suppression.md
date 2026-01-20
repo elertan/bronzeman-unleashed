@@ -1,7 +1,8 @@
 ---
 date: 2026-01-20
 design-spec: ../designs/collection-log-overlay-suppression.md
-status: in-progress
+status: completed
+completed-date: 2026-01-20
 executor: planspec:impl-spec-executor
 ---
 
