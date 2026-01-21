@@ -1,0 +1,9 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="bronzeman-unleashed.main:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/bronzeman_unleashed_main_jar</output-path>
+    <root id="archive" name="bronzeman-unleashed.jar">
+      <element id="module-output" name="bronzeman-unleashed.main" />
+      <element id="dir-copy" path="$PROJECT_DIR$/src/main/resources" />
+    </root>
+  </artifact>
+</component>
