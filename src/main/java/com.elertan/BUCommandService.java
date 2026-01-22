@@ -8,7 +8,6 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.events.ChatMessage;
-import net.runelite.client.chat.ChatMessageBuilder;
 
 /**
  * Handles !bu: chat commands for plugin functionality and testing.
@@ -118,12 +117,7 @@ public class BUCommandService implements BUPluginLifecycle {
         }
 
         // Unknown command - show error
-        ChatMessageBuilder builder = new ChatMessageBuilder();
-        builder.append(
-            config.chatErrorColor(),
-            "Unknown command: !bu:" + commandName + ". Use !bu:help for list."
-        );
-        buChatService.sendMessage(builder.build());
+        buChatService.sendErrorMessage("Unknown command: !bu:" + commandName + ". Use !bu:help for list.");
         return true;
     }
 

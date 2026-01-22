@@ -178,6 +178,12 @@ public class BUChatService implements BUPluginLifecycle {
         buSoundHelper.playDisabledSound();
     }
 
+    public void sendErrorMessage(String message) {
+        ChatMessageBuilder builder = new ChatMessageBuilder();
+        builder.append(config.chatErrorColor(), message);
+        sendMessage(builder.build());
+    }
+
     public void sendMessage(String message) {
         log.debug("Sending chat message: {}", message);
 

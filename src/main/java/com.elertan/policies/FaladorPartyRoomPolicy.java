@@ -12,7 +12,6 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.util.Text;
 
 @Slf4j
@@ -53,11 +52,6 @@ public class FaladorPartyRoomPolicy extends PolicyBase {
         }
 
         event.consume();
-        ChatMessageBuilder builder = new ChatMessageBuilder();
-        builder.append(
-            buPluginConfig.chatRestrictionColor(),
-            chatMessageProvider.messageFor(MessageKey.FALADOR_PARTY_ROOM_BALLOON_RESTRICTION)
-        );
-        buChatService.sendMessage(builder.build());
+        buChatService.sendRestrictionMessage(MessageKey.FALADOR_PARTY_ROOM_BALLOON_RESTRICTION);
     }
 }
