@@ -74,18 +74,15 @@ public final class Observable<T> {
      */
     public void set(T newValue) {
         T oldValue = this.value;
+        boolean wasReady = hasBeenSet.getAndSet(true);
 
-        // Skip if value unchanged
-        if (Objects.equals(oldValue, newValue)) {
-            // Still mark as ready on first call, even if value is unchanged (e.g., null -> null)
-            hasBeenSet.set(true);
+        // Skip if value unchanged AND was already ready
+        // First set() must always notify (transition to ready state is meaningful)
+        if (wasReady && Objects.equals(oldValue, newValue)) {
             return;
         }
 
         this.value = newValue;
-        // First set() call transitions to Ready state
-        hasBeenSet.set(true);
-
         notifyListeners(newValue, oldValue);
     }
 
