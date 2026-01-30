@@ -4,7 +4,6 @@ import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
 import com.elertan.BUPluginConfig;
 import com.elertan.BUPluginLifecycle;
-import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
 import com.elertan.MemberService;
 import com.elertan.MinigameService;
@@ -41,7 +40,6 @@ import net.runelite.api.events.ItemDespawned;
 import net.runelite.api.events.ItemSpawned;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.chat.ChatMessageBuilder;
 
 @Slf4j
 public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
@@ -52,8 +50,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private ClientThread clientThread;
     @Inject
     private BUPluginConfig buPluginConfig;
-    @Inject
-    private BUSoundHelper buSoundHelper;
     @Inject
     private BUChatService buChatService;
     @Inject
@@ -256,12 +252,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 ));
             if (mustPerformCheck) {
                 event.consume();
-                ChatMessageBuilder builder = new ChatMessageBuilder();
-                builder.append(
-                    buPluginConfig.chatErrorColor(),
-                    chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT)
-                );
-                buChatService.sendMessage(builder.build());
+                buChatService.sendErrorMessage(chatMessageProvider.messageFor(
+                    MessageKey.STILL_LOADING_PLEASE_WAIT));
             }
             return;
         }
@@ -297,13 +289,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                             }
 
                             log.info("Player '{}' is not part of our group, deny take", droppedByPlayerName);
-                            event.consume();
-                            ChatMessageBuilder builder = new ChatMessageBuilder();
-                            builder.append(
-                                buPluginConfig.chatRestrictionColor(),
-                                chatMessageProvider.messageFor(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION)
-                            );
-                            buChatService.sendMessage(builder.build());
+                            buChatService.sendRestrictionMessage(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION);
                             return;
                         }
                     }
@@ -322,19 +308,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 && context.getGameRules().isRestrictGroundItems());
         if (mustPerformGroundItemsCheck) {
             event.consume();
-            ChatMessageBuilder builder = new ChatMessageBuilder();
-            if (isWidgetTargetOnGroundItemAction) {
-                builder.append(
-                    buPluginConfig.chatRestrictionColor(),
-                    chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_CAST_RESTRICTION)
-                );
-            } else {
-                builder.append(
-                    buPluginConfig.chatRestrictionColor(),
-                    chatMessageProvider.messageFor(MessageKey.GROUND_ITEM_TAKE_RESTRICTION)
-                );
-            }
-            buChatService.sendMessage(builder.build());
+            MessageKey messageKey = isWidgetTargetOnGroundItemAction
+                ? MessageKey.GROUND_ITEM_CAST_RESTRICTION
+                : MessageKey.GROUND_ITEM_TAKE_RESTRICTION;
+            buChatService.sendRestrictionMessage(messageKey);
         }
     }
 

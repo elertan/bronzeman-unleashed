@@ -4,7 +4,6 @@ import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
 import com.elertan.BUPluginConfig;
 import com.elertan.BUPluginLifecycle;
-import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
 import com.elertan.MinigameService;
 import com.elertan.PolicyService;
@@ -37,7 +36,6 @@ import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.game.ItemStack;
 
@@ -55,8 +53,6 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
     private GroundItemOwnedByDataProvider groundItemOwnedByDataProvider;
     @Inject
     private BUPluginConfig buPluginConfig;
-    @Inject
-    private BUSoundHelper buSoundHelper;
     @Inject
     private MinigameService minigameService;
 
@@ -247,28 +243,14 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
         if (widgetId == InterfaceID.WildyLootChest.ITEMS) {
             if (menuOption.startsWith("Take") || menuOption.startsWith("Bank")) {
                 event.consume();
-
-                ChatMessageBuilder builder = new ChatMessageBuilder();
-                builder.append(
-                    buPluginConfig.chatRestrictionColor(),
-                    chatMessageProvider.messageFor(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_KEY_RESTRICTION)
-                );
-                buChatService.sendMessage(builder.build());
-                buSoundHelper.playDisabledSound();
+                buChatService.sendRestrictionMessage(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_KEY_RESTRICTION);
                 return;
             }
         }
         if (widgetId == InterfaceID.WildyLootChest.WITHDRAWBANK
             || widgetId == InterfaceID.WildyLootChest.WITHDRAWINV) {
             event.consume();
-
-            ChatMessageBuilder builder = new ChatMessageBuilder();
-            builder.append(
-                buPluginConfig.chatRestrictionColor(),
-                chatMessageProvider.messageFor(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_KEY_RESTRICTION)
-            );
-            buChatService.sendMessage(builder.build());
-            buSoundHelper.playDisabledSound();
+            buChatService.sendRestrictionMessage(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_KEY_RESTRICTION);
         }
     }
 

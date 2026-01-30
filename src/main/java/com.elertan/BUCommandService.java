@@ -4,20 +4,18 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.events.ChatMessage;
-import net.runelite.client.chat.ChatMessageBuilder;
+import net.runelite.api.events.CommandExecuted;
 
 /**
- * Handles !bu: chat commands for plugin functionality and testing.
+ * Handles "::bu" commands for plugin functionality and testing.
  */
 @Slf4j
 @Singleton
 public class BUCommandService implements BUPluginLifecycle {
-
-    private static final String COMMAND_PREFIX = "!bu:";
 
     @Inject
     private BUPluginConfig config;
@@ -32,7 +30,12 @@ public class BUCommandService implements BUPluginLifecycle {
     @Override
     public void startUp() throws Exception {
         // General commands
-        commands.add(new CommandInfo("help", "Show available commands", null, this::handleHelp));
+        commands.add(new CommandInfo(
+            "help",
+            "Show available commands",
+            null,
+            this::handleHelp
+        ));
 
         // Debug commands for pet detection testing
         debugCommands.add(new CommandInfo(
@@ -68,85 +71,56 @@ public class BUCommandService implements BUPluginLifecycle {
     }
 
     /**
-     * Process a chat message and handle !bu: commands.
+     * Process a command executed event and handle "::bu" commands.
      *
-     * @param event the chat message event
-     * @return true if the message was a command and was consumed
+     * @param event the command executed event
      */
-    public boolean onChatMessage(ChatMessage event) {
-        if (event.getType() != ChatMessageType.PUBLICCHAT) {
-            return false;
+    public void onCommandExecuted(CommandExecuted event) {
+        if (!event.getCommand().equalsIgnoreCase("bu")) {
+            return;
         }
 
-        // Message format: "<img=X>PlayerName: !bu:command" or "PlayerName: !bu:command"
-        String message = event.getMessage();
-        int prefixIndex = message.toLowerCase().indexOf(COMMAND_PREFIX);
-        if (prefixIndex < 0) {
-            return false;
+        String[] args = event.getArguments();
+        if (args.length == 0) {
+            buChatService.sendErrorMessage("Please enter a subcommand. Use ::bu help for list.");
+            return;
         }
 
-        String commandString = message.substring(prefixIndex + COMMAND_PREFIX.length());
-        String commandName;
-        String argument = null;
-
-        int colonIndex = commandString.indexOf(':');
-        if (colonIndex >= 0) {
-            commandName = commandString.substring(0, colonIndex).toLowerCase();
-            argument = commandString.substring(colonIndex + 1);
-        } else {
-            commandName = commandString.toLowerCase();
-        }
+        String commandName = args[0].toLowerCase();
+        String argument = args.length > 1 ? args[1] : null;
 
         log.info("Parsed command: '{}', argument: '{}'", commandName, argument);
 
-        // Check regular commands first
-        for (CommandInfo cmd : commands) {
-            if (cmd.getName().equals(commandName)) {
-                cmd.getHandler().handle(argument);
-                return true;
-            }
-        }
+        Stream<CommandInfo> commandStream = config.enableDebugCommands()
+            ? Stream.concat(commands.stream(), debugCommands.stream())
+            : commands.stream();
 
-        // Check debug commands if enabled
-        if (config.enableDebugCommands()) {
-            for (CommandInfo cmd : debugCommands) {
-                if (cmd.getName().equals(commandName)) {
-                    cmd.getHandler().handle(argument);
-                    return true;
-                }
-            }
-        }
-
-        // Unknown command - show error
-        ChatMessageBuilder builder = new ChatMessageBuilder();
-        builder.append(
-            config.chatErrorColor(),
-            "Unknown command: !bu:" + commandName + ". Use !bu:help for list."
-        );
-        buChatService.sendMessage(builder.build());
-        return true;
+        commandStream
+            .filter(c -> c.getName().equals(commandName))
+            .findFirst()
+            .ifPresentOrElse(
+                c -> c.getHandler().handle(argument),
+                () -> buChatService.sendErrorMessage(
+                    "Unknown command: ::bu " + commandName + ". Use ::bu help for list.")
+            );
     }
 
     private void handleHelp(String arg) {
-        buChatService.sendMessage("[BU Commands]");
-        for (CommandInfo cmd : commands) {
-            buChatService.sendMessage(formatCommandHelp(cmd));
+        buChatService.sendMessage("[Bronzeman Unleashed Commands]");
+        commands.stream().map(this::formatCommandHelp).forEach(buChatService::sendMessage);
+
+        if (!config.enableDebugCommands() || debugCommands.isEmpty()) {
+            return;
         }
 
-        if (config.enableDebugCommands() && !debugCommands.isEmpty()) {
-            buChatService.sendMessage("[Debug Commands]");
-            for (CommandInfo cmd : debugCommands) {
-                buChatService.sendMessage(formatCommandHelp(cmd));
-            }
-        }
+        buChatService.sendMessage("[Debug Commands]");
+        debugCommands.stream().map(this::formatCommandHelp).forEach(buChatService::sendMessage);
     }
 
     private String formatCommandHelp(CommandInfo cmd) {
         StringBuilder sb = new StringBuilder();
-        sb.append("!bu:").append(cmd.getName());
-        if (cmd.getArgs() != null) {
-            sb.append(":").append(cmd.getArgs());
-        }
+        sb.append("::bu ").append(cmd.getName());
+        Optional.ofNullable(cmd.getArgs()).ifPresent((args) -> sb.append(" ").append(args));
         sb.append(" - ").append(cmd.getDescription());
         return sb.toString();
     }
@@ -168,7 +142,7 @@ public class BUCommandService implements BUPluginLifecycle {
 
     private void handlePetCollection(String petName) {
         if (petName == null || petName.isEmpty()) {
-            buChatService.sendMessage("Usage: !bu:pet_collection:<name>");
+            buChatService.sendMessage("Usage: ::bu pet_collection <name>");
             return;
         }
         simulatePetMessage("New item added to your collection log: " + petName);

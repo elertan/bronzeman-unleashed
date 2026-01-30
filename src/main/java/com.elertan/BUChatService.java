@@ -37,6 +37,7 @@ import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.util.ColorUtil;
+import net.runelite.client.util.Text;
 
 import static com.elertan.utils.AsyncUtils.withErrorLogging;
 
@@ -178,53 +179,48 @@ public class BUChatService implements BUPluginLifecycle {
         buSoundHelper.playDisabledSound();
     }
 
+    public void sendErrorMessage(String message) {
+        ChatMessageBuilder builder = new ChatMessageBuilder();
+        builder.append(config.chatErrorColor(), message);
+        sendMessage(builder.build());
+    }
+
     public void sendMessage(String message) {
         log.debug("Sending chat message: {}", message);
 
-        waitForIsChatboxTransparentSet(null)
-            .whenComplete((__, throwable) -> {
-                if (throwable != null) {
-                    log.error("error waiting for isChatboxTransparent to become ready", throwable);
-                    return;
+        withErrorLogging(isChatboxTransparent.await(null),
+            "error waiting for isChatboxTransparent to become ready")
+            .thenAccept((isTransparent) -> {
+                String messageChatIcon = getMessageChatIconTag();
+
+                if (messageChatIcon == null) {
+                    throw new IllegalStateException("Chat icon has not been set");
+                }
+                Color chatColor = Boolean.TRUE.equals(isTransparent) ? config.chatColorTransparent()
+                    : config.chatColorOpaque();
+
+                ChatMessageBuilder builder = new ChatMessageBuilder();
+                // We need to supply a color here, otherwise the image does not work...
+                builder.append(chatColor, messageChatIcon + " ");
+                // Replacing all closing cols with our chat color to reset it back to our default
+                if (config.useChatColor()) {
+                    String pluginChatColorTag = ColorUtil.colorTag(chatColor);
+                    String chatColorFixedMessage = message.replaceAll(
+                        "</col>",
+                        pluginChatColorTag
+                    );
+                    builder.append(chatColor, chatColorFixedMessage);
+                } else {
+                    builder.append(message);
                 }
 
-                clientThread.invoke(() -> {
-                    String messageChatIcon = getMessageChatIconTag();
-
-                    if (messageChatIcon == null) {
-                        throw new IllegalStateException("Chat icon has not been set");
-                    }
-                    Boolean isTransparent = isChatboxTransparent.get();
-                    Color chatColor = Boolean.TRUE.equals(isTransparent) ? config.chatColorTransparent()
-                        : config.chatColorOpaque();
-
-                    ChatMessageBuilder builder = new ChatMessageBuilder();
-                    // We need to supply a color here, otherwise the image does not work...
-                    builder.append(chatColor, messageChatIcon);
-                    // Replacing all closing cols with our chat color to reset it back to our default
-                    if (config.useChatColor()) {
-                        String pluginChatColorTag = ColorUtil.colorTag(chatColor);
-                        String chatColorFixedMessage = message.replaceAll(
-                            "</col>",
-                            pluginChatColorTag
-                        );
-                        builder.append(chatColor, " " + chatColorFixedMessage);
-                    } else {
-                        builder.append(" " + message);
-                    }
-
-                    String formattedMessage = builder.build();
-                    QueuedMessage queuedMessage = QueuedMessage.builder()
-                        .type(ChatMessageType.GAMEMESSAGE)
-                        .runeLiteFormattedMessage(formattedMessage)
-                        .build();
-                    chatMessageManager.queue(queuedMessage);
-                });
+                String formattedMessage = builder.build();
+                QueuedMessage queuedMessage = QueuedMessage.builder()
+                    .type(ChatMessageType.GAMEMESSAGE)
+                    .runeLiteFormattedMessage(formattedMessage)
+                    .build();
+                clientThread.invoke(() -> chatMessageManager.queue(queuedMessage));
             });
-    }
-
-    public CompletableFuture<Boolean> waitForIsChatboxTransparentSet(Duration timeout) {
-        return isChatboxTransparent.await(timeout);
     }
 
     private void setIsChatboxTransparent(Boolean isTransparent) {

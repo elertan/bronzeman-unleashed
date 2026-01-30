@@ -25,6 +25,7 @@ import net.runelite.api.Client;
 import net.runelite.api.events.AccountHashChanged;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ItemDespawned;
@@ -289,12 +290,13 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onChatMessage(ChatMessage chatMessage) {
-        // Command service first - it may consume the event
-        if (buCommandService.onChatMessage(chatMessage)) {
-            return;
-        }
         buChatService.onChatMessage(chatMessage);
         petDropService.onChatMessage(chatMessage);
+    }
+
+    @Subscribe
+    public void onCommandExecuted(CommandExecuted event) {
+        buCommandService.onCommandExecuted(event);
     }
 
     @Subscribe
