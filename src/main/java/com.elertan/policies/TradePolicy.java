@@ -8,6 +8,7 @@ import com.elertan.GameRulesService;
 import com.elertan.ItemUnlockService;
 import com.elertan.MemberService;
 import com.elertan.PolicyService;
+import com.elertan.WorldTypeService;
 import com.elertan.models.GameRules;
 import com.elertan.models.Member;
 import com.elertan.utils.TextUtils;
@@ -35,8 +36,9 @@ public class TradePolicy extends PolicyBase {
 
     @Inject
     public TradePolicy(AccountConfigurationService accountConfigurationService,
-        GameRulesService gameRulesService, PolicyService policyService) {
-        super(accountConfigurationService, gameRulesService, policyService);
+        GameRulesService gameRulesService, PolicyService policyService,
+        WorldTypeService worldTypeService) {
+        super(accountConfigurationService, gameRulesService, policyService, worldTypeService);
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {

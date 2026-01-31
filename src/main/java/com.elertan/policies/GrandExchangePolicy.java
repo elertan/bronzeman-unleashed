@@ -4,6 +4,7 @@ import com.elertan.AccountConfigurationService;
 import com.elertan.GameRulesService;
 import com.elertan.ItemUnlockService;
 import com.elertan.PolicyService;
+import com.elertan.WorldTypeService;
 import com.elertan.models.GameRules;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -32,9 +33,10 @@ public class GrandExchangePolicy extends PolicyBase {
     @Inject
     public GrandExchangePolicy(
         AccountConfigurationService accountConfigurationService,
-        GameRulesService gameRulesService, PolicyService policyService
+        GameRulesService gameRulesService, PolicyService policyService,
+        WorldTypeService worldTypeService
     ) {
-        super(accountConfigurationService, gameRulesService, policyService);
+        super(accountConfigurationService, gameRulesService, policyService, worldTypeService);
     }
 
     @Override

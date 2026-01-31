@@ -8,6 +8,7 @@ import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
 import com.elertan.MinigameService;
 import com.elertan.PolicyService;
+import com.elertan.WorldTypeService;
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
 import com.elertan.data.GroundItemOwnedByDataProvider;
@@ -64,8 +65,9 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
 
     @Inject
     public PlayerVersusPlayerPolicy(AccountConfigurationService accountConfigurationService,
-        GameRulesService gameRulesService, PolicyService policyService) {
-        super(accountConfigurationService, gameRulesService, policyService);
+        GameRulesService gameRulesService, PolicyService policyService,
+        WorldTypeService worldTypeService) {
+        super(accountConfigurationService, gameRulesService, policyService, worldTypeService);
     }
 
     @Override
