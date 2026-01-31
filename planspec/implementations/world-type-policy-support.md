@@ -1,7 +1,7 @@
 ---
 date: 2026-01-31
 design-spec: ../designs/world-type-policy-support.md
-status: ready
+status: completed
 executor: planspec:impl-spec-executor
 ---
 
