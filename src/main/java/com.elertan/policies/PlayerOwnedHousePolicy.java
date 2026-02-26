@@ -28,7 +28,6 @@ import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.input.KeyListener;
 import net.runelite.client.input.KeyManager;
 
@@ -353,24 +352,12 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
         try {
             member = memberService.getMemberByName(playerName);
         } catch (Exception ex) {
-            ChatMessageBuilder builder = new ChatMessageBuilder();
-            builder.append(
-                buPluginConfig.chatErrorColor(),
-                chatMessageProvider.messageFor(MessageKey.STILL_LOADING_PLEASE_WAIT)
-            );
-            buChatService.sendMessage(builder.build());
-            buSoundHelper.playDisabledSound();
+            buChatService.sendRestrictionMessage(MessageKey.STILL_LOADING_PLEASE_WAIT);
             return false;
         }
 
         if (member == null) {
-            ChatMessageBuilder builder = new ChatMessageBuilder();
-            builder.append(
-                buPluginConfig.chatRestrictionColor(),
-                chatMessageProvider.messageFor(MessageKey.POH_ENTER_RESTRICTION)
-            );
-            buChatService.sendMessage(builder.build());
-            buSoundHelper.playDisabledSound();
+            buChatService.sendRestrictionMessage(MessageKey.POH_ENTER_RESTRICTION);
             return false;
         }
 

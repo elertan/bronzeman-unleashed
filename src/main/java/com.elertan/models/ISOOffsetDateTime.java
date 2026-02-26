@@ -7,18 +7,16 @@ import com.google.gson.stream.JsonWriter;
 import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @JsonAdapter(ISOOffsetDateTime.Adapter.class)
+@Getter
+@AllArgsConstructor
 public final class ISOOffsetDateTime {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
-    @Getter
     private final OffsetDateTime value;
-
-    public ISOOffsetDateTime(OffsetDateTime value) {
-        this.value = value;
-    }
 
     @Override
     public String toString() {

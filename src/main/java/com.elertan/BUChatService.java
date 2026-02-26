@@ -2,6 +2,7 @@ package com.elertan;
 
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
+import com.elertan.chat.CollectionLogUnlockParsedGameMessage;
 import com.elertan.chat.GameMessageParser;
 import com.elertan.chat.ParsedGameMessage;
 import com.elertan.event.BUEvent;
@@ -29,15 +30,16 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.VarbitID;
-import net.runelite.api.widgets.ComponentID;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
-import net.runelite.client.game.ChatIconManager;
-import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.ColorUtil;
+import net.runelite.client.util.Text;
+
+import static com.elertan.utils.AsyncUtils.withErrorLogging;
 
 @Slf4j
 @Singleton
@@ -58,10 +60,6 @@ public class BUChatService implements BUPluginLifecycle {
     @Inject
     private ChatMessageManager chatMessageManager;
     @Inject
-    private ChatIconManager chatIconManager;
-    @Inject
-    private ItemManager itemManager;
-    @Inject
     private BUPluginConfig config;
     @Inject
     private AccountConfigurationService accountConfigurationService;
@@ -76,6 +74,8 @@ public class BUChatService implements BUPluginLifecycle {
     private ChatMessageProvider chatMessageProvider;
     @Inject
     private BUSoundHelper buSoundHelper;
+    @Inject
+    private CollectionLogService collectionLogService;
 
     @Override
     public void startUp() throws Exception {
@@ -115,26 +115,32 @@ public class BUChatService implements BUPluginLifecycle {
             addIconToChatMessage(chatMessage);
         }
 
-        if (chatMessageType == ChatMessageType.GAMEMESSAGE) {
-            String message = chatMessage.getMessage();
-            ParsedGameMessage parsedGameMessage = GameMessageParser.tryParseGameMessage(message);
-            if (parsedGameMessage != null) {
-                BUEvent event = GameMessageToEventTransformer.transformGameMessage(
-                    parsedGameMessage,
-                    client.getAccountHash()
-                );
-                if (event != null) {
-                    buEventService.publishEvent(event).whenComplete((__, throwable) -> {
-                        if (throwable != null) {
-                            log.error("error publishing game message event", throwable);
-                            return;
-                        }
-
-                        log.info("published game message event");
-                    });
-                }
-            }
+        if (chatMessageType != ChatMessageType.GAMEMESSAGE) {
+            return;
         }
+
+        ParsedGameMessage parsedGameMessage =
+            GameMessageParser.tryParseGameMessage(chatMessage.getMessage());
+        if (parsedGameMessage == null) {
+            return;
+        }
+
+        // Track collection log unlocks for overlay suppression (must be synchronous, before async publish)
+        if (parsedGameMessage instanceof CollectionLogUnlockParsedGameMessage) {
+            CollectionLogUnlockParsedGameMessage clogMessage =
+                (CollectionLogUnlockParsedGameMessage) parsedGameMessage;
+            collectionLogService.addRecentCollectionLogUnlock(clogMessage.getItemName());
+        }
+
+        BUEvent event = GameMessageToEventTransformer.transformGameMessage(
+            parsedGameMessage, client.getAccountHash());
+
+        if (event == null) {
+            return;
+        }
+
+        withErrorLogging(buEventService.publishEvent(event), "error publishing game message event")
+            .thenRun(() -> log.info("published game message event"));
     }
 
     public void onScriptCallbackEvent(ScriptCallbackEvent scriptCallbackEvent) {
@@ -173,53 +179,48 @@ public class BUChatService implements BUPluginLifecycle {
         buSoundHelper.playDisabledSound();
     }
 
+    public void sendErrorMessage(String message) {
+        ChatMessageBuilder builder = new ChatMessageBuilder();
+        builder.append(config.chatErrorColor(), message);
+        sendMessage(builder.build());
+    }
+
     public void sendMessage(String message) {
         log.debug("Sending chat message: {}", message);
 
-        waitForIsChatboxTransparentSet(null)
-            .whenComplete((__, throwable) -> {
-                if (throwable != null) {
-                    log.error("error waiting for isChatboxTransparent to become ready", throwable);
-                    return;
+        withErrorLogging(isChatboxTransparent.await(null),
+            "error waiting for isChatboxTransparent to become ready")
+            .thenAccept((isTransparent) -> {
+                String messageChatIcon = getMessageChatIconTag();
+
+                if (messageChatIcon == null) {
+                    throw new IllegalStateException("Chat icon has not been set");
+                }
+                Color chatColor = Boolean.TRUE.equals(isTransparent) ? config.chatColorTransparent()
+                    : config.chatColorOpaque();
+
+                ChatMessageBuilder builder = new ChatMessageBuilder();
+                // We need to supply a color here, otherwise the image does not work...
+                builder.append(chatColor, messageChatIcon + " ");
+                // Replacing all closing cols with our chat color to reset it back to our default
+                if (config.useChatColor()) {
+                    String pluginChatColorTag = ColorUtil.colorTag(chatColor);
+                    String chatColorFixedMessage = message.replaceAll(
+                        "</col>",
+                        pluginChatColorTag
+                    );
+                    builder.append(chatColor, chatColorFixedMessage);
+                } else {
+                    builder.append(message);
                 }
 
-                clientThread.invoke(() -> {
-                    String messageChatIcon = getMessageChatIconTag();
-
-                    if (messageChatIcon == null) {
-                        throw new IllegalStateException("Chat icon has not been set");
-                    }
-                    Boolean isTransparent = isChatboxTransparent.get();
-                    Color chatColor = Boolean.TRUE.equals(isTransparent) ? config.chatColorTransparent()
-                        : config.chatColorOpaque();
-
-                    ChatMessageBuilder builder = new ChatMessageBuilder();
-                    // We need to supply a color here, otherwise the image does not work...
-                    builder.append(chatColor, messageChatIcon);
-                    // Replacing all closing cols with our chat color to reset it back to our default
-                    if (config.useChatColor()) {
-                        String pluginChatColorTag = ColorUtil.colorTag(chatColor);
-                        String chatColorFixedMessage = message.replaceAll(
-                            "</col>",
-                            pluginChatColorTag
-                        );
-                        builder.append(chatColor, " " + chatColorFixedMessage);
-                    } else {
-                        builder.append(" " + message);
-                    }
-
-                    String formattedMessage = builder.build();
-                    QueuedMessage queuedMessage = QueuedMessage.builder()
-                        .type(ChatMessageType.GAMEMESSAGE)
-                        .runeLiteFormattedMessage(formattedMessage)
-                        .build();
-                    chatMessageManager.queue(queuedMessage);
-                });
+                String formattedMessage = builder.build();
+                QueuedMessage queuedMessage = QueuedMessage.builder()
+                    .type(ChatMessageType.GAMEMESSAGE)
+                    .runeLiteFormattedMessage(formattedMessage)
+                    .build();
+                clientThread.invoke(() -> chatMessageManager.queue(queuedMessage));
             });
-    }
-
-    public CompletableFuture<Boolean> waitForIsChatboxTransparentSet(Duration timeout) {
-        return isChatboxTransparent.await(timeout);
     }
 
     private void setIsChatboxTransparent(Boolean isTransparent) {
@@ -253,7 +254,7 @@ public class BUChatService implements BUPluginLifecycle {
 
         AccountConfiguration accountConfiguration = accountConfigurationService.getCurrentAccountConfiguration();
 
-        Widget chatboxInput = client.getWidget(ComponentID.CHATBOX_INPUT);
+        Widget chatboxInput = client.getWidget(InterfaceID.Chatbox.INPUT);
         if (chatboxInput == null) {
             return;
         }

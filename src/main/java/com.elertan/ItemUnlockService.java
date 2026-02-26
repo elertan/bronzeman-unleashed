@@ -12,11 +12,10 @@ import com.google.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.ItemContainerChanged;
-import net.runelite.api.events.ItemSpawned;
+import net.runelite.api.events.*;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.events.ServerNpcLoot;
@@ -162,6 +161,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private AccountConfigurationService accountConfigurationService;
     @Inject
     private MinigameService minigameService;
+    @Inject
+    private CollectionLogService collectionLogService;
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private volatile boolean hasNotifiedPlayerOfNonSupportedWorldType = false;
 
@@ -171,14 +172,25 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
             @Override
             public void onUpdate(UnlockedItem unlockedItem) {
-                // We can consider these to be newly unlocked items
+                // Defer overlay to client thread to:
+                // 1. Ensure any collection log chat messages from the same tick are processed first
+                // 2. Safely access client.getAccountHash()
+                clientThread.invokeLater(() -> {
+                    boolean isLocalPlayer = client.getAccountHash() == unlockedItem.getAcquiredByAccountHash();
 
-                itemUnlockOverlay.enqueueShowUnlock(
-                    unlockedItem.getId(),
-                    unlockedItem.getAcquiredByAccountHash(),
-                    unlockedItem.getDroppedByNPCId()
-                );
+                    if (isLocalPlayer && collectionLogService.tryConsumeOverlaySuppression(unlockedItem.getName())) {
+                        // Suppress overlay - native collection log UI already shows it
+                        return;
+                    }
 
+                    itemUnlockOverlay.enqueueShowUnlock(
+                        unlockedItem.getId(),
+                        unlockedItem.getAcquiredByAccountHash(),
+                        unlockedItem.getDroppedByNPCId()
+                    );
+                });
+
+                // Chat notification - keep existing code below unchanged
                 boolean hideChat = buPluginConfig.hideUnlockChatInMinigames() && minigameService.isInMinigameOrInstance();
                 if (buPluginConfig.showItemUnlocksInChat() && !hideChat) {
                     buChatService.getItemIconTagIfEnabled(unlockedItem.getId())
@@ -332,6 +344,13 @@ public class ItemUnlockService implements BUPluginLifecycle {
         TileItem tileItem = event.getItem();
         Tile tile = event.getTile();
 
+        // Only unlock items that belong to us (our drops when inventory is full)
+        // Ignore items dropped by other players
+        int ownership = tileItem.getOwnership();
+        if (ownership != TileItem.OWNERSHIP_SELF && ownership != TileItem.OWNERSHIP_GROUP) {
+            return;
+        }
+
         Player localPlayer = client.getLocalPlayer();
         if (localPlayer == null) {
             return;
@@ -350,6 +369,26 @@ public class ItemUnlockService implements BUPluginLifecycle {
         }
 
         withErrorLogging(unlockItem(itemId), "Failed to unlock ground item");
+    }
+
+    // Code from: RuneProfile Plugin
+    // Repository: https://github.com/ReinhardtR/runeprofile-plugin
+    // License: BSD 2-Clause License
+    // Unlock all unlocked items from the collection log when the interface is opened
+    public void onScriptPreFired(ScriptPreFired preFired) {
+        if (preFired.getScriptId() != 4100) {
+            return;
+        }
+
+        // prevent reacting to scripts fired when opened from adventure log
+        // e.g. other plugins might fire the collection log script when viewing other players' collection logs
+        boolean isOpenedFromAdventureLog = client.getVarbitValue(VarbitID.COLLECTION_POH_HOST_BOOK_OPEN) == 1;
+        if (isOpenedFromAdventureLog) {
+            return;
+        }
+
+        int itemId = (int)preFired.getScriptEvent().getArguments()[1];
+        withErrorLogging(unlockItem(itemId), "Failed to unlock item in on script pre fired");
     }
 
     public boolean hasUnlockedItem(int initialItemId) throws IllegalStateException {

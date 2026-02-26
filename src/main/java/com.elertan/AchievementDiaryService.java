@@ -10,9 +10,7 @@ import com.google.inject.Inject;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -323,13 +321,10 @@ public class AchievementDiaryService implements BUPluginLifecycle {
         return inverse.get(new AchievementDiaryVarbitInfo(area, tier));
     }
 
-    @AllArgsConstructor
-    @EqualsAndHashCode
+    @Value
     private static class AchievementDiaryVarbitInfo {
 
-        @Getter
-        private final AchievementDiaryArea area;
-        @Getter
-        private final AchievementDiaryTier tier;
+        AchievementDiaryArea area;
+        AchievementDiaryTier tier;
     }
 }

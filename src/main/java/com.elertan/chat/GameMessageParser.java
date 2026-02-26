@@ -22,12 +22,16 @@ public class GameMessageParser {
     private static final Pattern QUEST_COMPLETE =
         Pattern.compile("Congratulations, you've completed a quest: (.+)");
 
+    private static final Pattern COLLECTION_LOG_UNLOCK =
+        Pattern.compile("New item added to your collection log: (.+)");
+
     private static final List<Function<String, ParsedGameMessage>> allParsers = Arrays.asList(
         GameMessageParser::tryParseLevelUp,
         GameMessageParser::tryParseTotalLevel,
         GameMessageParser::tryParseCombatTask,
         GameMessageParser::tryParseQuestComplete,
-        GameMessageParser::tryParseMaxLevelUp
+        GameMessageParser::tryParseMaxLevelUp,
+        GameMessageParser::tryParseCollectionLogUnlock
     );
 
     public static ParsedGameMessage tryParseGameMessage(String message) {
@@ -95,5 +99,15 @@ public class GameMessageParser {
         String skill = matcher.group(1);
         int level = Integer.parseInt(matcher.group(2));
         return new SkillLevelUpParsedGameMessage(skill, level);
+    }
+
+    public static CollectionLogUnlockParsedGameMessage tryParseCollectionLogUnlock(String message) {
+        Matcher matcher = COLLECTION_LOG_UNLOCK.matcher(message);
+        if (!matcher.find()) {
+            return null;
+        }
+
+        String itemName = matcher.group(1);
+        return new CollectionLogUnlockParsedGameMessage(itemName);
     }
 }

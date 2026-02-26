@@ -25,6 +25,7 @@ import net.runelite.api.Client;
 import net.runelite.api.events.AccountHashChanged;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ItemDespawned;
@@ -118,6 +119,8 @@ public final class BUPlugin extends Plugin {
     private PetDropService petDropService;
     @Inject
     private BUCommandService buCommandService;
+    @Inject
+    private CollectionLogService collectionLogService;
 
     @Inject
     private Client client;
@@ -160,6 +163,7 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(lootValuationService);
         lifecycleDependencies.add(policyService);
         lifecycleDependencies.add(achievementDiaryService);
+        lifecycleDependencies.add(collectionLogService);
         // Policies
         lifecycleDependencies.add(grandExchangePolicy);
         lifecycleDependencies.add(tradePolicy);
@@ -257,6 +261,7 @@ public final class BUPlugin extends Plugin {
         achievementDiaryService.onGameStateChanged(event);
         itemUnlockService.onGameStateChanged(event);
         petDropService.onGameStateChanged(event);
+        collectionLogService.onGameStateChanged(event);
 
         grandExchangePolicy.onGameStateChanged(event);
     }
@@ -264,6 +269,7 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onGameTick(GameTick event) {
         petDropService.onGameTick(event);
+        collectionLogService.onGameTick(event);
     }
 
     @Subscribe
@@ -284,12 +290,13 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onChatMessage(ChatMessage chatMessage) {
-        // Command service first - it may consume the event
-        if (buCommandService.onChatMessage(chatMessage)) {
-            return;
-        }
         buChatService.onChatMessage(chatMessage);
         petDropService.onChatMessage(chatMessage);
+    }
+
+    @Subscribe
+    public void onCommandExecuted(CommandExecuted event) {
+        buCommandService.onCommandExecuted(event);
     }
 
     @Subscribe
@@ -342,6 +349,7 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onScriptPreFired(ScriptPreFired event) {
+        itemUnlockService.onScriptPreFired(event);
         playerOwnedHousePolicy.onScriptPreFired(event);
     }
 

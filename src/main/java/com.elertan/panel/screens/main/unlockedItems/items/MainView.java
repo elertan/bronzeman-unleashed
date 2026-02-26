@@ -147,9 +147,6 @@ public class MainView extends JPanel implements AutoCloseable {
             AsyncBufferedImage icon = listItem.getIcon();
             icon.addTo(label);
 
-            // repaint when image loads
-            icon.onLoaded(jl::repaint);
-
             UnlockedItem item = listItem.getItem();
             // rich tooltip
             String name = item.getName();
