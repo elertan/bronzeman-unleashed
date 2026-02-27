@@ -1,5 +1,11 @@
 package com.elertan.chat;
 
+import com.elertan.chat.ParsedGameMessage.CombatLevelUpParsedGameMessage;
+import com.elertan.chat.ParsedGameMessage.CombatTaskParsedGameMessage;
+import com.elertan.chat.ParsedGameMessage.CollectionLogUnlockParsedGameMessage;
+import com.elertan.chat.ParsedGameMessage.QuestCompletionParsedGameMessage;
+import com.elertan.chat.ParsedGameMessage.SkillLevelUpParsedGameMessage;
+import com.elertan.chat.ParsedGameMessage.TotalLevelParsedGameMessage;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
@@ -9,105 +15,64 @@ import net.runelite.client.util.Text;
 
 public class GameMessageParser {
 
-    private static final Pattern LEVEL_UP =
-        Pattern.compile(
-            "Congratulations, you've just advanced your (.+) level\\. You are now level (\\d+)\\.");
-    private static final Pattern MAX_LEVEL_UP =
-        Pattern.compile(
-            "Congratulations, you've reached the highest possible (.+) level of (\\d+)\\.");
-    private static final Pattern TOTAL_LEVEL =
-        Pattern.compile("Congratulations, you've reached a total level of (\\d+)\\.");
-    private static final Pattern COMBAT_TASK =
-        Pattern.compile("Congratulations, you've completed a (\\w+) combat task: (.+) \\(.+");
-    private static final Pattern QUEST_COMPLETE =
-        Pattern.compile("Congratulations, you've completed a quest: (.+)");
-
-    private static final Pattern COLLECTION_LOG_UNLOCK =
-        Pattern.compile("New item added to your collection log: (.+)");
+    private static final Pattern LEVEL_UP = Pattern.compile(
+        "Congratulations, you've just advanced your (.+) level\\. You are now level (\\d+)\\.");
+    private static final Pattern MAX_LEVEL_UP = Pattern.compile(
+        "Congratulations, you've reached the highest possible (.+) level of (\\d+)\\.");
+    private static final Pattern TOTAL_LEVEL = Pattern.compile(
+        "Congratulations, you've reached a total level of (\\d+)\\.");
+    private static final Pattern COMBAT_TASK = Pattern.compile(
+        "Congratulations, you've completed a (\\w+) combat task: (.+) \\(.+");
+    private static final Pattern QUEST_COMPLETE = Pattern.compile(
+        "Congratulations, you've completed a quest: (.+)");
+    private static final Pattern COLLECTION_LOG_UNLOCK = Pattern.compile(
+        "New item added to your collection log: (.+)");
 
     private static final List<Function<String, ParsedGameMessage>> allParsers = Arrays.asList(
-        GameMessageParser::tryParseLevelUp,
-        GameMessageParser::tryParseTotalLevel,
-        GameMessageParser::tryParseCombatTask,
-        GameMessageParser::tryParseQuestComplete,
-        GameMessageParser::tryParseMaxLevelUp,
-        GameMessageParser::tryParseCollectionLogUnlock
-    );
+        GameMessageParser::tryParseLevelUp, GameMessageParser::tryParseTotalLevel,
+        GameMessageParser::tryParseCombatTask, GameMessageParser::tryParseQuestComplete,
+        GameMessageParser::tryParseMaxLevelUp, GameMessageParser::tryParseCollectionLogUnlock);
 
     public static ParsedGameMessage tryParseGameMessage(String message) {
         for (Function<String, ParsedGameMessage> parser : allParsers) {
             ParsedGameMessage result = parser.apply(message);
-            if (result != null) {
-                return result;
-            }
+            if (result != null) return result;
         }
         return null;
     }
 
-    private static ParsedGameMessage tryParseLevelUp(String message) {
-        Matcher matcher = LEVEL_UP.matcher(message);
-        if (!matcher.find()) {
-            return null;
-        }
-        String skill = matcher.group(1);
-        int level = Integer.parseInt(matcher.group(2));
-
-        if (skill.equalsIgnoreCase("combat")) {
-            return new CombatLevelUpParsedGameMessage(level);
-        }
-
-        return new SkillLevelUpParsedGameMessage(skill, level);
+    private static ParsedGameMessage tryParseLevelUp(String msg) {
+        Matcher m = LEVEL_UP.matcher(msg);
+        if (!m.find()) return null;
+        String skill = m.group(1);
+        int level = Integer.parseInt(m.group(2));
+        return skill.equalsIgnoreCase("combat")
+            ? new CombatLevelUpParsedGameMessage(level)
+            : new SkillLevelUpParsedGameMessage(skill, level);
     }
 
-    private static TotalLevelParsedGameMessage tryParseTotalLevel(String message) {
-        Matcher matcher = TOTAL_LEVEL.matcher(message);
-        if (!matcher.find()) {
-            return null;
-        }
-
-        int totalLevel = Integer.parseInt(matcher.group(1));
-        return new TotalLevelParsedGameMessage(totalLevel);
+    private static TotalLevelParsedGameMessage tryParseTotalLevel(String msg) {
+        Matcher m = TOTAL_LEVEL.matcher(msg);
+        return m.find() ? new TotalLevelParsedGameMessage(Integer.parseInt(m.group(1))) : null;
     }
 
-    private static CombatTaskParsedGameMessage tryParseCombatTask(String message) {
-        Matcher matcher = COMBAT_TASK.matcher(message);
-        if (!matcher.find()) {
-            return null;
-        }
-
-        String tier = matcher.group(1);
-        String name = Text.removeTags(matcher.group(2));
-        return new CombatTaskParsedGameMessage(tier, name);
+    private static CombatTaskParsedGameMessage tryParseCombatTask(String msg) {
+        Matcher m = COMBAT_TASK.matcher(msg);
+        return m.find() ? new CombatTaskParsedGameMessage(m.group(1), Text.removeTags(m.group(2))) : null;
     }
 
-    private static QuestCompletionParsedGameMessage tryParseQuestComplete(String message) {
-        Matcher matcher = QUEST_COMPLETE.matcher(message);
-        if (!matcher.find()) {
-            return null;
-        }
-
-        String name = Text.removeTags(matcher.group(1));
-        return new QuestCompletionParsedGameMessage(name);
+    private static QuestCompletionParsedGameMessage tryParseQuestComplete(String msg) {
+        Matcher m = QUEST_COMPLETE.matcher(msg);
+        return m.find() ? new QuestCompletionParsedGameMessage(Text.removeTags(m.group(1))) : null;
     }
 
-    private static SkillLevelUpParsedGameMessage tryParseMaxLevelUp(String message) {
-        Matcher matcher = MAX_LEVEL_UP.matcher(message);
-        if (!matcher.find()) {
-            return null;
-        }
-
-        String skill = matcher.group(1);
-        int level = Integer.parseInt(matcher.group(2));
-        return new SkillLevelUpParsedGameMessage(skill, level);
+    private static SkillLevelUpParsedGameMessage tryParseMaxLevelUp(String msg) {
+        Matcher m = MAX_LEVEL_UP.matcher(msg);
+        return m.find() ? new SkillLevelUpParsedGameMessage(m.group(1), Integer.parseInt(m.group(2))) : null;
     }
 
-    public static CollectionLogUnlockParsedGameMessage tryParseCollectionLogUnlock(String message) {
-        Matcher matcher = COLLECTION_LOG_UNLOCK.matcher(message);
-        if (!matcher.find()) {
-            return null;
-        }
-
-        String itemName = matcher.group(1);
-        return new CollectionLogUnlockParsedGameMessage(itemName);
+    public static CollectionLogUnlockParsedGameMessage tryParseCollectionLogUnlock(String msg) {
+        Matcher m = COLLECTION_LOG_UNLOCK.matcher(msg);
+        return m.find() ? new CollectionLogUnlockParsedGameMessage(m.group(1)) : null;
     }
 }

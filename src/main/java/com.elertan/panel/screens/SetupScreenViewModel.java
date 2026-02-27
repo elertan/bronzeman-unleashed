@@ -6,7 +6,7 @@ import com.elertan.models.AccountConfiguration;
 import com.elertan.models.GameRules;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabase;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
-import com.elertan.remote.firebase.storageAdapters.GameRulesFirebaseObjectStorageAdapter;
+import com.elertan.remote.firebase.FirebaseObjectStorageAdapterBase;
 import com.elertan.ui.Property;
 import com.google.gson.Gson;
 import com.google.inject.ImplementedBy;
@@ -30,15 +30,10 @@ public final class SetupScreenViewModel implements AutoCloseable {
     private final OkHttpClient httpClient;
     private final Gson gson;
     private FirebaseRealtimeDatabase firebaseRealtimeDatabase;
-    private GameRulesFirebaseObjectStorageAdapter gameRulesStoragePort;
+    private FirebaseObjectStorageAdapterBase<GameRules> gameRulesStoragePort;
 
-    private SetupScreenViewModel(
-        Client client,
-        BUPanelService buPanelService,
-        AccountConfigurationService accountConfigurationService,
-        OkHttpClient httpClient,
-        Gson gson
-    ) {
+    private SetupScreenViewModel(Client client, BUPanelService buPanelService,
+        AccountConfigurationService accountConfigurationService, OkHttpClient httpClient, Gson gson) {
         this.client = client;
         this.buPanelService = buPanelService;
         this.accountConfigurationService = accountConfigurationService;
@@ -48,60 +43,32 @@ public final class SetupScreenViewModel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        if (gameRulesStoragePort != null) {
-            gameRulesStoragePort.close();
-            gameRulesStoragePort = null;
-        }
-        if (firebaseRealtimeDatabase != null) {
-            firebaseRealtimeDatabase.close();
-            firebaseRealtimeDatabase = null;
-        }
+        if (gameRulesStoragePort != null) { gameRulesStoragePort.close(); gameRulesStoragePort = null; }
+        if (firebaseRealtimeDatabase != null) { firebaseRealtimeDatabase.close(); firebaseRealtimeDatabase = null; }
     }
 
     public void onDontAskMeAgainButtonClick() {
-        int result = JOptionPane.showConfirmDialog(
-            null,
+        int result = JOptionPane.showConfirmDialog(null,
             "We won't ask you again to set up bronzeman mode for this account.\n"
                 + "You can set up bronzeman mode at any time by re-opening this panel.",
-            "Confirm setup choice",
-            JOptionPane.OK_CANCEL_OPTION,
-            JOptionPane.WARNING_MESSAGE
-        );
-        if (result != JOptionPane.OK_OPTION) {
-            return;
-        }
-
+            "Confirm setup choice", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
         buPanelService.closePanel();
         accountConfigurationService.addCurrentAccountHashToAutoOpenConfigurationDisabled();
     }
 
     public CompletableFuture<Void> onRemoteStepFinished(FirebaseRealtimeDatabaseURL url) {
         CompletableFuture<Void> future = new CompletableFuture<>();
-
-        // We also want to grab the game rules from the remote database, if they exist
         firebaseRealtimeDatabase = new FirebaseRealtimeDatabase(httpClient, gson, url);
-        gameRulesStoragePort = new GameRulesFirebaseObjectStorageAdapter(
-            firebaseRealtimeDatabase,
-            gson
-        );
-        gameRulesStoragePort.read().whenComplete((gameRules, throwable) -> {
-            if (throwable != null) {
-                future.completeExceptionally(throwable);
-                return;
-            }
-
-            if (gameRules == null) {
-                gameRulesAreViewOnly.set(false);
-            } else {
-                gameRulesAreViewOnly.set(true);
-            }
-
-            this.gameRules.set(gameRules);
-
+        gameRulesStoragePort = new FirebaseObjectStorageAdapterBase<>(
+            "/GameRules", firebaseRealtimeDatabase, gson::toJsonTree, el -> gson.fromJson(el, GameRules.class));
+        gameRulesStoragePort.read().whenComplete((rules, throwable) -> {
+            if (throwable != null) { future.completeExceptionally(throwable); return; }
+            gameRulesAreViewOnly.set(rules != null);
+            this.gameRules.set(rules);
             step.set(Step.GAME_RULES);
             future.complete(null);
         });
-
         return future;
     }
 
@@ -112,17 +79,13 @@ public final class SetupScreenViewModel implements AutoCloseable {
 
     public CompletableFuture<Void> onGameRulesStepFinish() {
         CompletableFuture<Void> future = new CompletableFuture<>();
-
         if (gameRulesStoragePort == null) {
-            Exception ex = new IllegalStateException("The Firebase URL is not set yet");
-            future.completeExceptionally(ex);
+            future.completeExceptionally(new IllegalStateException("The Firebase URL is not set yet"));
             return future;
         }
-
-        Boolean gameRulesAreViewOnlyValue = this.gameRulesAreViewOnly.get();
-        if (gameRulesAreViewOnlyValue == null) {
-            Exception ex = new IllegalStateException("Game rules are view only not set");
-            future.completeExceptionally(ex);
+        Boolean viewOnly = this.gameRulesAreViewOnly.get();
+        if (viewOnly == null) {
+            future.completeExceptionally(new IllegalStateException("Game rules are view only not set"));
             return future;
         }
 
@@ -130,89 +93,48 @@ public final class SetupScreenViewModel implements AutoCloseable {
             step.set(Step.REMOTE);
             gameRulesAreViewOnly.set(null);
             gameRules.set(null);
-
-            long accountHash = client.getAccountHash();
-            AccountConfiguration accountConfiguration = new AccountConfiguration(
-                firebaseRealtimeDatabase.getDatabaseURL());
-            accountConfigurationService.setAccountConfiguration(accountConfiguration, accountHash);
-
-            try {
-                gameRulesStoragePort.close();
-                gameRulesStoragePort = null;
-            } catch (Exception ex) {
-                future.completeExceptionally(ex);
-                return;
-            }
-
-            try {
-                firebaseRealtimeDatabase.close();
-                firebaseRealtimeDatabase = null;
-            } catch (Exception ex) {
-                future.completeExceptionally(ex);
-                return;
-            }
-
+            accountConfigurationService.setAccountConfiguration(
+                new AccountConfiguration(firebaseRealtimeDatabase.getDatabaseURL()),
+                client.getAccountHash());
+            try { gameRulesStoragePort.close(); gameRulesStoragePort = null; }
+            catch (Exception ex) { future.completeExceptionally(ex); return; }
+            try { firebaseRealtimeDatabase.close(); firebaseRealtimeDatabase = null; }
+            catch (Exception ex) { future.completeExceptionally(ex); return; }
             future.complete(null);
         };
 
-        if (gameRulesAreViewOnlyValue) {
-            finalize.run();
+        if (viewOnly) { finalize.run(); return future; }
+
+        GameRules rulesValue = this.gameRules.get();
+        if (rulesValue == null) {
+            future.completeExceptionally(new IllegalStateException("Game rules are not set"));
             return future;
         }
-
-        GameRules gameRulesValue = this.gameRules.get();
-        if (gameRulesValue == null) {
-            Exception ex = new IllegalStateException("Game rules are not set");
-            future.completeExceptionally(ex);
-            return future;
-        }
-
-        gameRulesStoragePort.update(gameRulesValue).whenComplete((__, throwable) -> {
-            if (throwable != null) {
-                future.completeExceptionally(throwable);
-                return;
-            }
-
+        gameRulesStoragePort.update(rulesValue).whenComplete((__, throwable) -> {
+            if (throwable != null) { future.completeExceptionally(throwable); return; }
             finalize.run();
         });
-
         return future;
     }
 
-    public enum Step {
-        REMOTE,
-        GAME_RULES,
-    }
+    public enum Step { REMOTE, GAME_RULES }
 
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
-
         SetupScreenViewModel create();
     }
 
     @Singleton
     private static final class FactoryImpl implements Factory {
-
-        @Inject
-        private Client client;
-        @Inject
-        private BUPanelService buPanelService;
-        @Inject
-        private AccountConfigurationService accountConfigurationService;
-        @Inject
-        private OkHttpClient httpClient;
-        @Inject
-        private Gson gson;
+        @Inject private Client client;
+        @Inject private BUPanelService buPanelService;
+        @Inject private AccountConfigurationService accountConfigurationService;
+        @Inject private OkHttpClient httpClient;
+        @Inject private Gson gson;
 
         @Override
         public SetupScreenViewModel create() {
-            return new SetupScreenViewModel(
-                client,
-                buPanelService,
-                accountConfigurationService,
-                httpClient,
-                gson
-            );
+            return new SetupScreenViewModel(client, buPanelService, accountConfigurationService, httpClient, gson);
         }
     }
 }

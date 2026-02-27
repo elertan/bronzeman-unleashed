@@ -1,6 +1,7 @@
 package com.elertan.panel.screens.setup.remoteStep;
 
 import com.elertan.ui.Bindings;
+import com.elertan.ui.Property;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import javax.swing.BorderFactory;
@@ -13,9 +14,10 @@ import javax.swing.JProgressBar;
 
 public class CheckingView extends JPanel implements AutoCloseable {
 
+    private final Property<Boolean> isCancelled = new Property<>(false);
     private final AutoCloseable cancelButtonEnabledBinding;
 
-    public CheckingView(CheckingViewViewModel viewModel) {
+    public CheckingView(Listener listener) {
         setLayout(new BorderLayout());
         setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
 
@@ -32,21 +34,19 @@ public class CheckingView extends JPanel implements AutoCloseable {
         bar.setIndeterminate(true);
         bar.setAlignmentX(Component.CENTER_ALIGNMENT);
         center.add(bar);
-
         center.add(Box.createVerticalStrut(20));
 
         JPanel buttons = new JPanel();
         buttons.setLayout(new BoxLayout(buttons, BoxLayout.X_AXIS));
         JButton cancelButton = new JButton("Cancel");
-        cancelButtonEnabledBinding = Bindings.bindEnabled(
-            cancelButton,
-            viewModel.isCancelled.derive(b -> !b)
-        );
-        cancelButton.addActionListener(e -> viewModel.onCancelButtonClick());
+        cancelButtonEnabledBinding = Bindings.bindEnabled(cancelButton, isCancelled.derive(b -> !b));
+        cancelButton.addActionListener(e -> {
+            isCancelled.set(true);
+            listener.onCancel();
+            isCancelled.set(false);
+        });
         buttons.add(cancelButton);
-
         buttons.add(Box.createHorizontalGlue());
-
         center.add(buttons, BorderLayout.SOUTH);
 
         add(center, BorderLayout.CENTER);
@@ -55,5 +55,9 @@ public class CheckingView extends JPanel implements AutoCloseable {
     @Override
     public void close() throws Exception {
         cancelButtonEnabledBinding.close();
+    }
+
+    public interface Listener {
+        void onCancel();
     }
 }

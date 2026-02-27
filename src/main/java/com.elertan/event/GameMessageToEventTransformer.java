@@ -1,8 +1,13 @@
 package com.elertan.event;
 
 import com.elertan.chat.*;
+import com.elertan.chat.ParsedGameMessage.CombatLevelUpParsedGameMessage;
+import com.elertan.chat.ParsedGameMessage.CombatTaskParsedGameMessage;
+import com.elertan.chat.ParsedGameMessage.CollectionLogUnlockParsedGameMessage;
+import com.elertan.chat.ParsedGameMessage.QuestCompletionParsedGameMessage;
+import com.elertan.chat.ParsedGameMessage.SkillLevelUpParsedGameMessage;
+import com.elertan.chat.ParsedGameMessage.TotalLevelParsedGameMessage;
 import com.elertan.models.ISOOffsetDateTime;
-import com.google.common.collect.ImmutableSet;
 import java.time.OffsetDateTime;
 import java.util.EnumMap;
 import java.util.Set;
@@ -12,60 +17,11 @@ public class GameMessageToEventTransformer {
     private static final EnumMap<ParsedGameMessageType, Transformer> TRANSFORMERS = new EnumMap<>(
         ParsedGameMessageType.class);
 
-    private static final Set<Integer> SHARE_SKILL_LEVEL_UP_OF_SET = ImmutableSet.of(
-        10,
-        20,
-        30,
-        40,
-        50,
-        60,
-        65,
-        70,
-        75,
-        80,
-        81,
-        82,
-        83,
-        84,
-        85,
-        86,
-        87,
-        88,
-        89,
-        90,
-        91,
-        92,
-        93,
-        94,
-        95,
-        96,
-        97,
-        98,
-        99
-    );
+    private static final Set<Integer> SHARE_SKILL_LEVEL_UP_OF_SET = Set.of(
+        10, 20, 30, 40, 50, 60, 65, 70, 75, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99);
 
-    private static final Set<Integer> SHARE_COMBAT_LEVEL_UP_OF_SET = ImmutableSet.of(
-        10,
-        20,
-        30,
-        40,
-        50,
-        60,
-        70,
-        80,
-        90,
-        100,
-        105,
-        110,
-        115,
-        120,
-        121,
-        122,
-        123,
-        124,
-        125,
-        126
-    );
+    private static final Set<Integer> SHARE_COMBAT_LEVEL_UP_OF_SET = Set.of(
+        10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 105, 110, 115, 120, 121, 122, 123, 124, 125, 126);
 
     static {
         TRANSFORMERS.put(
@@ -118,7 +74,7 @@ public class GameMessageToEventTransformer {
             return null;
         }
 
-        return new SkillLevelUpAchievementBUEvent(
+        return new BUEvent.SkillLevelUpAchievementBUEvent(
             dispatchedFromAccountHash,
             timestamp,
             m.getSkill(),
@@ -129,7 +85,7 @@ public class GameMessageToEventTransformer {
     private static BUEvent transformTotalLevel(
         ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
         TotalLevelParsedGameMessage m = (TotalLevelParsedGameMessage) gameMessage;
-        return new TotalLevelAchievementBUEvent(dispatchedFromAccountHash, timestamp, m.getTotalLevel());
+        return new BUEvent.TotalLevelAchievementBUEvent(dispatchedFromAccountHash, timestamp, m.getTotalLevel());
     }
 
     private static BUEvent transformCombatLevelUp(
@@ -141,7 +97,7 @@ public class GameMessageToEventTransformer {
             return null;
         }
 
-        return new CombatLevelUpAchievementBUEvent(
+        return new BUEvent.CombatLevelUpAchievementBUEvent(
             dispatchedFromAccountHash,
             timestamp,
             level
@@ -151,7 +107,7 @@ public class GameMessageToEventTransformer {
     private static BUEvent transformCombatTask(
         ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
         CombatTaskParsedGameMessage m = (CombatTaskParsedGameMessage) gameMessage;
-        return new CombatTaskAchievementBUEvent(
+        return new BUEvent.CombatTaskAchievementBUEvent(
             dispatchedFromAccountHash,
             timestamp,
             m.getTier(),
@@ -162,13 +118,13 @@ public class GameMessageToEventTransformer {
     private static BUEvent transformQuestCompletion(
         ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
         QuestCompletionParsedGameMessage m = (QuestCompletionParsedGameMessage) gameMessage;
-        return new QuestCompletionAchievementBUEvent(dispatchedFromAccountHash, timestamp, m.getName());
+        return new BUEvent.QuestCompletionAchievementBUEvent(dispatchedFromAccountHash, timestamp, m.getName());
     }
 
     private static BUEvent transformCollectionLogUnlock(
         ParsedGameMessage gameMessage, long dispatchedFromAccountHash, ISOOffsetDateTime timestamp) {
         CollectionLogUnlockParsedGameMessage m = (CollectionLogUnlockParsedGameMessage) gameMessage;
-        return new CollectionLogUnlockAchievementBUEvent(dispatchedFromAccountHash, timestamp, m.getItemName());
+        return new BUEvent.CollectionLogUnlockAchievementBUEvent(dispatchedFromAccountHash, timestamp, m.getItemName());
     }
 
     @FunctionalInterface

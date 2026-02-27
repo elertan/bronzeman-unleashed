@@ -5,6 +5,7 @@ import com.elertan.panel.screens.main.ConfigScreenViewModel;
 import com.elertan.panel.screens.main.UnlockedItemsScreen;
 import com.elertan.panel.screens.main.UnlockedItemsScreenViewModel;
 import com.elertan.ui.Bindings;
+import com.elertan.ui.Property;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -13,33 +14,27 @@ import javax.swing.JPanel;
 
 public class MainScreen extends JPanel implements AutoCloseable {
 
-    private final MainScreenViewModel viewModel;
+    public final Property<Screen> screen = new Property<>(Screen.UNLOCKED_ITEMS);
     private final UnlockedItemsScreenViewModel unlockedItemsScreenViewModel;
     private final UnlockedItemsScreen.Factory unlockedItemsScreenFactory;
-    private final ConfigScreenViewModel configScreenViewModel;
+    private final ConfigScreenViewModel.Factory configScreenViewModelFactory;
     private final ConfigScreen.Factory configScreenFactory;
     private final AutoCloseable cardLayoutBinding;
 
-    private MainScreen(MainScreenViewModel viewModel,
+    private MainScreen(
         UnlockedItemsScreenViewModel unlockedItemsScreenViewModel,
         UnlockedItemsScreen.Factory unlockedItemsScreenFactory,
-        ConfigScreenViewModel configScreenViewModel,
-        ConfigScreen.Factory configScreenFactory) {
-        this.viewModel = viewModel;
+        ConfigScreenViewModel.Factory configScreenViewModelFactory,
+        ConfigScreen.Factory configScreenFactory
+    ) {
         this.unlockedItemsScreenViewModel = unlockedItemsScreenViewModel;
         this.unlockedItemsScreenFactory = unlockedItemsScreenFactory;
-        this.configScreenViewModel = configScreenViewModel;
+        this.configScreenViewModelFactory = configScreenViewModelFactory;
         this.configScreenFactory = configScreenFactory;
 
         CardLayout cardLayout = new CardLayout();
         setLayout(cardLayout);
-
-        cardLayoutBinding = Bindings.bindCardLayout(
-            this,
-            cardLayout,
-            viewModel.mainScreen,
-            this::buildScreen
-        );
+        cardLayoutBinding = Bindings.bindCardLayout(this, cardLayout, screen, this::buildScreen);
     }
 
     @Override
@@ -47,49 +42,49 @@ public class MainScreen extends JPanel implements AutoCloseable {
         cardLayoutBinding.close();
     }
 
-    private JPanel buildScreen(MainScreenViewModel.MainScreen screen) {
-        switch (screen) {
+    public void navigateToConfig() {
+        screen.set(Screen.CONFIG);
+    }
+
+    public void navigateToUnlockedItems() {
+        screen.set(Screen.UNLOCKED_ITEMS);
+    }
+
+    private JPanel buildScreen(Screen s) {
+        switch (s) {
             case UNLOCKED_ITEMS:
                 return unlockedItemsScreenFactory.create(
-                    unlockedItemsScreenViewModel,
-                    viewModel::navigateToConfig
-                );
+                    unlockedItemsScreenViewModel, this::navigateToConfig);
             case CONFIG:
-                return configScreenFactory.create(configScreenViewModel);
+                return configScreenFactory.create(
+                    configScreenViewModelFactory.create(this::navigateToUnlockedItems));
         }
+        throw new IllegalStateException("Unknown main screen: " + s);
+    }
 
-        throw new IllegalStateException("Unknown main screen: " + screen);
+    public enum Screen {
+        UNLOCKED_ITEMS,
+        CONFIG
     }
 
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
-
-        MainScreen create(MainScreenViewModel viewModel);
+        MainScreen create();
     }
 
     @Singleton
     private static final class FactoryImpl implements Factory {
-
-        @Inject
-        private UnlockedItemsScreenViewModel.Factory unlockedItemsScreenViewModelFactory;
-        @Inject
-        private UnlockedItemsScreen.Factory unlockedItemsScreenFactory;
-        @Inject
-        private ConfigScreenViewModel.Factory configScreenViewModelFactory;
-        @Inject
-        private ConfigScreen.Factory configScreenFactory;
+        @Inject private UnlockedItemsScreenViewModel.Factory unlockedItemsScreenViewModelFactory;
+        @Inject private UnlockedItemsScreen.Factory unlockedItemsScreenFactory;
+        @Inject private ConfigScreenViewModel.Factory configScreenViewModelFactory;
+        @Inject private ConfigScreen.Factory configScreenFactory;
 
         @Override
-        public MainScreen create(MainScreenViewModel viewModel) {
-            UnlockedItemsScreenViewModel unlockedItemsScreenViewModel = unlockedItemsScreenViewModelFactory.create();
-            ConfigScreenViewModel configScreenViewModel = configScreenViewModelFactory.create(
-                viewModel::navigateToUnlockedItems);
-
+        public MainScreen create() {
             return new MainScreen(
-                viewModel,
-                unlockedItemsScreenViewModel,
+                unlockedItemsScreenViewModelFactory.create(),
                 unlockedItemsScreenFactory,
-                configScreenViewModel,
+                configScreenViewModelFactory,
                 configScreenFactory
             );
         }

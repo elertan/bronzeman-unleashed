@@ -14,41 +14,20 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Singleton
 public class LastEventDataProvider extends AbstractDataProvider {
-
-    // Note: This observable is event-based (transient), not stateful.
-    // It holds the "last event" and notifies on each new event.
-    @Getter
-    private final Observable<BUEvent> events = Observable.empty();
-
-    @Inject
-    private RemoteStorageService remoteStorageService;
-
+    @Getter private final Observable<BUEvent> events = Observable.empty();
+    @Inject private RemoteStorageService remoteStorageService;
     private ObjectListStoragePort<BUEvent> storagePort;
     private ObjectListStoragePort.Listener<BUEvent> storagePortListener;
 
-
     @Override
-    protected RemoteStorageService getRemoteStorageService() {
-        return remoteStorageService;
-    }
+    protected RemoteStorageService getRemoteStorageService() { return remoteStorageService; }
 
     @Override
     public void startUp() throws Exception {
         storagePortListener = new ObjectListStoragePort.Listener<BUEvent>() {
-            @Override
-            public void onFullUpdate(Map<String, BUEvent> map) {
-                // ignored - only care about individual adds
-            }
-
-            @Override
-            public void onAdd(String entryKey, BUEvent value) {
-                events.set(value);
-            }
-
-            @Override
-            public void onRemove(String entryKey) {
-                // ignored - cleanup only
-            }
+            @Override public void onFullUpdate(Map<String, BUEvent> map) { }
+            @Override public void onAdd(String entryKey, BUEvent value) { events.set(value); }
+            @Override public void onRemove(String entryKey) { }
         };
         super.startUp();
     }
@@ -69,29 +48,17 @@ public class LastEventDataProvider extends AbstractDataProvider {
     }
 
     public CompletableFuture<String> add(BUEvent event) {
-        if (getState().get() != State.Ready) {
-            CompletableFuture<String> future = new CompletableFuture<>();
-            future.completeExceptionally(new IllegalStateException("state is not ready"));
-            return future;
-        }
+        if (getState().get() != State.Ready) return CompletableFuture.failedFuture(new IllegalStateException("state is not ready"));
         return storagePort.add(event);
     }
 
     public CompletableFuture<Map<String, BUEvent>> readAll() {
-        if (getState().get() != State.Ready) {
-            CompletableFuture<Map<String, BUEvent>> future = new CompletableFuture<>();
-            future.completeExceptionally(new IllegalStateException("state is not ready"));
-            return future;
-        }
+        if (getState().get() != State.Ready) return CompletableFuture.failedFuture(new IllegalStateException("state is not ready"));
         return storagePort.readAll();
     }
 
     public CompletableFuture<Void> remove(String entryKey) {
-        if (getState().get() != State.Ready) {
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            future.completeExceptionally(new IllegalStateException("state is not ready"));
-            return future;
-        }
+        if (getState().get() != State.Ready) return CompletableFuture.failedFuture(new IllegalStateException("state is not ready"));
         return storagePort.remove(entryKey);
     }
 }

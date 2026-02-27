@@ -18,31 +18,21 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Singleton
 public class BUEventService implements BUPluginLifecycle {
-
     private static final int STALE_EVENT_THRESHOLD_SECONDS = 30;
     private static final int CLEANUP_DELAY_SECONDS = 10;
 
-    // Note: This observable is event-based (transient), not stateful.
-    // It holds the "last event" and notifies on each new event.
-    @Getter
-    private final Observable<BUEvent> lastEvent = Observable.empty();
+    @Getter private final Observable<BUEvent> lastEvent = Observable.empty();
+    @Inject private LastEventDataProvider lastEventDataProvider;
     private ScheduledExecutorService scheduler;
     private Subscription lastEventDataProviderSubscription;
-
-    @Inject
-    private LastEventDataProvider lastEventDataProvider;
 
     @Override
     public void startUp() throws Exception {
         scheduler = Executors.newSingleThreadScheduledExecutor();
         lastEventDataProviderSubscription = lastEventDataProvider.getEvents()
             .subscribe(event -> lastEvent.set(event));
-
         lastEventDataProvider.await(null).whenComplete((__, throwable) -> {
-            if (throwable != null) {
-                log.error("LastEventDataProvider await failed", throwable);
-                return;
-            }
+            if (throwable != null) { log.error("LastEventDataProvider await failed", throwable); return; }
             cleanupStaleEvents();
         });
     }
@@ -53,24 +43,16 @@ public class BUEventService implements BUPluginLifecycle {
             lastEventDataProviderSubscription.dispose();
             lastEventDataProviderSubscription = null;
         }
-        if (scheduler != null) {
-            scheduler.shutdown();
-        }
+        if (scheduler != null) scheduler.shutdown();
     }
 
     public CompletableFuture<String> publishEvent(BUEvent event) {
         return lastEventDataProvider.add(event).thenApply(entryKey -> {
             if (entryKey != null) {
-                // Events use POST to create unique entries (prevents data races).
-                // Writer cleans up own entry after 10s - enough time for SSE propagation.
-                // Stale events (>30s) cleaned on startup as fallback.
-                scheduler.schedule(() -> {
-                    lastEventDataProvider.remove(entryKey)
-                        .exceptionally(ex -> {
-                            log.error("Failed to cleanup own event", ex);
-                            return null;
-                        });
-                }, CLEANUP_DELAY_SECONDS, TimeUnit.SECONDS);
+                // Writer cleans up own entry after delay; stale events cleaned on startup as fallback
+                scheduler.schedule(() -> lastEventDataProvider.remove(entryKey)
+                    .exceptionally(ex -> { log.error("Failed to cleanup own event", ex); return null; }),
+                    CLEANUP_DELAY_SECONDS, TimeUnit.SECONDS);
             }
             return entryKey;
         });
@@ -83,15 +65,9 @@ public class BUEventService implements BUPluginLifecycle {
                 BUEvent event = entry.getValue();
                 if (event.getTimestamp() == null || event.getTimestamp().getValue().isBefore(threshold)) {
                     lastEventDataProvider.remove(entry.getKey())
-                        .exceptionally(ex -> {
-                            log.error("Failed to cleanup stale event", ex);
-                            return null;
-                        });
+                        .exceptionally(ex -> { log.error("Failed to cleanup stale event", ex); return null; });
                 }
             }
-        }).exceptionally(ex -> {
-            log.error("Failed to read events for cleanup", ex);
-            return null;
-        });
+        }).exceptionally(ex -> { log.error("Failed to read events for cleanup", ex); return null; });
     }
 }

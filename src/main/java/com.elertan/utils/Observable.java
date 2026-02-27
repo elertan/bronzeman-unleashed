@@ -14,183 +14,109 @@ import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Thread-safe observable value with built-in ready state and subscriptions.
- *
- * @param <T> the value type
- */
+/** Thread-safe observable value with built-in ready state and subscriptions. */
 @Slf4j
 public final class Observable<T> {
 
-    // ConcurrentLinkedQueue allows thread-safe iteration without locking,
-    // enabling listeners to be added/removed while notifying
+    // ConcurrentLinkedQueue allows thread-safe iteration without locking
     private final ConcurrentLinkedQueue<BiConsumer<T, T>> listeners = new ConcurrentLinkedQueue<>();
     private volatile T value;
-    // Tracks whether set() has been called at least once (ready state)
     private final AtomicBoolean hasBeenSet = new AtomicBoolean(false);
 
-    private Observable() {
-    }
+    private Observable() {}
 
-    /**
-     * Creates observable without initial value. Starts in NotReady state.
-     *
-     * @param <T> the value type
-     * @return new Observable in NotReady state
-     */
     public static <T> Observable<T> empty() {
         return new Observable<>();
     }
 
-    /**
-     * Creates observable with initial value. Starts in Ready state.
-     *
-     * @param <T>   the value type
-     * @param value the initial value (can be null)
-     * @return new Observable in Ready state
-     */
     public static <T> Observable<T> of(T value) {
-        Observable<T> observable = new Observable<>();
-        observable.value = value;
-        observable.hasBeenSet.set(true);
-        return observable;
+        Observable<T> obs = new Observable<>();
+        obs.value = value;
+        obs.hasBeenSet.set(true);
+        return obs;
     }
 
-    /**
-     * Get current value.
-     *
-     * @return current value (may be null even when ready)
-     */
-    public T get() {
-        return value;
-    }
+    public T get() { return value; }
 
-    /**
-     * Set value and notify listeners.
-     * First call transitions to Ready state.
-     * Skips notification if value equals previous (using Objects.equals).
-     *
-     * @param newValue the new value
-     */
+    public boolean isReady() { return hasBeenSet.get(); }
+
     public void set(T newValue) {
         T oldValue = this.value;
         boolean wasReady = hasBeenSet.getAndSet(true);
-
-        // Skip if value unchanged AND was already ready
-        // First set() must always notify (transition to ready state is meaningful)
-        if (wasReady && Objects.equals(oldValue, newValue)) {
-            return;
-        }
-
+        // First set() always notifies (ready-state transition); skip if value unchanged after that
+        if (wasReady && Objects.equals(oldValue, newValue)) return;
         this.value = newValue;
         notifyListeners(newValue, oldValue);
     }
 
-    /**
-     * Returns true after set() has been called at least once.
-     *
-     * @return true if ready
-     */
-    public boolean isReady() {
-        return hasBeenSet.get();
-    }
-
-    /**
-     * Returns a future that completes when ready.
-     * If already ready, completes immediately with current value.
-     * If timeout provided and exceeded, completes exceptionally with TimeoutException.
-     *
-     * @param timeout timeout duration, or null for no timeout
-     * @return future that completes with the value when ready
-     */
+    /** Returns a future that completes when ready, with optional timeout. */
     public CompletableFuture<T> await(@Nullable Duration timeout) {
         CompletableFuture<T> future = new CompletableFuture<>();
+        if (isReady()) { future.complete(value); return future; }
 
-        // Complete immediately if already ready
-        if (isReady()) {
-            future.complete(value);
-            return future;
-        }
-
-        // Subscribe to changes
-        Subscription[] subscriptionHolder = new Subscription[1];
-        subscriptionHolder[0] = subscribe((newValue, oldValue) -> {
-            if (isReady() && !future.isDone()) {
-                subscriptionHolder[0].dispose();
-                future.complete(newValue);
-            }
+        Subscription[] holder = new Subscription[1];
+        holder[0] = subscribe((nv, ov) -> {
+            if (isReady() && !future.isDone()) { holder[0].dispose(); future.complete(nv); }
         });
+        // Race condition check: ready state might have changed between isReady() and subscribe
+        if (isReady() && !future.isDone()) { holder[0].dispose(); future.complete(value); }
 
-        // Race condition check: ready state might have changed between isReady() check and subscribe
-        if (isReady() && !future.isDone()) {
-            subscriptionHolder[0].dispose();
-            future.complete(value);
-        }
-
-        // Timeout handling via ScheduledExecutorService
         if (timeout != null) {
-            ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-            scheduler.schedule(() -> {
+            ScheduledExecutorService sched = Executors.newSingleThreadScheduledExecutor();
+            sched.schedule(() -> {
                 if (!future.isDone()) {
-                    subscriptionHolder[0].dispose();
-                    future.completeExceptionally(
-                        new TimeoutException("Timeout waiting for Observable to become ready"));
+                    holder[0].dispose();
+                    future.completeExceptionally(new TimeoutException("Timeout waiting for Observable to become ready"));
                 }
             }, timeout.toMillis(), TimeUnit.MILLISECONDS);
-            // Ensure scheduler is shutdown when future completes (success, timeout, or cancellation)
-            future.whenComplete((result, ex) -> scheduler.shutdown());
+            future.whenComplete((r, ex) -> sched.shutdown());
         }
-
         return future;
     }
 
-    /**
-     * Subscribe to value changes.
-     * Listener receives (newValue, oldValue) on each change.
-     * oldValue is null on first notification after ready.
-     *
-     * @param listener the listener to notify on changes
-     * @return subscription that can be disposed to unsubscribe
-     */
+    /** Returns a future that completes when the observable reaches the target value. */
+    public static <T> CompletableFuture<T> awaitValue(Observable<T> observable, T targetValue, Duration timeout) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        if (observable.get() == targetValue) { future.complete(targetValue); return future; }
+
+        Subscription[] holder = new Subscription[1];
+        holder[0] = observable.subscribe((nv, ov) -> {
+            if (nv == targetValue && !future.isDone()) { holder[0].dispose(); future.complete(nv); }
+        });
+        if (observable.get() == targetValue && !future.isDone()) { holder[0].dispose(); future.complete(targetValue); }
+
+        if (timeout != null) {
+            ScheduledExecutorService sched = Executors.newSingleThreadScheduledExecutor();
+            sched.schedule(() -> {
+                if (!future.isDone()) { holder[0].dispose(); future.completeExceptionally(new TimeoutException("Timeout waiting for value")); }
+            }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+            future.whenComplete((r, ex) -> sched.shutdown());
+        }
+        return future;
+    }
+
+    /** Subscribe to (newValue, oldValue) changes. */
     public Subscription subscribe(BiConsumer<T, T> listener) {
         listeners.add(listener);
         return new ListenerSubscription(listener);
     }
 
-    /**
-     * Subscribe to value changes (simple form).
-     * Listener receives only newValue.
-     *
-     * @param listener the listener to notify on changes
-     * @return subscription that can be disposed to unsubscribe
-     */
+    /** Subscribe to newValue-only changes. */
     public Subscription subscribe(Consumer<T> listener) {
-        return subscribe((newValue, oldValue) -> listener.accept(newValue));
+        return subscribe((nv, ov) -> listener.accept(nv));
     }
 
-    /**
-     * Subscribe and immediately invoke with current value if ready.
-     * Useful for "get current state + subscribe to changes" pattern.
-     *
-     * @param listener the listener to notify on changes
-     * @return subscription that can be disposed to unsubscribe
-     */
+    /** Subscribe and immediately invoke with current value if ready. */
     public Subscription subscribeImmediate(BiConsumer<T, T> listener) {
-        Subscription subscription = subscribe(listener);
+        Subscription sub = subscribe(listener);
         if (isReady()) {
-            try {
-                listener.accept(value, null);
-            } catch (Exception e) {
-                log.error("Observable immediate listener error", e);
-            }
+            try { listener.accept(value, null); }
+            catch (Exception e) { log.error("Observable immediate listener error", e); }
         }
-        return subscription;
+        return sub;
     }
 
-    /**
-     * Clear all subscriptions and reset to NotReady state.
-     * Call during service shutdown.
-     */
+    /** Clear all subscriptions and reset to NotReady state. */
     public void clear() {
         listeners.clear();
         hasBeenSet.set(false);
@@ -198,36 +124,23 @@ public final class Observable<T> {
 
     private void notifyListeners(T newValue, T oldValue) {
         for (BiConsumer<T, T> listener : listeners) {
-            try {
-                listener.accept(newValue, oldValue);
-            } catch (Exception e) {
-                // Log error but continue notifying other listeners
-                log.error("Observable listener notification error", e);
-            }
+            try { listener.accept(newValue, oldValue); }
+            catch (Exception e) { log.error("Observable listener notification error", e); }
         }
     }
 
-    /**
-     * Internal subscription implementation that removes the listener on dispose.
-     */
     private final class ListenerSubscription implements Subscription {
         private final BiConsumer<T, T> listener;
         private final AtomicBoolean disposed = new AtomicBoolean(false);
 
-        ListenerSubscription(BiConsumer<T, T> listener) {
-            this.listener = listener;
-        }
+        ListenerSubscription(BiConsumer<T, T> listener) { this.listener = listener; }
 
         @Override
         public void dispose() {
-            if (disposed.compareAndSet(false, true)) {
-                listeners.remove(listener);
-            }
+            if (disposed.compareAndSet(false, true)) listeners.remove(listener);
         }
 
         @Override
-        public boolean isDisposed() {
-            return disposed.get();
-        }
+        public boolean isDisposed() { return disposed.get(); }
     }
 }
