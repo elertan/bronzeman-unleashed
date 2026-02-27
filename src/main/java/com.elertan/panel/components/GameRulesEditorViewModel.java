@@ -6,7 +6,6 @@ import com.elertan.panel.BaseViewModel;
 import com.elertan.ui.Property;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Singleton;
-import java.beans.PropertyChangeListener;
 import java.time.OffsetDateTime;
 import java.util.function.Consumer;
 import lombok.Value;
@@ -20,6 +19,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
     public final Property<Boolean> preventTradeOutsideGroupProperty;
     public final Property<Boolean> preventTradeLockedItemsProperty;
     public final Property<Boolean> preventGrandExchangeBuyOffersProperty;
+    public final Property<Boolean> preventGrandExchangeGearBuyOffersProperty;
     public final Property<Boolean> preventPlayedOwnedHouseProperty;
     public final Property<Boolean> restrictPlayerVersusPlayerLootProperty;
     public final Property<Boolean> restrictFaladorPartyRoomBalloonsProperty;
@@ -28,104 +28,68 @@ public class GameRulesEditorViewModel extends BaseViewModel {
     public final Property<String> partyPasswordProperty;
     public final Property<Boolean> isViewOnlyModeProperty;
     private Props props;
-    private final PropertyChangeListener updateListener = evt -> {
-        log.debug("{} changed to: {}", evt.getPropertyName(), evt.getNewValue());
-        tryUpdateGameRules();
-    };
 
     private GameRulesEditorViewModel(Props initialProps) {
         this.props = initialProps;
+        GameRules gr = resolveOrDefault(initialProps);
 
-        boolean setGameRules = false;
-        GameRules gameRules = initialProps.getGameRules();
-        if (gameRules == null) {
-            ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
-            gameRules = GameRules.createWithDefaults(initialProps.getAccountHash(), now);
-            setGameRules = true;
-        }
-
-        onlyForTradeableItemsProperty = new Property<>(gameRules.isOnlyForTradeableItems());
-        restrictGroundItemsProperty = new Property<>(gameRules.isRestrictGroundItems());
-        preventTradeOutsideGroupProperty = new Property<>(gameRules.isPreventTradeOutsideGroup());
-        preventTradeLockedItemsProperty = new Property<>(gameRules.isPreventTradeLockedItems());
-        preventGrandExchangeBuyOffersProperty = new Property<>(gameRules.isPreventGrandExchangeBuyOffers());
-        preventPlayedOwnedHouseProperty = new Property<>(gameRules.isPreventPlayerOwnedHouse());
-        restrictPlayerVersusPlayerLootProperty = new Property<>(gameRules.isRestrictPlayerVersusPlayerLoot());
-        restrictFaladorPartyRoomBalloonsProperty = new Property<>(gameRules.isRestrictFaladorPartyRoomBalloons());
-        shareAchievementNotificationsProperty = new Property<>(gameRules.isShareAchievementNotifications());
-        valuableLootNotificationThresholdProperty = new Property<>(gameRules.getValuableLootNotificationThreshold());
-        partyPasswordProperty = new Property<>(gameRules.getPartyPassword());
-
+        onlyForTradeableItemsProperty = tracked(gr.isOnlyForTradeableItems());
+        restrictGroundItemsProperty = tracked(gr.isRestrictGroundItems());
+        preventTradeOutsideGroupProperty = tracked(gr.isPreventTradeOutsideGroup());
+        preventTradeLockedItemsProperty = tracked(gr.isPreventTradeLockedItems());
+        preventGrandExchangeBuyOffersProperty = tracked(gr.isPreventGrandExchangeBuyOffers());
+        preventGrandExchangeGearBuyOffersProperty = tracked(gr.isPreventGrandExchangeGearBuyOffers());
+        preventPlayedOwnedHouseProperty = tracked(gr.isPreventPlayerOwnedHouse());
+        restrictPlayerVersusPlayerLootProperty = tracked(gr.isRestrictPlayerVersusPlayerLoot());
+        restrictFaladorPartyRoomBalloonsProperty = tracked(gr.isRestrictFaladorPartyRoomBalloons());
+        shareAchievementNotificationsProperty = tracked(gr.isShareAchievementNotifications());
+        valuableLootNotificationThresholdProperty = tracked(gr.getValuableLootNotificationThreshold());
+        partyPasswordProperty = tracked(gr.getPartyPassword());
         isViewOnlyModeProperty = new Property<>(initialProps.isViewOnlyMode());
-//        isValid = Property.deriveMany(
-//                Arrays.asList(
-//                        preventTradeOutsideGroup,
-//                        preventTradeLockedItems,
-//                        preventGrandExchangeBuyOffers,
-//                        shareAchievementNotifications,
-//                        partyPassword
-//                ),
-//                (list) -> {
-//                    Boolean preventTradeOutsideGroupValue = (Boolean) list.get(0);
-//                    Boolean preventTradeLockedItemsValue = (Boolean) list.get(1);
-//                    Boolean preventGrandExchangeBuyOffersValue = (Boolean) list.get(2);
-//                    Boolean shareAchievementNotificationsValue = (Boolean) list.get(3);
-//                    String partyPasswordValue = (String) list.get(4);
-//
-//                    return partyPasswordValue == null || partyPasswordValue.length() <= 20;
-//                }
-//        );
-//        isValid = partyPassword.derive((partyPasswordValue) -> partyPasswordValue == null || partyPasswordValue.length() <= 20);
 
-        addListener(onlyForTradeableItemsProperty, updateListener);
-        addListener(restrictGroundItemsProperty, updateListener);
-        addListener(preventTradeOutsideGroupProperty, updateListener);
-        addListener(preventTradeLockedItemsProperty, updateListener);
-        addListener(preventGrandExchangeBuyOffersProperty, updateListener);
-        addListener(preventPlayedOwnedHouseProperty, updateListener);
-        addListener(restrictPlayerVersusPlayerLootProperty, updateListener);
-        addListener(restrictFaladorPartyRoomBalloonsProperty, updateListener);
-        addListener(shareAchievementNotificationsProperty, updateListener);
-        addListener(valuableLootNotificationThresholdProperty, updateListener);
-        addListener(partyPasswordProperty, updateListener);
-
-        if (setGameRules) {
-            initialProps.onGameRulesChanged.accept(gameRules);
+        if (initialProps.getGameRules() == null) {
+            initialProps.onGameRulesChanged.accept(gr);
         }
     }
 
+    private <T> Property<T> tracked(T initialValue) {
+        Property<T> p = new Property<>(initialValue);
+        addListener(p, evt -> {
+            log.debug("{} changed to: {}", evt.getPropertyName(), evt.getNewValue());
+            tryUpdateGameRules();
+        });
+        return p;
+    }
+
+    private static GameRules resolveOrDefault(Props props) {
+        GameRules gr = props.getGameRules();
+        if (gr != null) return gr;
+        return GameRules.createWithDefaults(
+            props.getAccountHash(), new ISOOffsetDateTime(OffsetDateTime.now()));
+    }
 
     public void setProps(Props props) {
         this.props = props;
-
-        GameRules gameRules = props.getGameRules();
-        if (gameRules == null) {
-            ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
-            gameRules = GameRules.createWithDefaults(props.getAccountHash(), now);
-        }
-
-        onlyForTradeableItemsProperty.set(gameRules.isOnlyForTradeableItems());
-        restrictGroundItemsProperty.set(gameRules.isRestrictGroundItems());
-        preventTradeOutsideGroupProperty.set(gameRules.isPreventTradeOutsideGroup());
-        preventTradeLockedItemsProperty.set(gameRules.isPreventTradeLockedItems());
-        preventGrandExchangeBuyOffersProperty.set(gameRules.isPreventGrandExchangeBuyOffers());
-        preventPlayedOwnedHouseProperty.set(gameRules.isPreventPlayerOwnedHouse());
-        restrictPlayerVersusPlayerLootProperty.set(gameRules.isRestrictPlayerVersusPlayerLoot());
-        restrictFaladorPartyRoomBalloonsProperty.set(gameRules.isRestrictFaladorPartyRoomBalloons());
-        shareAchievementNotificationsProperty.set(gameRules.isShareAchievementNotifications());
-        partyPasswordProperty.set(gameRules.getPartyPassword());
-        valuableLootNotificationThresholdProperty.set(gameRules.getValuableLootNotificationThreshold());
-
+        GameRules gr = resolveOrDefault(props);
+        onlyForTradeableItemsProperty.set(gr.isOnlyForTradeableItems());
+        restrictGroundItemsProperty.set(gr.isRestrictGroundItems());
+        preventTradeOutsideGroupProperty.set(gr.isPreventTradeOutsideGroup());
+        preventTradeLockedItemsProperty.set(gr.isPreventTradeLockedItems());
+        preventGrandExchangeBuyOffersProperty.set(gr.isPreventGrandExchangeBuyOffers());
+        preventGrandExchangeGearBuyOffersProperty.set(gr.isPreventGrandExchangeGearBuyOffers());
+        preventPlayedOwnedHouseProperty.set(gr.isPreventPlayerOwnedHouse());
+        restrictPlayerVersusPlayerLootProperty.set(gr.isRestrictPlayerVersusPlayerLoot());
+        restrictFaladorPartyRoomBalloonsProperty.set(gr.isRestrictFaladorPartyRoomBalloons());
+        shareAchievementNotificationsProperty.set(gr.isShareAchievementNotifications());
+        valuableLootNotificationThresholdProperty.set(gr.getValuableLootNotificationThreshold());
+        partyPasswordProperty.set(gr.getPartyPassword());
         isViewOnlyModeProperty.set(props.isViewOnlyMode());
     }
 
     private boolean isValid() {
-        String partyPassword = partyPasswordProperty.get();
-        Integer valuableLootNotificationThreshold = valuableLootNotificationThresholdProperty.get();
-        if (valuableLootNotificationThreshold != null && valuableLootNotificationThreshold < 0) {
-            return false;
-        }
-        return partyPassword == null || partyPassword.length() <= 20;
+        Integer threshold = valuableLootNotificationThresholdProperty.get();
+        String pw = partyPasswordProperty.get();
+        return (threshold == null || threshold >= 0) && (pw == null || pw.length() <= 20);
     }
 
     private void tryUpdateGameRules() {
@@ -133,8 +97,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
             props.onGameRulesChanged.accept(null);
             return;
         }
-
-        GameRules newGameRules = GameRules.builder()
+        props.onGameRulesChanged.accept(GameRules.builder()
             .lastUpdatedByAccountHash(props.getAccountHash())
             .lastUpdatedAt(new ISOOffsetDateTime(OffsetDateTime.now()))
             .onlyForTradeableItems(onlyForTradeableItemsProperty.get())
@@ -142,14 +105,14 @@ public class GameRulesEditorViewModel extends BaseViewModel {
             .preventTradeOutsideGroup(preventTradeOutsideGroupProperty.get())
             .preventTradeLockedItems(preventTradeLockedItemsProperty.get())
             .preventGrandExchangeBuyOffers(preventGrandExchangeBuyOffersProperty.get())
+            .preventGrandExchangeGearBuyOffers(preventGrandExchangeGearBuyOffersProperty.get())
             .preventPlayerOwnedHouse(preventPlayedOwnedHouseProperty.get())
             .restrictPlayerVersusPlayerLoot(restrictPlayerVersusPlayerLootProperty.get())
             .restrictFaladorPartyRoomBalloons(restrictFaladorPartyRoomBalloonsProperty.get())
             .shareAchievementNotifications(shareAchievementNotificationsProperty.get())
             .valuableLootNotificationThreshold(valuableLootNotificationThresholdProperty.get())
             .partyPassword(partyPasswordProperty.get())
-            .build();
-        props.onGameRulesChanged.accept(newGameRules);
+            .build());
     }
 
     @ImplementedBy(FactoryImpl.class)

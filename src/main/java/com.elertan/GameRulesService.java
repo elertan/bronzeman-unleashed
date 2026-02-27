@@ -9,6 +9,7 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -20,6 +21,19 @@ import net.runelite.client.chat.ChatMessageBuilder;
 @Slf4j
 @Singleton
 public class GameRulesService implements BUPluginLifecycle {
+
+    private static final List<GameRuleDiff> BOOLEAN_RULE_DIFFS = List.of(
+        new GameRuleDiff("Only for tradeable items", GameRules::isOnlyForTradeableItems),
+        new GameRuleDiff("Restrict ground items", GameRules::isRestrictGroundItems),
+        new GameRuleDiff("Prevent Grand Exchange buy offers", GameRules::isPreventGrandExchangeBuyOffers),
+        new GameRuleDiff("Prevent Grand Exchange gear buy offers", GameRules::isPreventGrandExchangeGearBuyOffers),
+        new GameRuleDiff("Prevent trade locked items", GameRules::isPreventTradeLockedItems),
+        new GameRuleDiff("Prevent trade outside group", GameRules::isPreventTradeOutsideGroup),
+        new GameRuleDiff("Restrict player owned house", GameRules::isPreventPlayerOwnedHouse),
+        new GameRuleDiff("Restrict PvP loot", GameRules::isRestrictPlayerVersusPlayerLoot),
+        new GameRuleDiff("Restrict Falador Party Room balloons", GameRules::isRestrictFaladorPartyRoomBalloons),
+        new GameRuleDiff("Share achievement notifications", GameRules::isShareAchievementNotifications)
+    );
 
     @Getter
     private final Observable<GameRules> gameRules = Observable.empty();
@@ -58,7 +72,6 @@ public class GameRulesService implements BUPluginLifecycle {
     }
 
     private void onGameRulesChanged(GameRules newGameRules, GameRules oldGameRules) {
-        // Notify chat of game rules update (only when transitioning between non-null values)
         if (newGameRules != null && oldGameRules != null) {
             {
                 ChatMessageBuilder builder = new ChatMessageBuilder();
@@ -98,7 +111,6 @@ public class GameRulesService implements BUPluginLifecycle {
             }
         }
 
-        // Observable set() will notify listeners with (new, old)
         gameRules.set(newGameRules);
     }
 
@@ -108,61 +120,16 @@ public class GameRulesService implements BUPluginLifecycle {
             return null;
         }
 
-        Function<Boolean, String> booleanFormatter = (value) -> value ? "enabled" : "disabled";
-
         Map<String, String> differences = new HashMap<>();
-        if (oldGameRules.isOnlyForTradeableItems() != newGameRules.isOnlyForTradeableItems()) {
-            differences.put(
-                "Only for tradeable items",
-                booleanFormatter.apply(newGameRules.isOnlyForTradeableItems())
-            );
+
+        for (GameRuleDiff diff : BOOLEAN_RULE_DIFFS) {
+            boolean oldVal = diff.getter.apply(oldGameRules);
+            boolean newVal = diff.getter.apply(newGameRules);
+            if (oldVal != newVal) {
+                differences.put(diff.label, newVal ? "enabled" : "disabled");
+            }
         }
-        if (oldGameRules.isRestrictGroundItems() != newGameRules.isRestrictGroundItems()) {
-            differences.put(
-                "Restrict ground items",
-                booleanFormatter.apply(newGameRules.isRestrictGroundItems())
-            );
-        }
-        if (oldGameRules.isPreventGrandExchangeBuyOffers()
-            != newGameRules.isPreventGrandExchangeBuyOffers()) {
-            differences.put(
-                "Prevent Grand Exchange buy offers",
-                booleanFormatter.apply(newGameRules.isPreventGrandExchangeBuyOffers())
-            );
-        }
-        if (oldGameRules.isPreventTradeLockedItems() != newGameRules.isPreventTradeLockedItems()) {
-            differences.put(
-                "Prevent trade locked items",
-                booleanFormatter.apply(newGameRules.isPreventTradeLockedItems())
-            );
-        }
-        if (oldGameRules.isPreventTradeOutsideGroup()
-            != newGameRules.isPreventTradeOutsideGroup()) {
-            differences.put(
-                "Prevent trade outside group",
-                booleanFormatter.apply(newGameRules.isPreventTradeOutsideGroup())
-            );
-        }
-        if (oldGameRules.isPreventPlayerOwnedHouse() != newGameRules.isPreventPlayerOwnedHouse()) {
-            differences.put(
-                "Restrict player owned house",
-                booleanFormatter.apply(newGameRules.isPreventPlayerOwnedHouse())
-            );
-        }
-        if (oldGameRules.isRestrictPlayerVersusPlayerLoot()
-            != newGameRules.isRestrictPlayerVersusPlayerLoot()) {
-            differences.put(
-                "Restrict PvP loot",
-                booleanFormatter.apply(newGameRules.isRestrictPlayerVersusPlayerLoot())
-            );
-        }
-        if (oldGameRules.isRestrictFaladorPartyRoomBalloons()
-            != newGameRules.isRestrictFaladorPartyRoomBalloons()) {
-            differences.put(
-                "Restrict Falador Party Room balloons",
-                booleanFormatter.apply(newGameRules.isRestrictFaladorPartyRoomBalloons())
-            );
-        }
+
         if (!Objects.equals(
             oldGameRules.getValuableLootNotificationThreshold(),
             newGameRules.getValuableLootNotificationThreshold()
@@ -176,16 +143,22 @@ public class GameRulesService implements BUPluginLifecycle {
             }
             differences.put("Valuable loot notification threshold", newValue);
         }
-        if (oldGameRules.isShareAchievementNotifications()
-            != newGameRules.isShareAchievementNotifications()) {
-            differences.put(
-                "Share achievement notifications",
-                booleanFormatter.apply(newGameRules.isShareAchievementNotifications())
-            );
-        }
+
         if (!Objects.equals(oldGameRules.getPartyPassword(), newGameRules.getPartyPassword())) {
             differences.put("Party password", "*hidden see config*");
         }
+
         return differences;
+    }
+
+    private static class GameRuleDiff {
+
+        final String label;
+        final Function<GameRules, Boolean> getter;
+
+        GameRuleDiff(String label, Function<GameRules, Boolean> getter) {
+            this.label = label;
+            this.getter = getter;
+        }
     }
 }

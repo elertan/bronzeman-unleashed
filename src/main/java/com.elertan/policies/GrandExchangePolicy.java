@@ -4,13 +4,13 @@ import com.elertan.AccountConfigurationService;
 import com.elertan.GameRulesService;
 import com.elertan.ItemUnlockService;
 import com.elertan.PolicyService;
-import com.elertan.WorldTypeService;
 import com.elertan.models.GameRules;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.ItemComposition;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.events.WidgetClosed;
@@ -33,10 +33,9 @@ public class GrandExchangePolicy extends PolicyBase {
     @Inject
     public GrandExchangePolicy(
         AccountConfigurationService accountConfigurationService,
-        GameRulesService gameRulesService, PolicyService policyService,
-        WorldTypeService worldTypeService
+        GameRulesService gameRulesService, PolicyService policyService
     ) {
-        super(accountConfigurationService, gameRulesService, policyService, worldTypeService);
+        super(accountConfigurationService, gameRulesService, policyService);
     }
 
     @Override
@@ -80,9 +79,9 @@ public class GrandExchangePolicy extends PolicyBase {
 
     private void onSearchBuild() {
         PolicyContext context = createContext();
-        if (!context.shouldApplyForRules(GameRules::isPreventGrandExchangeBuyOffers)) {
-            return;
-        }
+        boolean preventLocked = context.shouldApplyForRules(GameRules::isPreventGrandExchangeBuyOffers);
+        boolean preventGear = context.shouldApplyForRules(GameRules::isPreventGrandExchangeGearBuyOffers);
+        if (!preventLocked && !preventGear) return;
 
         Widget searchResultsWidget = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         if (searchResultsWidget == null) {
@@ -98,26 +97,48 @@ public class GrandExchangePolicy extends PolicyBase {
         for (int i = 0; i < children.length; i += 3) {
             final Widget itemWidget = children[i + 2];
             final int itemId = itemWidget.getItemId();
-            final boolean hasUnlockedItem;
-            try {
-                hasUnlockedItem = itemUnlockService.hasUnlockedItem(itemId);
-            } catch (Exception e) {
-                log.error(
-                    "Failed to check hasUnlockedItem({}) in onGrandExchangeSearchBuild",
-                    itemId,
-                    e
-                );
-                return;
+            boolean block = false;
+
+            if (preventLocked) {
+                try {
+                    boolean hasUnlockedItem = itemUnlockService.hasUnlockedItem(itemId);
+                    if (!hasUnlockedItem) {
+                        block = true;
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to check hasUnlockedItem({}) in onGrandExchangeSearchBuild", itemId, e);
+                    return;
+                }
             }
 
-            if (!hasUnlockedItem) {
-                // Make not clickable
-                children[i].setHidden(true);
+            if (!block && preventGear && isGearItem(itemId)) {
+                block = true;
+            }
 
-                // Make transparent to indicate not clickable
+            if (block) {
+                children[i].setHidden(true);
                 children[i + 1].setOpacity(120);
                 children[i + 2].setOpacity(120);
             }
         }
+    }
+
+    private boolean isGearItem(int itemId) {
+        ItemComposition comp = client.getItemDefinition(itemId);
+        if (comp == null) {
+            return false;
+        }
+        String[] actions = comp.getInventoryActions();
+        if (actions == null) {
+            return false;
+        }
+        for (String action : actions) {
+            if (action == null) continue;
+            String lower = action.toLowerCase();
+            if (lower.contains("wear") || lower.contains("equip") || lower.contains("wield")) {
+                return true;
+            }
+        }
+        return false;
     }
 }

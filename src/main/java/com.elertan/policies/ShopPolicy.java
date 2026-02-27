@@ -6,7 +6,9 @@ import com.elertan.BUResourceService;
 import com.elertan.GameRulesService;
 import com.elertan.ItemUnlockService;
 import com.elertan.PolicyService;
-import com.elertan.WorldTypeService;
+import com.elertan.BUChatService;
+import com.elertan.chat.ChatMessageProvider.MessageKey;
+import com.elertan.models.GameRules;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.awt.AlphaComposite;
@@ -18,11 +20,12 @@ import java.awt.Shape;
 import java.awt.image.BufferedImage;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.MenuAction;
+import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -33,65 +36,58 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 public class ShopPolicy extends PolicyBase {
 
     private final ShopmainOverlay shopmainOverlay = new ShopmainOverlay();
-    @Inject
-    private Client client;
-    @Inject
-    private ClientThread clientThread;
-    @Inject
-    private BUResourceService buResourceService;
-    @Inject
-    private BUPluginConfig buPluginConfig;
-    @Inject
-    private ItemUnlockService itemUnlockService;
-    @Inject
-    private OverlayManager overlayManager;
-
+    @Inject private Client client;
+    @Inject private BUResourceService buResourceService;
+    @Inject private BUPluginConfig buPluginConfig;
+    @Inject private ItemUnlockService itemUnlockService;
+    @Inject private OverlayManager overlayManager;
+    @Inject private BUChatService buChatService;
 
     @Inject
     public ShopPolicy(AccountConfigurationService accountConfigurationService,
-        GameRulesService gameRulesService, PolicyService policyService,
-        WorldTypeService worldTypeService) {
-        super(accountConfigurationService, gameRulesService, policyService, worldTypeService);
+        GameRulesService gameRulesService, PolicyService policyService) {
+        super(accountConfigurationService, gameRulesService, policyService);
     }
 
     public void onWidgetLoaded(WidgetLoaded event) {
-        if (!accountConfigurationService.isBronzemanEnabled()) {
-            return;
+        if (accountConfigurationService.isBronzemanEnabled()
+            && event.getGroupId() == InterfaceID.SHOPMAIN) {
+            overlayManager.add(shopmainOverlay);
         }
-
-        int groupId = event.getGroupId();
-        if (groupId != InterfaceID.SHOPMAIN) {
-            return;
-        }
-        onShopmainOpened();
     }
 
     public void onWidgetClosed(WidgetClosed event) {
-        if (!accountConfigurationService.isBronzemanEnabled()) {
-            return;
+        if (accountConfigurationService.isBronzemanEnabled()
+            && event.getGroupId() == InterfaceID.SHOPMAIN) {
+            overlayManager.remove(shopmainOverlay);
         }
+    }
 
-        int groupId = event.getGroupId();
-        if (groupId != InterfaceID.SHOPMAIN) {
-            return;
+    public void onMenuOptionClicked(MenuOptionClicked event) {
+        if (!accountConfigurationService.isBronzemanEnabled()) return;
+
+        // Reuse the same rule as GE locked-item prevention
+        PolicyContext context = createContext();
+        if (!context.shouldApplyForRules(GameRules::isPreventGrandExchangeBuyOffers)) return;
+
+        MenuAction action = event.getMenuAction();
+        String option = event.getMenuOption();
+        if (action != MenuAction.CC_OP && action != MenuAction.CC_OP_LOW_PRIORITY) return;
+        if (option == null || !option.startsWith("Buy")) return;
+        if (event.getId() <= 0) return;
+
+        try {
+            boolean unlocked = itemUnlockService.hasUnlockedItem(event.getId());
+            if (!unlocked) {
+                event.consume();
+                buChatService.sendRestrictionMessage(MessageKey.SHOP_BUY_RESTRICTION);
+            }
+        } catch (Exception e) {
+            // If the unlock check fails, allow the buy rather than hard-blocking
         }
-        onShopmainClosed();
     }
 
-    private void onShopmainOpened() {
-        overlayManager.add(shopmainOverlay);
-    }
-
-    private void onShopmainClosed() {
-        overlayManager.remove(shopmainOverlay);
-    }
-
-    /**
-     * Draws unlocked-item checkmarks over shop items without using sprite IDs or widget children.
-     * Placement, size, and opacity match the previous widget-based approach.
-     */
     private class ShopmainOverlay extends Overlay {
-
         private static final int CHECKMARK_SIZE = 8;
 
         private ShopmainOverlay() {
@@ -101,65 +97,31 @@ public class ShopPolicy extends PolicyBase {
 
         @Override
         public Dimension render(Graphics2D g) {
-            if (!buPluginConfig.showUnlockedItemsIndicatorInShops()) {
-                return null;
-            }
-
-            // Resolve the items container; if absent, nothing to draw
+            if (!buPluginConfig.showUnlockedItemsIndicatorInShops()) return null;
             Widget itemsContainer = client.getWidget(InterfaceID.Shopmain.ITEMS);
-            if (itemsContainer == null) {
-                return null;
-            }
+            if (itemsContainer == null) return null;
             Widget[] children = itemsContainer.getDynamicChildren();
-            if (children == null || children.length == 0) {
-                return null;
-            }
+            if (children == null || children.length == 0) return null;
 
-            BufferedImage checkmarkImg = buResourceService.getCheckmarkIconBufferedImage();
-
-            // Clip drawings to the scrollable viewport so icons don't bleed while scrolling
+            BufferedImage checkmark = buResourceService.getCheckmarkIconBufferedImage();
             Shape oldClip = g.getClip();
-            Rectangle viewport = itemsContainer.getBounds();
-            g.setClip(viewport);
-
-            // Draw semi-transparent checkmarks in the same bottom-right position as before
+            g.setClip(itemsContainer.getBounds());
             Composite prev = g.getComposite();
-            g.setComposite(AlphaComposite.getInstance(
-                AlphaComposite.SRC_OVER,
-                0.5f
-            )); // opacity 50%
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f));
 
             for (Widget w : children) {
-                if (w == null || w.isHidden()) {
-                    continue;
-                }
-                int itemId = w.getItemId();
-                if (itemId <= 0) {
-                    continue;
-                }
-
+                if (w == null || w.isHidden() || w.getItemId() <= 0) continue;
                 boolean unlocked;
-                try {
-                    unlocked = itemUnlockService.hasUnlockedItem(itemId);
-                } catch (Exception e) {
-                    continue;
-                }
-                if (!unlocked) {
-                    continue;
-                }
-
-                // Use absolute on-canvas bounds which already account for scroll
+                try { unlocked = itemUnlockService.hasUnlockedItem(w.getItemId()); }
+                catch (Exception e) { continue; }
+                if (!unlocked) continue;
                 Rectangle b = w.getBounds();
-                int x = b.x + b.width - CHECKMARK_SIZE - 1;
-                int y = b.y + b.height - CHECKMARK_SIZE - 1;
-
-                g.drawImage(checkmarkImg, x, y, CHECKMARK_SIZE, CHECKMARK_SIZE, null);
+                g.drawImage(checkmark, b.x + b.width - CHECKMARK_SIZE - 1,
+                    b.y + b.height - CHECKMARK_SIZE - 1, CHECKMARK_SIZE, CHECKMARK_SIZE, null);
             }
 
-            // Restore state
             g.setComposite(prev);
             g.setClip(oldClip);
-
             return null;
         }
     }

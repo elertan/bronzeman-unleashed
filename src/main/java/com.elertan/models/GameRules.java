@@ -20,6 +20,7 @@ public class GameRules {
     boolean preventTradeOutsideGroup;
     boolean preventTradeLockedItems;
     boolean preventGrandExchangeBuyOffers;
+    boolean preventGrandExchangeGearBuyOffers;
     boolean preventPlayerOwnedHouse;
     boolean restrictPlayerVersusPlayerLoot;
     boolean restrictFaladorPartyRoomBalloons;
@@ -37,6 +38,7 @@ public class GameRules {
             .preventTradeOutsideGroup(true)
             .preventTradeLockedItems(true)
             .preventGrandExchangeBuyOffers(true)
+            .preventGrandExchangeGearBuyOffers(false)
             .preventPlayerOwnedHouse(true)
             .restrictPlayerVersusPlayerLoot(false)
             .restrictFaladorPartyRoomBalloons(true)

@@ -1,6 +1,7 @@
 package com.elertan.panel.screens.main;
 
 import com.elertan.panel.ViewportWidthTrackingPanel;
+import com.elertan.panel.components.ErrorLabel;
 import com.elertan.panel.components.GameRulesEditor;
 import com.elertan.panel.components.GameRulesEditorViewModel;
 import com.elertan.ui.Bindings;
@@ -8,7 +9,6 @@ import com.elertan.ui.Property;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
@@ -26,10 +26,11 @@ import javax.swing.ScrollPaneConstants;
 public class ConfigScreen extends JPanel implements AutoCloseable {
 
     private final AutoCloseable backButtonEnabledBinding;
+    private final AutoCloseable stopPopupsButtonEnabledBinding;
+    private final AutoCloseable resetUnlockedButtonEnabledBinding;
     private final AutoCloseable updateGameRulesButtonEnabledBinding;
     private final AutoCloseable leaveButtonEnabledBinding;
-    private final AutoCloseable errorMessageLabelVisibleBinding;
-    private final AutoCloseable errorMessageLabelTextBinding;
+    private final ErrorLabel errorLabel;
 
     private ConfigScreen(ConfigScreenViewModel viewModel,
         GameRulesEditorViewModel gameRulesEditorViewModel,
@@ -43,14 +44,10 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         gbc.gridx = 0;
         gbc.gridy = 0;
 
-        gbc.weighty = 0.0;
         JButton backButton = new JButton("Back");
         backButton.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
         backButton.addActionListener(e -> viewModel.onBackButtonClick());
-        backButtonEnabledBinding = Bindings.bindEnabled(
-            backButton,
-            viewModel.isSubmittingProperty.derive(b -> !b)
-        );
+        backButtonEnabledBinding = Bindings.bindEnabled(backButton, viewModel.isSubmittingProperty.derive(b -> !b));
         add(backButton, gbc);
         gbc.gridy++;
 
@@ -70,25 +67,20 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.BOTH;
         GameRulesEditor gameRulesEditor = gameRulesEditorFactory.create(gameRulesEditorViewModel);
-
-        ViewportWidthTrackingPanel viewportWrapper = new ViewportWidthTrackingPanel(new BorderLayout());
-        viewportWrapper.add(gameRulesEditor, BorderLayout.NORTH);
+        ViewportWidthTrackingPanel viewportWrapper = new ViewportWidthTrackingPanel(new java.awt.BorderLayout());
+        viewportWrapper.add(gameRulesEditor, java.awt.BorderLayout.NORTH);
 
         JScrollPane scrollPane = new JScrollPane(viewportWrapper);
         scrollPane.setBorder(null);
         scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
-        // Dynamically add right padding only when vertical scrollbar is visible
         scrollPane.getVerticalScrollBar().addAdjustmentListener(e -> {
             boolean visible = scrollPane.getVerticalScrollBar().isVisible();
-            if (visible) {
-                viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 10));
-            } else {
-                viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
-            }
+            viewportWrapper.setBorder(visible
+                ? BorderFactory.createEmptyBorder(0, 0, 0, 10)
+                : BorderFactory.createEmptyBorder(0, 0, 0, 0));
             viewportWrapper.revalidate();
         });
-
         add(scrollPane, gbc);
 
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -98,27 +90,28 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         add(Box.createVerticalStrut(5), gbc);
         gbc.gridy++;
 
-        JLabel errorMessageLabel = new JLabel();
-        errorMessageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        errorMessageLabelVisibleBinding = Bindings.bindVisible(
-            errorMessageLabel,
-            viewModel.errorMessageProperty.derive(errorMessage -> errorMessage != null
-                && !errorMessage.isEmpty())
-        );
-        errorMessageLabelTextBinding = Bindings.bindLabelText(
-            errorMessageLabel, viewModel.errorMessageProperty.derive(errorMessage -> {
-                if (errorMessage == null || errorMessage.isEmpty()) {
-                    return "";
-                }
+        errorLabel = new ErrorLabel(viewModel.errorMessageProperty);
+        add(errorLabel, gbc);
+        gbc.gridy++;
 
-                String sb = "<html><div style=\"text-align:center;color:red;\">" +
-                    errorMessage +
-                    "</div></html>";
+        add(Box.createVerticalStrut(5), gbc);
+        gbc.gridy++;
 
-                return sb;
-            })
-        );
-        add(errorMessageLabel, gbc);
+        JButton stopPopupsButton = new JButton("Stop Item Unlock Popups");
+        stopPopupsButton.addActionListener(e -> viewModel.stopQueuedUnlockPopupsClick());
+        stopPopupsButtonEnabledBinding = Bindings.bindEnabled(stopPopupsButton,
+            viewModel.isSubmittingProperty.derive(b -> !b));
+        add(stopPopupsButton, gbc);
+        gbc.gridy++;
+
+        add(Box.createVerticalStrut(5), gbc);
+        gbc.gridy++;
+
+        JButton resetUnlockedButton = new JButton("Reset Unlocked Items");
+        resetUnlockedButton.addActionListener(e -> viewModel.resetUnlockedItemsClick());
+        resetUnlockedButtonEnabledBinding = Bindings.bindEnabled(resetUnlockedButton,
+            viewModel.isSubmittingProperty.derive(b -> !b));
+        add(resetUnlockedButton, gbc);
         gbc.gridy++;
 
         add(Box.createVerticalStrut(5), gbc);
@@ -127,25 +120,15 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         JButton updateGameRulesButton = new JButton("Update Game Rules");
         updateGameRulesButton.setBorder(BorderFactory.createEmptyBorder(15, 0, 15, 0));
         updateGameRulesButton.addActionListener(e -> viewModel.updateGameRulesClick());
-        updateGameRulesButtonEnabledBinding = Bindings.bindEnabled(
-            updateGameRulesButton,
+        updateGameRulesButtonEnabledBinding = Bindings.bindEnabled(updateGameRulesButton,
             Property.deriveMany(
-                Arrays.asList(
-                    viewModel.gameRulesEditorViewModelPropsProperty,
-                    viewModel.isSubmittingProperty
-                ),
-                (values) -> {
+                Arrays.asList(viewModel.gameRulesEditorViewModelPropsProperty, viewModel.isSubmittingProperty),
+                values -> {
                     GameRulesEditorViewModel.Props props = viewModel.gameRulesEditorViewModelPropsProperty.get();
                     Boolean isSubmitting = viewModel.isSubmittingProperty.get();
-
-                    if (props == null || isSubmitting == null) {
-                        return false;
-                    }
-
+                    if (props == null || isSubmitting == null) return false;
                     return !props.isViewOnlyMode() && !isSubmitting;
-                }
-            )
-        );
+                }));
         add(updateGameRulesButton, gbc);
         gbc.gridy++;
 
@@ -156,52 +139,38 @@ public class ConfigScreen extends JPanel implements AutoCloseable {
         leaveButton.setBackground(new Color(183, 48, 48));
         leaveButton.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
         leaveButton.addActionListener(e -> viewModel.leaveButtonClick());
-        leaveButtonEnabledBinding = Bindings.bindEnabled(
-            leaveButton,
-            viewModel.isSubmittingProperty.derive(b -> !b)
-        );
+        leaveButtonEnabledBinding = Bindings.bindEnabled(leaveButton, viewModel.isSubmittingProperty.derive(b -> !b));
         add(leaveButton, gbc);
-        gbc.gridy++;
     }
 
     @Override
     public void close() throws Exception {
         leaveButtonEnabledBinding.close();
-        errorMessageLabelVisibleBinding.close();
-        errorMessageLabelTextBinding.close();
         updateGameRulesButtonEnabledBinding.close();
+        resetUnlockedButtonEnabledBinding.close();
+        stopPopupsButtonEnabledBinding.close();
+        errorLabel.close();
         backButtonEnabledBinding.close();
     }
 
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
-
         ConfigScreen create(ConfigScreenViewModel viewModel);
     }
 
     @Singleton
     private static final class FactoryImpl implements Factory {
-
-        @Inject
-        private GameRulesEditor.Factory gameRulesEditorFactory;
-        @Inject
-        private GameRulesEditorViewModel.Factory gameRulesEditorViewModelFactory;
+        @Inject private GameRulesEditor.Factory gameRulesEditorFactory;
+        @Inject private GameRulesEditorViewModel.Factory gameRulesEditorViewModelFactory;
 
         @Override
         public ConfigScreen create(ConfigScreenViewModel viewModel) {
-            GameRulesEditorViewModel gameRulesEditorViewModel = gameRulesEditorViewModelFactory.create(
+            GameRulesEditorViewModel vm = gameRulesEditorViewModelFactory.create(
                 viewModel.gameRulesEditorViewModelPropsProperty.get());
-
-            // Add listener FIRST to catch any async updates
-            viewModel.gameRulesEditorViewModelPropsProperty.addListener((event) -> {
-                GameRulesEditorViewModel.Props newProps = viewModel.gameRulesEditorViewModelPropsProperty.get();
-                gameRulesEditorViewModel.setProps(newProps);
-            });
-
-            // Then explicitly set current value (in case async already completed)
-            gameRulesEditorViewModel.setProps(viewModel.gameRulesEditorViewModelPropsProperty.get());
-
-            return new ConfigScreen(viewModel, gameRulesEditorViewModel, gameRulesEditorFactory);
+            viewModel.gameRulesEditorViewModelPropsProperty.addListener(
+                event -> vm.setProps(viewModel.gameRulesEditorViewModelPropsProperty.get()));
+            vm.setProps(viewModel.gameRulesEditorViewModelPropsProperty.get());
+            return new ConfigScreen(viewModel, vm, gameRulesEditorFactory);
         }
     }
 }
