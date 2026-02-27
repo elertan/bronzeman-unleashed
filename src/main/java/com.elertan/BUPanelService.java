@@ -2,7 +2,6 @@ package com.elertan;
 
 import com.elertan.models.AccountConfiguration;
 import com.elertan.panel.BUPanel;
-import com.elertan.panel.BUPanelViewModel;
 import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -14,18 +13,10 @@ import net.runelite.client.ui.NavigationButton;
 @Slf4j
 @Singleton
 public class BUPanelService implements BUPluginLifecycle {
-
-    @Inject
-    private ClientToolbar clientToolbar;
-    @Inject
-    private BUResourceService buResourceService;
-    @Inject
-    private AccountConfigurationService accountConfigurationService;
-
-    @Inject
-    private BUPanelViewModel.Factory buPanelViewModelFactory;
-    @Inject
-    private BUPanel.Factory buPanelFactory;
+    @Inject private ClientToolbar clientToolbar;
+    @Inject private BUResourceService buResourceService;
+    @Inject private AccountConfigurationService accountConfigurationService;
+    @Inject private BUPanel.Factory buPanelFactory;
 
     private BUPanel buPanel;
     private NavigationButton panelNavigationButton;
@@ -33,17 +24,14 @@ public class BUPanelService implements BUPluginLifecycle {
 
     @Override
     public void startUp() {
-        buPanel = buPanelFactory.create(buPanelViewModelFactory.create());
+        buPanel = buPanelFactory.create();
         panelNavigationButton = NavigationButton.builder()
             .tooltip("Bronzeman Unleashed")
             .icon(buResourceService.getIconBufferedImage())
-            .priority(3)
-            .panel(buPanel)
-            .build();
+            .priority(3).panel(buPanel).build();
         clientToolbar.addNavigation(panelNavigationButton);
-
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
-            .subscribe(this::currentAccountConfigurationChangeListener);
+            .subscribe(this::onAccountConfigChanged);
     }
 
     @Override
@@ -52,7 +40,6 @@ public class BUPanelService implements BUPluginLifecycle {
             accountConfigSubscription.dispose();
             accountConfigSubscription = null;
         }
-
         clientToolbar.removeNavigation(panelNavigationButton);
         panelNavigationButton = null;
         buPanel.close();
@@ -67,15 +54,10 @@ public class BUPanelService implements BUPluginLifecycle {
         SwingUtilities.invokeLater(() -> clientToolbar.openPanel(null));
     }
 
-    private void currentAccountConfigurationChangeListener(
-        AccountConfiguration accountConfiguration) {
-        boolean shouldOpenPanel = false;
-        try {
-            shouldOpenPanel = accountConfigurationService.isCurrentAccountAutoOpenAccountConfigurationEnabled();
-        } catch (Exception ignored) {
-        }
-        if (accountConfiguration == null && shouldOpenPanel) {
-            openPanel();
-        }
+    private void onAccountConfigChanged(AccountConfiguration config) {
+        boolean shouldOpen = false;
+        try { shouldOpen = accountConfigurationService.isCurrentAccountAutoOpenAccountConfigurationEnabled(); }
+        catch (Exception ignored) {}
+        if (config == null && shouldOpen) openPanel();
     }
 }

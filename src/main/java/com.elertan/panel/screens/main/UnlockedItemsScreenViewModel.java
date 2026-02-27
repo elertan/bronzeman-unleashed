@@ -29,32 +29,20 @@ public class UnlockedItemsScreenViewModel extends BaseViewModel {
     private UnlockedItemsScreenViewModel(UnlockedItemsDataProvider unlockedItemsDataProvider) {
         this.unlockedItemsDataProvider = unlockedItemsDataProvider;
 
-        Supplier<List<UnlockedItem>> allUnlockedItemsSupplier = () -> {
-            Map<Integer, UnlockedItem> unlockedItemsMap = unlockedItemsDataProvider.getUnlockedItemsMap();
-            return unlockedItemsMap == null ? null : new ArrayList<>(unlockedItemsMap.values());
+        Supplier<List<UnlockedItem>> supplier = () -> {
+            Map<Integer, UnlockedItem> map = unlockedItemsDataProvider.getUnlockedItemsMap();
+            return map == null ? null : new ArrayList<>(map.values());
         };
-
-        allUnlockedItems = new Property<>(allUnlockedItemsSupplier.get());
+        allUnlockedItems = new Property<>(supplier.get());
         unlockedItemsMapListener = new UnlockedItemsDataProvider.UnlockedItemsMapListener() {
-            @Override
-            public void onUpdate(UnlockedItem unlockedItem) {
-                allUnlockedItems.set(allUnlockedItemsSupplier.get());
-            }
-
-            @Override
-            public void onDelete(UnlockedItem unlockedItem) {
-                allUnlockedItems.set(allUnlockedItemsSupplier.get());
-            }
+            @Override public void onUpdate(UnlockedItem item) { allUnlockedItems.set(supplier.get()); }
+            @Override public void onDelete(UnlockedItem item) { allUnlockedItems.set(supplier.get()); }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
-
         unlockedItemsDataProvider.await(null).whenComplete((__, throwable) -> {
-            if (throwable != null) {
-                return;
-            }
-            allUnlockedItems.set(allUnlockedItemsSupplier.get());
+            if (throwable != null) return;
+            allUnlockedItems.set(supplier.get());
         });
-
         addListener(sortedBy, sortedByListener);
     }
 
@@ -65,35 +53,20 @@ public class UnlockedItemsScreenViewModel extends BaseViewModel {
     }
 
     private void sortedByListener(PropertyChangeEvent event) {
-        SortedBy sortedByValue = (SortedBy) event.getNewValue();
-        log.info("sorted by changed to: {}", sortedByValue);
+        log.info("sorted by changed to: {}", event.getNewValue());
     }
 
-    public enum Screen {
-        LOADING,
-        ITEMS
-    }
-
-    public enum SortedBy {
-        UNLOCKED_AT_ASC,
-        ALPHABETICAL_ASC,
-        PLAYER_ASC,
-        UNLOCKED_AT_DESC,
-        ALPHABETICAL_DESC,
-        PLAYER_DESC,
-    }
+    public enum Screen { LOADING, ITEMS }
+    public enum SortedBy { UNLOCKED_AT_ASC, ALPHABETICAL_ASC, PLAYER_ASC, UNLOCKED_AT_DESC, ALPHABETICAL_DESC, PLAYER_DESC }
 
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
-
         UnlockedItemsScreenViewModel create();
     }
 
     @Singleton
     private static final class FactoryImpl implements Factory {
-
-        @Inject
-        private UnlockedItemsDataProvider unlockedItemsDataProvider;
+        @Inject private UnlockedItemsDataProvider unlockedItemsDataProvider;
 
         @Override
         public UnlockedItemsScreenViewModel create() {

@@ -34,47 +34,29 @@ import net.runelite.client.util.AsyncBufferedImage;
 @Singleton
 public class ItemUnlockOverlay extends Overlay {
 
-    // Frame + layout
     private static final int WIDTH = 250;
     private static final int HEIGHT = 70;
     private static final int ACQUIRED_BY_HEIGHT = 10;
-
-    // Timings (ms)
-//    private static final int DISPLAY_TIME_MS = 1250; // per-item dwell
-//    private static final int FADE_TIME_MS = 800;     // frame open/close split
-    private static final int SWAP_TIME_MS = 350;     // crossfade between items (image+name only)
-
+    private static final int SWAP_TIME_MS = 350;
     private static final String TITLE = "Item Unlocked";
-    // Queue + items
+    private static final Color TITLE_COLOR = new Color(255, 145, 0);
+    private static final Color OUTLINE_COLOR = new Color(45, 45, 45);
+
     private final ConcurrentLinkedQueue<UnlockToast> queue = new ConcurrentLinkedQueue<>();
-    @Inject
-    private ItemManager itemManager;
-    @Inject
-    private RuneLiteConfig runeLiteConfig;
-    @Inject
-    private BUPluginConfig config;
-    @Inject
-    private BUResourceService buResourceService;
-    @Inject
-    private Client client;
-    @Inject
-    private ClientThread clientThread;
-    @Inject
-    private MembersDataProvider membersDataProvider;
-    @Inject
-    private MemberService memberService;
-    @Inject
-    private AccountConfigurationService accountConfigurationService;
-    @Inject
-    private MinigameService minigameService;
+    @Inject private ItemManager itemManager;
+    @Inject private RuneLiteConfig runeLiteConfig;
+    @Inject private BUPluginConfig config;
+    @Inject private BUResourceService buResourceService;
+    @Inject private Client client;
+    @Inject private ClientThread clientThread;
+    @Inject private MembersDataProvider membersDataProvider;
+    @Inject private MemberService memberService;
+    @Inject private AccountConfigurationService accountConfigurationService;
+    @Inject private MinigameService minigameService;
     private UnlockToast current;
     private UnlockToast next;
     private Phase phase = Phase.IDLE;
-    // Clocks
-    private long overlayT0;    // frame open/close animation start
-    private long itemT0;       // current item start
-    private long swapT0;       // swap start
-    // Session layout lock to avoid height jumps
+    private long overlayT0, itemT0, swapT0;
     private int sessionFrameHeight = HEIGHT;
 
     @Inject
@@ -84,393 +66,192 @@ public class ItemUnlockOverlay extends Overlay {
     }
 
     private static float progress(long now, long t0, int durationMs) {
-        if (durationMs <= 0) {
-            return 1f;
-        }
-        return clamp01((now - t0) / (float) durationMs);
+        return durationMs <= 0 ? 1f : clamp01((now - t0) / (float) durationMs);
     }
 
-    private static float clamp01(float v) {
-        if (v < 0f) {
-            return 0f;
-        }
-        if (v > 1f) {
-            return 1f;
-        }
-        return v;
-    }
-
-    private static long elapsed(long now, long t0) {
-        return Math.max(0L, now - t0);
-    }
-
-    // ----- helpers -----
+    private static float clamp01(float v) { return Math.max(0f, Math.min(1f, v)); }
 
     public void enqueueShowUnlock(int itemId, long acquiredByAccountHash, Integer droppedByNPCId) {
-        // We need members information for acquired by, waiting just in case
-        membersDataProvider.await(null)
-            .whenComplete((__, throwable) -> {
-                if (throwable != null) {
-                    log.error("error waiting for members data provider to complete");
-                    return;
+        membersDataProvider.await(null).whenComplete((__, throwable) -> {
+            if (throwable != null) { log.error("error waiting for members data provider"); return; }
+            clientThread.invokeLater(() -> {
+                AsyncBufferedImage img = itemManager.getImage(itemId, 1, false);
+                String droppedBy = droppedByNPCId != null
+                    ? client.getNpcDefinition(droppedByNPCId).getName() : null;
+                queue.add(new UnlockToast(itemId, acquiredByAccountHash, droppedBy, img));
+                if (phase == Phase.IDLE && current == null) {
+                    current = queue.poll();
+                    startOpeningSession();
                 }
-
-                clientThread.invokeLater(() -> {
-                    AsyncBufferedImage img = itemManager.getImage(itemId, 1, false);
-                    String droppedBy = null;
-                    if (droppedByNPCId != null) {
-                        NPCComposition npcComposition = client.getNpcDefinition(droppedByNPCId);
-                        droppedBy = npcComposition.getName();
-                    }
-                    queue.add(new UnlockToast(itemId, acquiredByAccountHash, droppedBy, img));
-                    if (phase == Phase.IDLE && current == null) {
-                        current = queue.poll();
-                        startOpeningSession();
-                    }
-                });
             });
+        });
     }
 
     public void clear() {
-        queue.clear();
-        current = null;
-        next = null;
-        phase = Phase.IDLE;
-        overlayT0 = 0L;
-        itemT0 = 0L;
-        swapT0 = 0L;
+        queue.clear(); current = null; next = null;
+        phase = Phase.IDLE; overlayT0 = 0L; itemT0 = 0L; swapT0 = 0L;
         sessionFrameHeight = HEIGHT;
     }
 
     @Override
     public Dimension render(Graphics2D g) {
-        if (!config.showUnlockOverlay()) {
-            return null;
-        }
-        if (!accountConfigurationService.isBronzemanEnabled()) {
-            return null;
-        }
-        if (config.hideUnlockOverlayInMinigames() && minigameService.isInMinigameOrInstance()) {
-            return null;
-        }
+        if (!config.showUnlockOverlay() || !accountConfigurationService.isBronzemanEnabled()) return null;
+        if (config.hideUnlockOverlayInMinigames() && minigameService.isInMinigameOrInstance()) return null;
 
         final long now = System.currentTimeMillis();
+        advanceStateMachine(now);
+        if (phase == Phase.IDLE) return null;
 
-        // Advance state
+        float openProg = computeOpenProgress(now);
+        float vp = openProg < 0.5f ? openProg / 0.5f : 1f;
+        float hp = openProg < 0.5f ? 0f : (openProg - 0.5f) / 0.5f;
+        int visH = Math.round(sessionFrameHeight * vp), visW = Math.round(5 + (WIDTH - 5) * hp);
+        if (visH < 1 || visW < 1) return new Dimension(WIDTH, sessionFrameHeight);
+
+        // Draw centered within the overlay's drag rectangle. The overlay
+        // system already positions this rectangle, so avoid extra offsets
+        // that would desync the popup from the yellow outline.
+        int y = 0;
+        int frameX = (WIDTH - visW) / 2;
+        g.setComposite(AlphaComposite.SrcOver);
+        drawFrame(g, frameX, y, visW, visH);
+
+        if (visH > 20 && visW > 40) {
+            boolean big = visW >= WIDTH * 0.8f && visH >= sessionFrameHeight * 0.8f;
+            float alpha = (phase == Phase.OPENING || phase == Phase.CLOSING)
+                ? (big ? clamp01((openProg - 0.8f) / 0.2f) : 0f) : 1f;
+            if (alpha > 0f) {
+                drawTitle(g, frameX, y, visW, visH, alpha);
+                if (phase == Phase.SWAPPING) {
+                    float p = clamp01(progress(now, swapT0, SWAP_TIME_MS));
+                    if (current != null) drawItemBlock(g, current, frameX, y, visW, visH, alpha * (1f - p));
+                    if (next != null) drawItemBlock(g, next, frameX, y, visW, visH, alpha * p);
+                } else if (current != null) {
+                    drawItemBlock(g, current, frameX, y, visW, visH, alpha);
+                }
+            }
+        }
+        return new Dimension(WIDTH, sessionFrameHeight);
+    }
+
+    private void advanceStateMachine(long now) {
+        int fadeDur = config.unlockOverlayOpenAndCloseDuration();
         switch (phase) {
             case OPENING:
-                if (progress(now, overlayT0, config.unlockOverlayOpenAndCloseDuration()) >= 1f) {
-                    phase = Phase.SHOWING;
-                    itemT0 = now;
-                }
+                if (progress(now, overlayT0, fadeDur) >= 1f) { phase = Phase.SHOWING; itemT0 = now; }
                 break;
             case SHOWING:
-                if (elapsed(now, itemT0) >= config.unlockOverlayItemVisibleDuration()) {
-                    if (!queue.isEmpty()) {
-                        next = queue.poll();
-                        phase = Phase.SWAPPING;
-                        swapT0 = now;
-                    } else {
-                        phase = Phase.CLOSING;
-                        overlayT0 = now;
-                    }
+                if (now - itemT0 >= config.unlockOverlayItemVisibleDuration()) {
+                    if (!queue.isEmpty()) { next = queue.poll(); phase = Phase.SWAPPING; swapT0 = now; }
+                    else { phase = Phase.CLOSING; overlayT0 = now; }
                 }
                 break;
             case SWAPPING:
                 if (progress(now, swapT0, SWAP_TIME_MS) >= 1f) {
-                    current = next;
-                    next = null;
-                    phase = Phase.SHOWING;
-                    itemT0 = now;
+                    current = next; next = null; phase = Phase.SHOWING; itemT0 = now;
                 }
                 break;
             case CLOSING:
-                if (progress(now, overlayT0, config.unlockOverlayOpenAndCloseDuration()) >= 1f) {
-                    phase = Phase.IDLE;
-                    current = null;
-                    next = null;
-                    return null;
-                }
+                if (progress(now, overlayT0, fadeDur) >= 1f) { phase = Phase.IDLE; current = null; next = null; }
                 break;
             case IDLE:
-                if (current == null && !queue.isEmpty()) {
-                    current = queue.poll();
-                    startOpeningSession();
-                } else {
-                    return null;
-                }
+                if (current == null && !queue.isEmpty()) { current = queue.poll(); startOpeningSession(); }
                 break;
         }
+    }
 
-        // Frame open/close progress
-        float openProgress;
-        if (phase == Phase.OPENING) {
-            openProgress = progress(now, overlayT0, config.unlockOverlayOpenAndCloseDuration());
-        } else if (phase == Phase.CLOSING) {
-            openProgress =
-                1f - progress(now, overlayT0, config.unlockOverlayOpenAndCloseDuration());
-        } else {
-            openProgress = 1f;
-        }
-        openProgress = clamp01(openProgress);
-
-        // Split vertical/horizontal
-        float verticalProgress;
-        float horizontalProgress;
-        if (openProgress < 0.5f) {
-            verticalProgress = openProgress / 0.5f;
-            horizontalProgress = 0f;
-        } else {
-            verticalProgress = 1f;
-            horizontalProgress = (openProgress - 0.5f) / 0.5f;
-        }
-
-        int visibleHeight = Math.round(sessionFrameHeight * verticalProgress);
-        int visibleWidth = Math.round(5 + (WIDTH - 5) * horizontalProgress);
-        if (visibleHeight < 1 || visibleWidth < 1) {
-            return new Dimension(WIDTH, sessionFrameHeight);
-        }
-
-        int y = 40;
-        int frameX = WIDTH + -visibleWidth / 2; // TOP_CENTER anchor
-
-        g.setComposite(AlphaComposite.SrcOver);
-
-        // Frame
-        drawFrame(g, frameX, y, visibleWidth, visibleHeight);
-
-        // Contents
-        if (visibleHeight > 20 && visibleWidth > 40) {
-            final float minW = WIDTH * 0.8f;
-            final float minH = sessionFrameHeight * 0.8f;
-            final boolean bigEnough = visibleWidth >= minW && visibleHeight >= minH;
-
-            switch (phase) {
-                case OPENING: {
-                    // Delay content until frame mostly open (0.8->1 fade-in)
-                    float alpha = 0f;
-                    if (bigEnough) {
-                        alpha = (openProgress - 0.8f) / 0.2f; // 0..1
-                    }
-                    alpha = clamp01(alpha);
-
-                    if (alpha > 0f && current != null) {
-                        drawTitle(g, frameX, y, visibleWidth, visibleHeight, alpha);
-                        drawItemBlock(g, current, frameX, y, visibleWidth, visibleHeight, alpha);
-                    }
-                    break;
-                }
-                case SHOWING: {
-                    drawTitle(g, frameX, y, visibleWidth, visibleHeight, 1f);
-                    if (current != null) {
-                        drawItemBlock(g, current, frameX, y, visibleWidth, visibleHeight, 1f);
-                    }
-                    break;
-                }
-                case SWAPPING: {
-                    // Title remains stable (no fade between items)
-                    drawTitle(g, frameX, y, visibleWidth, visibleHeight, 1f);
-                    float p = clamp01(progress(now, swapT0, SWAP_TIME_MS));
-                    if (current != null) {
-                        drawItemBlock(g, current, frameX, y, visibleWidth, visibleHeight, 1f - p);
-                    }
-                    if (next != null) {
-                        drawItemBlock(g, next, frameX, y, visibleWidth, visibleHeight, p);
-                    }
-                    break;
-                }
-                case CLOSING: {
-                    // Mirror original behavior:
-                    // while frame is 100%..80% of size, fade from 1->0; below 80% hide content.
-                    if (bigEnough) {
-                        float alpha = (openProgress - 0.8f) / 0.2f; // 1 at 1.0, 0 at 0.8
-                        alpha = clamp01(alpha);
-                        if (alpha > 0f && current != null) {
-                            drawTitle(g, frameX, y, visibleWidth, visibleHeight, alpha);
-                            drawItemBlock(
-                                g,
-                                current,
-                                frameX,
-                                y,
-                                visibleWidth,
-                                visibleHeight,
-                                alpha
-                            );
-                        }
-                    }
-                    // If not bigEnough, draw nothing (content hidden while frame collapses).
-                    break;
-                }
-                default:
-                    break;
-            }
-        }
-
-        return new Dimension(WIDTH, sessionFrameHeight);
+    private float computeOpenProgress(long now) {
+        int dur = config.unlockOverlayOpenAndCloseDuration();
+        if (phase == Phase.OPENING) return clamp01(progress(now, overlayT0, dur));
+        if (phase == Phase.CLOSING) return clamp01(1f - progress(now, overlayT0, dur));
+        return 1f;
     }
 
     private void startOpeningSession() {
         overlayT0 = System.currentTimeMillis();
-        sessionFrameHeight =
-            config.showAcquiredByInUnlockOverlay() ? (HEIGHT + ACQUIRED_BY_HEIGHT) : HEIGHT;
+        sessionFrameHeight = config.showAcquiredByInUnlockOverlay() ? HEIGHT + ACQUIRED_BY_HEIGHT : HEIGHT;
         phase = Phase.OPENING;
     }
 
     private void drawFrame(Graphics2D g, int x, int y, int w, int h) {
-        // Border outline
-        g.setColor(new Color(45, 45, 45));
-        g.fillRect(x, y, w, h);
-
-        // Border
-        Color runeliteOverlayColor = runeLiteConfig.overlayBackgroundColor();
-        Color borderColor = config.unlockOverlayFrameBorderColor();
-        // Fall back to a brighter version of the RuneLite overlay color
-        if (borderColor == null)
-            borderColor = runeliteOverlayColor.brighter();
-        g.setColor(borderColor);
-        g.fillRect(x + 1, y + 1, w - 2, h - 2);
-
-        // Content outline
-        g.setColor(new Color(45, 45, 45));
-        g.fillRect(x + 5, y + 5, w - 10, h - 10);
-
-        // Content
-        g.setColor(runeliteOverlayColor);
-        g.fillRect(x + 6, y + 6, w - 12, h - 12);
+        Color bg = runeLiteConfig.overlayBackgroundColor();
+        Color border = config.unlockOverlayFrameBorderColor();
+        if (border == null) border = bg.brighter();
+        g.setColor(OUTLINE_COLOR); g.fillRect(x, y, w, h);
+        g.setColor(border); g.fillRect(x + 1, y + 1, w - 2, h - 2);
+        g.setColor(OUTLINE_COLOR); g.fillRect(x + 5, y + 5, w - 10, h - 10);
+        g.setColor(bg); g.fillRect(x + 6, y + 6, w - 12, h - 12);
     }
 
-    private void drawTitle(Graphics2D g, int frameX, int y, int visibleWidth, int visibleHeight,
-        float alpha) {
-        if (alpha <= 0f) {
-            return;
-        }
+    private void drawShadowedString(Graphics2D g, String text, int x, int y, Color fg) {
+        g.setColor(Color.BLACK); g.drawString(text, x + 1, y + 1);
+        g.setColor(fg); g.drawString(text, x, y);
+    }
 
-        final Composite old = g.getComposite();
+    private void drawTitle(Graphics2D g, int fx, int y, int vw, int vh, float alpha) {
+        if (alpha <= 0f) return;
+        Composite old = g.getComposite();
         g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-
-        // Plugin icon
-        g.drawImage(buResourceService.getIconBufferedImage(), frameX + 10, y + 10, 16, 16, null);
-
-        // Title
+        g.drawImage(buResourceService.getIconBufferedImage(), fx + 10, y + 10, 16, 16, null);
         g.setFont(FontManager.getRunescapeBoldFont());
-        FontMetrics fmBold = g.getFontMetrics();
-        final String title = TITLE;
-        int tx = frameX + (visibleWidth - fmBold.stringWidth(title)) / 2;
+        int tx = fx + (vw - g.getFontMetrics().stringWidth(TITLE)) / 2;
         int titleY = y + 24;
-        if (titleY < y + visibleHeight - 5) {
-            g.setColor(new Color(0, 0, 0));
-            g.drawString(title, tx + 1, titleY + 1);
-
-            g.setColor(new Color(255, 145, 0));
-            g.drawString(title, tx, titleY);
-        }
-
+        if (titleY < y + vh - 5) drawShadowedString(g, TITLE, tx, titleY, TITLE_COLOR);
         g.setComposite(old);
     }
 
-    private void drawItemBlock(
-        Graphics2D g, UnlockToast toast, int frameX, int y,
-        int visibleWidth, int visibleHeight, float alpha
-    ) {
-        if (alpha <= 0f) {
-            return;
-        }
-
-        final Composite old = g.getComposite();
+    private void drawItemBlock(Graphics2D g, UnlockToast toast, int fx, int y,
+        int vw, int vh, float alpha) {
+        if (alpha <= 0f) return;
+        Composite old = g.getComposite();
         g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
 
-        // Subtitle and item icon
-        final int itemId = toast.itemId;
-        final ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-        final String subtitle =
-            itemComposition != null ? itemComposition.getName() : "Unknown item";
-
+        ItemComposition ic = itemManager.getItemComposition(toast.itemId);
+        String subtitle = ic != null ? ic.getName() : "Unknown item";
         g.setFont(FontManager.getRunescapeFont());
         FontMetrics fm = g.getFontMetrics();
+        int iconSz = 32;
+        int blockX = fx + (vw - iconSz - 5 - fm.stringWidth(subtitle)) / 2;
+        boolean showAcq = shouldShowAcquiredBy(toast.acquiredByAccountHash);
+        int iconY = y + (vh + (showAcq ? 10 : 20) - iconSz) / 2;
+        if (toast.image != null) g.drawImage(toast.image, blockX, iconY, null);
 
-        int iconSize = 32;
-        int textWidth = fm.stringWidth(subtitle);
-        int totalBlockWidth = iconSize + 5 + textWidth;
+        int textX = blockX + iconSz + 5;
+        int textY = iconY + (iconSz + fm.getAscent() - fm.getDescent()) / 2;
+        if (textY < y + vh - 5) drawShadowedString(g, subtitle, textX, textY, config.unlockOverlayItemTextColor());
 
-        int blockX = frameX + (visibleWidth - totalBlockWidth) / 2;
-        int iconX = blockX;
-
-        boolean showAcquiredBy = shouldShowAcquiredBy(toast.acquiredByAccountHash);
-        int iconYOffset = showAcquiredBy ? 10 : 20;
-        int iconY = y + (visibleHeight + iconYOffset - iconSize) / 2;
-
-        AsyncBufferedImage itemImage = toast.image;
-        if (itemImage != null) {
-            g.drawImage(itemImage, iconX, iconY, null);
-        }
-
-        int textX = iconX + iconSize + 5;
-        int textY = iconY + (iconSize + fm.getAscent() - fm.getDescent()) / 2;
-        if (textY < y + visibleHeight - 5) {
-            g.setColor(new Color(0, 0, 0));
-            g.drawString(subtitle, textX + 1, textY + 1);
-
-            g.setColor(config.unlockOverlayItemTextColor());
-            g.drawString(subtitle, textX, textY);
-        }
-
-        // "acquired by ..."
-        if (showAcquiredBy) {
+        if (showAcq) {
             g.setFont(FontManager.getRunescapeSmallFont());
-            FontMetrics fmSmall = g.getFontMetrics();
-
-            Member acquiredByMember = memberService.getMemberByAccountHash(toast.acquiredByAccountHash);
-
-            final String label = "unlocked by";
-            final String name = acquiredByMember.getName();
-
-            int labelW = fmSmall.stringWidth(label);
-            int spaceW = fmSmall.charWidth(' ');
-            int nameW = fmSmall.stringWidth(name);
-
-            int rightPad = 10; // keep a small margin from the right edge
-            int startX = frameX + visibleWidth - (labelW + spaceW + nameW) - rightPad;
-            int acquiredByY = textY + fmSmall.getAscent() + 8;
-
-            if (acquiredByY < y + visibleHeight) {
-                g.setColor(Color.GRAY);
-                g.drawString(label, startX, acquiredByY);
-
-                g.setColor(Color.LIGHT_GRAY);
-                g.drawString(name, startX + labelW + spaceW, acquiredByY);
+            FontMetrics fs = g.getFontMetrics();
+            Member m = memberService.getMemberByAccountHash(toast.acquiredByAccountHash);
+            String label = "unlocked by", name = m.getName();
+            int lw = fs.stringWidth(label), sw = fs.charWidth(' '), nw = fs.stringWidth(name);
+            int sx = fx + vw - (lw + sw + nw) - 10;
+            int ay = textY + fs.getAscent() + 8;
+            if (ay < y + vh) {
+                g.setColor(Color.GRAY); g.drawString(label, sx, ay);
+                g.setColor(Color.LIGHT_GRAY); g.drawString(name, sx + lw + sw, ay);
             }
         }
         g.setComposite(old);
     }
 
-    private boolean shouldShowAcquiredBy(long acquiredByAccountHash) {
-        if (!config.showAcquiredByInUnlockOverlay()) {
-            return false;
-        }
-
-        if (!config.showAcquiredByInUnlockOverlayForSelf()) {
-            long accountHash = client.getAccountHash();
-            return !Objects.equals(accountHash, acquiredByAccountHash);
-        }
+    private boolean shouldShowAcquiredBy(long hash) {
+        if (!config.showAcquiredByInUnlockOverlay()) return false;
+        if (!config.showAcquiredByInUnlockOverlayForSelf()) return !Objects.equals(client.getAccountHash(), hash);
         return true;
     }
 
-    // State machine
-    private enum Phase {IDLE, OPENING, SHOWING, SWAPPING, CLOSING}
+    private enum Phase { IDLE, OPENING, SHOWING, SWAPPING, CLOSING }
 
     private static final class UnlockToast {
-
         final int itemId;
         final long acquiredByAccountHash;
         final String droppedBy;
         final AsyncBufferedImage image;
-
-        UnlockToast(int itemId, long acquiredByAccountHash, String droppedBy,
-            AsyncBufferedImage image) {
-            this.itemId = itemId;
-            this.acquiredByAccountHash = acquiredByAccountHash;
-            this.droppedBy = droppedBy;
-            this.image = image;
+        UnlockToast(int itemId, long hash, String droppedBy, AsyncBufferedImage image) {
+            this.itemId = itemId; this.acquiredByAccountHash = hash;
+            this.droppedBy = droppedBy; this.image = image;
         }
     }
 }

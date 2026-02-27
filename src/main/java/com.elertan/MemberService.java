@@ -8,12 +8,7 @@ import com.elertan.models.MemberRole;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import com.elertan.utils.Subscription;
@@ -27,66 +22,49 @@ import net.runelite.client.chat.ChatMessageBuilder;
 @Singleton
 public class MemberService implements BUPluginLifecycle {
 
-    @Inject
-    private Client client;
-    @Inject
-    private ClientThread clientThread;
-    @Inject
-    private AccountConfigurationService accountConfigurationService;
-    @Inject
-    private MembersDataProvider membersDataProvider;
+    @Inject private Client client;
+    @Inject private ClientThread clientThread;
+    @Inject private AccountConfigurationService accountConfigurationService;
+    @Inject private MembersDataProvider membersDataProvider;
+    @Inject private BUChatService buChatService;
+    @Inject private BUPluginConfig buPluginConfig;
     private Subscription accountConfigSubscription;
-    @Inject
-    private BUChatService buChatService;
-    @Inject
-    private BUPluginConfig buPluginConfig;
     private MembersDataProvider.MemberMapListener memberMapListener;
 
     @Override
     public void startUp() throws Exception {
-        // Data provider callbacks are not on client thread - wrap in clientThread.invoke()
         memberMapListener = new MembersDataProvider.MemberMapListener() {
             @Override
             public void onUpdate(Member member, Member old) {
                 clientThread.invoke(() -> {
-                    log.debug(
-                        "member service -> member update: {} - old: {}",
+                    log.debug("member service -> member update: {} - old: {}",
                         member == null ? null : member.toString(),
-                        old == null ? null : old.toString()
-                    );
-
+                        old == null ? null : old.toString());
                     if (old == null) {
-                        // If the updated member is not us, inform of a join
                         if (member.getAccountHash() != client.getAccountHash()) {
-                            ChatMessageBuilder builder = new ChatMessageBuilder();
-                            builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
-                            builder.append(" has joined your Group Bronzeman.");
-                            buChatService.sendMessage(builder.build());
+                            ChatMessageBuilder b = new ChatMessageBuilder();
+                            b.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                            b.append(" has joined your Group Bronzeman.");
+                            buChatService.sendMessage(b.build());
                         }
                     } else {
                         if (!Objects.equals(member.getName(), old.getName())) {
-                            ChatMessageBuilder builder = new ChatMessageBuilder();
-                            builder.append(buPluginConfig.chatPlayerNameColor(), old.getName());
-                            builder.append(" has changed their name to ");
-                            builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
-                            builder.append(".");
-                            buChatService.sendMessage(builder.build());
+                            ChatMessageBuilder b = new ChatMessageBuilder();
+                            b.append(buPluginConfig.chatPlayerNameColor(), old.getName());
+                            b.append(" has changed their name to ");
+                            b.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                            b.append(".");
+                            buChatService.sendMessage(b.build());
                         }
                         if (member.getRole() != old.getRole()) {
-                            ChatMessageBuilder builder = new ChatMessageBuilder();
-                            builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
-                            builder.append(" has changed their role from ");
-                            builder.append(
-                                buPluginConfig.chatHighlightColor(),
-                                old.getRole().toString()
-                            );
-                            builder.append(" to ");
-                            builder.append(
-                                buPluginConfig.chatHighlightColor(),
-                                member.getRole().toString()
-                            );
-                            builder.append(".");
-                            buChatService.sendMessage(builder.build());
+                            ChatMessageBuilder b = new ChatMessageBuilder();
+                            b.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                            b.append(" has changed their role from ");
+                            b.append(buPluginConfig.chatHighlightColor(), old.getRole().toString());
+                            b.append(" to ");
+                            b.append(buPluginConfig.chatHighlightColor(), member.getRole().toString());
+                            b.append(".");
+                            buChatService.sendMessage(b.build());
                         }
                     }
                 });
@@ -95,14 +73,13 @@ public class MemberService implements BUPluginLifecycle {
             @Override
             public void onDelete(Member member) {
                 clientThread.invoke(() -> {
-                    ChatMessageBuilder builder = new ChatMessageBuilder();
-                    builder.append(buPluginConfig.chatPlayerNameColor(), member.getName());
-                    builder.append(" has left your Group Bronzeman.");
-                    buChatService.sendMessage(builder.build());
+                    ChatMessageBuilder b = new ChatMessageBuilder();
+                    b.append(buPluginConfig.chatPlayerNameColor(), member.getName());
+                    b.append(" has left your Group Bronzeman.");
+                    buChatService.sendMessage(b.build());
                 });
             }
         };
-
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
         membersDataProvider.addMemberMapListener(memberMapListener);
@@ -118,34 +95,21 @@ public class MemberService implements BUPluginLifecycle {
     }
 
     public Member getMemberByName(String playerName) {
-        if (playerName == null) {
-            return null;
-        }
-        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready) {
+        if (playerName == null) return null;
+        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready)
             throw new IllegalStateException("Member data provider is not ready");
-        }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
-        if (membersMap == null || membersMap.isEmpty()) {
-            return null;
-        }
-        for (Member member : membersMap.values()) {
-            String name = member.getName();
-            if (playerName.equalsIgnoreCase(name)) {
-                return member;
-            }
-        }
-        return null;
+        if (membersMap == null || membersMap.isEmpty()) return null;
+        return membersMap.values().stream()
+            .filter(m -> playerName.equalsIgnoreCase(m.getName()))
+            .findFirst().orElse(null);
     }
 
     public Member getMemberByAccountHash(long accountHash) {
-        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready) {
+        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready)
             throw new IllegalStateException("Member data provider is not ready");
-        }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
-        if (membersMap == null) {
-            return null;
-        }
-        return membersMap.get(accountHash);
+        return membersMap == null ? null : membersMap.get(accountHash);
     }
 
     public Member getMyMember() {
@@ -153,256 +117,119 @@ public class MemberService implements BUPluginLifecycle {
     }
 
     public boolean isPlayingAlone() {
-        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready) {
+        if (membersDataProvider.getState().get() != MembersDataProvider.State.Ready)
             throw new IllegalStateException("Member data provider is not ready");
-        }
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
-        if (membersMap == null || membersMap.isEmpty()) {
-            return true;
-        }
-        return membersMap.size() == 1;
+        return membersMap == null || membersMap.isEmpty() || membersMap.size() == 1;
     }
 
-    private void currentAccountConfigurationChangeListener(
-        AccountConfiguration accountConfiguration) {
-        if (accountConfiguration == null) {
-            return;
-        }
-
-        // When we have an account, we want to wait until the members are ready
-        // if we have no members, we add ourselves as the owner
-        // if we do have members, but not us, we add ourselves as a member
-        membersDataProvider.await(null)
-            .whenComplete((void1, awaitThrowable) -> {
-                if (awaitThrowable != null) {
-                    log.error(
-                        "member service error whilst waiting till members data provider to become ready",
-                        awaitThrowable
-                    );
-                    return;
-                }
-
-                clientThread.invokeLater(this::whenMembersDataProviderReadyAfterAccountConfigurationSet);
-            });
+    private void currentAccountConfigurationChangeListener(AccountConfiguration accountConfiguration) {
+        if (accountConfiguration == null) return;
+        membersDataProvider.await(null).whenComplete((v, t) -> {
+            if (t != null) {
+                log.error("member service error whilst waiting till members data provider to become ready", t);
+                return;
+            }
+            clientThread.invokeLater(this::whenMembersDataProviderReadyAfterAccountConfigurationSet);
+        });
     }
 
     private void whenMembersDataProviderReadyAfterAccountConfigurationSet() {
         Player player = client.getLocalPlayer();
         String name = player.getName();
         if (name == null) {
-            // Wait till name gets set...
             clientThread.invokeLater(this::whenMembersDataProviderReadyAfterAccountConfigurationSet);
             return;
         }
-
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
         if (membersMap == null) {
             log.error("member service error members map is null but should be init here");
             return;
         }
-
         long accountHash = client.getAccountHash();
-        if (accountHash == -1) {
-            log.error("member service error whilst getting account hash");
-            return;
-        }
+        if (accountHash == -1) { log.error("member service error whilst getting account hash"); return; }
 
         log.debug("member service check if we need to add a member...");
-
-        boolean shouldUpdateMember = false;
-        boolean shouldBeOwner = false;
-        if (membersMap.isEmpty()) {
-            shouldUpdateMember = true;
-            shouldBeOwner = true;
-        } else if (!membersMap.containsKey(accountHash)) {
-            shouldUpdateMember = true;
-        } else {
+        boolean shouldUpdateMember = false, shouldBeOwner = false;
+        if (membersMap.isEmpty()) { shouldUpdateMember = true; shouldBeOwner = true; }
+        else if (!membersMap.containsKey(accountHash)) { shouldUpdateMember = true; }
+        else {
             Member member = membersMap.get(accountHash);
             String memberName = member.getName();
             if (memberName == null || !memberName.equals(name)) {
-                log.info(
-                    "member service -> name changed from '{}' to '{}' issue-ing member update",
-                    memberName,
-                    name
-                );
+                log.info("member service -> name changed from '{}' to '{}' issue-ing member update", memberName, name);
                 shouldUpdateMember = true;
             }
         }
-
-        log.debug(
-            "should update member: {} - should be owner: {}",
-            shouldUpdateMember,
-            shouldBeOwner
-        );
+        log.debug("should update member: {} - should be owner: {}", shouldUpdateMember, shouldBeOwner);
 
         if (shouldUpdateMember) {
             log.info("adding member...");
-            ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
-
-            MemberRole memberRole = shouldBeOwner ? MemberRole.Owner : MemberRole.Member;
-            Member member = new Member(
-                accountHash,
-                name,
-                now,
-                memberRole
-            );
-
-            membersDataProvider.addMember(member).whenComplete((void2, addMemberThrowable) -> {
-                if (addMemberThrowable != null) {
-                    log.error("member service error whilst adding member", addMemberThrowable);
-                    return;
-                }
+            MemberRole role = shouldBeOwner ? MemberRole.Owner : MemberRole.Member;
+            Member member = new Member(accountHash, name, new ISOOffsetDateTime(OffsetDateTime.now()), role);
+            membersDataProvider.addMember(member).whenComplete((v, t) -> {
+                if (t != null) { log.error("member service error whilst adding member", t); return; }
                 log.info("member added!");
             });
         }
     }
 
     public CompletableFuture<Void> promoteMemberToOwner(long accountHash) {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
-        if (membersMap == null) {
-            future.completeExceptionally(new IllegalStateException("members map is null"));
-            return future;
-        }
+        if (membersMap == null)
+            return CompletableFuture.failedFuture(new IllegalStateException("members map is null"));
         Member memberToPromote = membersMap.get(accountHash);
-        if (memberToPromote == null) {
-            future.completeExceptionally(new IllegalStateException("member to promote is null"));
-            return future;
-        }
-        if (memberToPromote.getRole() == MemberRole.Owner) {
-            future.complete(null);
-            return future;
-        }
+        if (memberToPromote == null)
+            return CompletableFuture.failedFuture(new IllegalStateException("member to promote is null"));
+        if (memberToPromote.getRole() == MemberRole.Owner)
+            return CompletableFuture.completedFuture(null);
 
-        List<Member> membersToDemote = membersMap.values()
-            .stream()
+        List<Member> membersToDemote = membersMap.values().stream()
             .filter(x -> x.getAccountHash() != accountHash && x.getRole() == MemberRole.Owner)
             .collect(Collectors.toList());
+        Member promoted = new Member(
+            memberToPromote.getAccountHash(), memberToPromote.getName(),
+            memberToPromote.getJoinedAt(), MemberRole.Owner);
 
-        Member newMemberToPromote = new Member(
-            memberToPromote.getAccountHash(),
-            memberToPromote.getName(),
-            memberToPromote.getJoinedAt(),
-            MemberRole.Owner
-        );
-        membersDataProvider.updateMember(newMemberToPromote).whenComplete((void1, throwable) -> {
-            if (throwable != null) {
-                future.completeExceptionally(throwable);
-                return;
-            }
-
-            List<CompletableFuture<Void>> demoteFutures = new ArrayList<>();
-            for (Member memberToDemote : membersToDemote) {
-                Member newMemberToDemote = new Member(
-                    memberToDemote.getAccountHash(),
-                    memberToDemote.getName(),
-                    memberToDemote.getJoinedAt(),
-                    MemberRole.Member
-                );
-                CompletableFuture<Void> fut = membersDataProvider.updateMember(newMemberToDemote);
-                demoteFutures.add(fut);
-            }
-
-            if (!demoteFutures.isEmpty()) {
-                CompletableFuture.allOf(demoteFutures.toArray(new CompletableFuture[0]))
-                    .whenComplete((void2, throwable2) -> {
-                        if (throwable2 != null) {
-                            future.completeExceptionally(throwable2);
-                            return;
-                        }
-
-                        future.complete(null);
-                    });
-                return;
-            }
-
-            future.complete(null);
+        return membersDataProvider.updateMember(promoted).thenCompose(v -> {
+            List<CompletableFuture<Void>> demoteFutures = membersToDemote.stream()
+                .map(m -> membersDataProvider.updateMember(
+                    new Member(m.getAccountHash(), m.getName(), m.getJoinedAt(), MemberRole.Member)))
+                .collect(Collectors.toList());
+            return demoteFutures.isEmpty()
+                ? CompletableFuture.completedFuture(null)
+                : CompletableFuture.allOf(demoteFutures.toArray(new CompletableFuture[0]));
         });
-
-        return future;
     }
 
     public CompletableFuture<Void> leaveGroup() {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-
         Member myMember;
-        try {
-            myMember = getMyMember();
-        } catch (Exception e) {
-            future.completeExceptionally(e);
-            return future;
-        }
+        try { myMember = getMyMember(); } catch (Exception e) { return CompletableFuture.failedFuture(e); }
         if (myMember == null) {
             log.warn("Attempted to leave group but we are not a member");
-            future.complete(null);
-            return future;
+            return CompletableFuture.completedFuture(null);
         }
-
-        membersDataProvider.removeMember(myMember.getAccountHash())
-            .whenComplete((void1, throwable) -> {
-                if (throwable != null) {
-                    log.error("Failed to remove member", throwable);
-                    future.completeExceptionally(throwable);
-                    return;
-                }
-
-                future.complete(null);
-            });
-
-        return future;
+        return membersDataProvider.removeMember(myMember.getAccountHash())
+            .whenComplete((v, t) -> { if (t != null) log.error("Failed to remove member", t); });
     }
 
     public CompletableFuture<Void> leaveGroupAndPromoteOldestMember() {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-
         Member myMember;
-        try {
-            myMember = getMyMember();
-        } catch (Exception e) {
-            future.completeExceptionally(e);
-            return future;
-        }
+        try { myMember = getMyMember(); } catch (Exception e) { return CompletableFuture.failedFuture(e); }
         if (myMember == null) {
             log.warn("Attempted to leave group but we are not a member");
-            future.complete(null);
-            return future;
+            return CompletableFuture.completedFuture(null);
         }
-
         Map<Long, Member> membersMap = membersDataProvider.getMembersMap();
-        if (membersMap == null) {
-            future.completeExceptionally(new IllegalStateException("members map is null"));
-            return future;
-        }
-
-        Optional<Member> otherOldestMemberOpt = membersMap.values()
-            .stream()
+        if (membersMap == null)
+            return CompletableFuture.failedFuture(new IllegalStateException("members map is null"));
+        Optional<Member> oldest = membersMap.values().stream()
             .filter(x -> x.getAccountHash() != myMember.getAccountHash())
             .min(Comparator.comparing(x -> x.getJoinedAt().getValue()));
-
-        if (!otherOldestMemberOpt.isPresent()) {
+        if (!oldest.isPresent()) {
             log.warn("Attempted to leave group and promote but there are no other members");
-            future.complete(null);
-            return future;
+            return CompletableFuture.completedFuture(null);
         }
-        Member otherOldestMember = otherOldestMemberOpt.get();
-
-        promoteMemberToOwner(otherOldestMember.getAccountHash()).whenComplete((void1, throwable) -> {
-            if (throwable != null) {
-                future.completeExceptionally(throwable);
-                return;
-            }
-
-            leaveGroup().whenComplete((void2, throwable2) -> {
-                if (throwable2 != null) {
-                    future.completeExceptionally(throwable2);
-                    return;
-                }
-
-                future.complete(null);
-            });
-        });
-
-        return future;
+        return promoteMemberToOwner(oldest.get().getAccountHash()).thenCompose(v -> leaveGroup());
     }
 }

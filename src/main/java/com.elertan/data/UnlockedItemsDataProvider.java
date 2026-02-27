@@ -15,63 +15,34 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Singleton
 public class UnlockedItemsDataProvider extends AbstractDataProvider {
-
     private final ConcurrentLinkedQueue<UnlockedItemsMapListener> unlockedItemsMapListeners = new ConcurrentLinkedQueue<>();
-
-    @Inject
-    private RemoteStorageService remoteStorageService;
-
+    @Inject private RemoteStorageService remoteStorageService;
     private KeyValueStoragePort<Integer, UnlockedItem> keyValueStoragePort;
     private KeyValueStoragePort.Listener<Integer, UnlockedItem> storagePortListener;
     private ConcurrentHashMap<Integer, UnlockedItem> unlockedItemsMap;
 
     @Override
-    protected RemoteStorageService getRemoteStorageService() {
-        return remoteStorageService;
-    }
+    protected RemoteStorageService getRemoteStorageService() { return remoteStorageService; }
 
     @Override
     public void startUp() throws Exception {
         storagePortListener = new KeyValueStoragePort.Listener<Integer, UnlockedItem>() {
             @Override
             public void onFullUpdate(Map<Integer, UnlockedItem> map) {
-                if (unlockedItemsMap == null) {
-                    return;
-                }
+                if (unlockedItemsMap == null) return;
                 unlockedItemsMap = new ConcurrentHashMap<>(map);
             }
-
             @Override
             public void onUpdate(Integer key, UnlockedItem newUnlockedItem) {
-                if (unlockedItemsMap == null) {
-                    return;
-                }
+                if (unlockedItemsMap == null) return;
                 unlockedItemsMap.put(key, newUnlockedItem);
-
-                for (UnlockedItemsMapListener listener : unlockedItemsMapListeners) {
-                    try {
-                        listener.onUpdate(newUnlockedItem);
-                    } catch (Exception ex) {
-                        log.error("unlockedItemUpdateListener: onUpdate", ex);
-                    }
-                }
+                notifyListeners(unlockedItemsMapListeners, l -> l.onUpdate(newUnlockedItem));
             }
-
             @Override
             public void onDelete(Integer key) {
-                if (unlockedItemsMap == null) {
-                    return;
-                }
-                UnlockedItem unlockedItem = unlockedItemsMap.get(key);
-                unlockedItemsMap.remove(key);
-
-                for (UnlockedItemsMapListener listener : unlockedItemsMapListeners) {
-                    try {
-                        listener.onDelete(unlockedItem);
-                    } catch (Exception ex) {
-                        log.error("unlockedItemDeleteListener: onDelete", ex);
-                    }
-                }
+                if (unlockedItemsMap == null) return;
+                UnlockedItem unlockedItem = unlockedItemsMap.remove(key);
+                notifyListeners(unlockedItemsMapListeners, l -> l.onDelete(unlockedItem));
             }
         };
         super.startUp();
@@ -81,7 +52,6 @@ public class UnlockedItemsDataProvider extends AbstractDataProvider {
     protected void onRemoteStorageReady() {
         keyValueStoragePort = remoteStorageService.getUnlockedItemsStoragePort();
         keyValueStoragePort.addListener(storagePortListener);
-
         keyValueStoragePort.readAll().whenComplete((map, throwable) -> {
             if (throwable != null) {
                 log.error("UnlockedItemDataProvider storageport read all failed", throwable);
@@ -103,36 +73,20 @@ public class UnlockedItemsDataProvider extends AbstractDataProvider {
     }
 
     public Map<Integer, UnlockedItem> getUnlockedItemsMap() {
-        if (unlockedItemsMap == null) {
-            return null;
-        }
-        return Collections.unmodifiableMap(unlockedItemsMap);
+        return unlockedItemsMap == null ? null : Collections.unmodifiableMap(unlockedItemsMap);
     }
 
-    public void addUnlockedItemsMapListener(UnlockedItemsMapListener listener) {
-        unlockedItemsMapListeners.add(listener);
-    }
-
-    public void removeUnlockedItemsMapListener(UnlockedItemsMapListener listener) {
-        unlockedItemsMapListeners.remove(listener);
-    }
+    public void addUnlockedItemsMapListener(UnlockedItemsMapListener listener) { unlockedItemsMapListeners.add(listener); }
+    public void removeUnlockedItemsMapListener(UnlockedItemsMapListener listener) { unlockedItemsMapListeners.remove(listener); }
 
     public CompletableFuture<Void> addUnlockedItem(UnlockedItem unlockedItem) {
-        if (getState().get() != State.Ready) {
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            future.completeExceptionally(new IllegalStateException("State is not ready"));
-            return future;
-        }
+        if (getState().get() != State.Ready) return CompletableFuture.failedFuture(new IllegalStateException("State is not ready"));
         unlockedItemsMap.put(unlockedItem.getId(), unlockedItem);
         return keyValueStoragePort.update(unlockedItem.getId(), unlockedItem);
     }
 
     public CompletableFuture<Void> removeUnlockedItemById(int itemId) {
-        if (getState().get() != State.Ready) {
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            future.completeExceptionally(new IllegalStateException("State is not ready"));
-            return future;
-        }
+        if (getState().get() != State.Ready) return CompletableFuture.failedFuture(new IllegalStateException("State is not ready"));
         return keyValueStoragePort.delete(itemId);
     }
 

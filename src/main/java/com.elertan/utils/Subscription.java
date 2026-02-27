@@ -1,29 +1,12 @@
 package com.elertan.utils;
 
-/**
- * Handle to an active subscription.
- * Implements AutoCloseable for try-with-resources support.
- */
+/** Handle to an active subscription. Implements AutoCloseable for try-with-resources. */
 public interface Subscription extends AutoCloseable {
-
-    /**
-     * Remove this subscription from its observable.
-     * Safe to call multiple times; subsequent calls are no-ops.
-     */
+    /** Remove this subscription. Safe to call multiple times. */
     void dispose();
 
-    /**
-     * Check if this subscription has been disposed.
-     *
-     * @return true if dispose() has been called
-     */
     boolean isDisposed();
 
-    /**
-     * Alias for dispose() to support try-with-resources.
-     */
     @Override
-    default void close() {
-        dispose();
-    }
+    default void close() { dispose(); }
 }

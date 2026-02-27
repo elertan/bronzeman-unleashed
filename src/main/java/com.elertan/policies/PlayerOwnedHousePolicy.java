@@ -2,14 +2,10 @@ package com.elertan.policies;
 
 import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
-import com.elertan.BUPluginConfig;
 import com.elertan.BUPluginLifecycle;
-import com.elertan.BUSoundHelper;
 import com.elertan.GameRulesService;
 import com.elertan.MemberService;
 import com.elertan.PolicyService;
-import com.elertan.WorldTypeService;
-import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
 import com.elertan.models.GameRules;
 import com.elertan.models.Member;
@@ -39,84 +35,46 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
     private static final int CHATBOX_INPUT_SCRIPT_ID = 112;
     private static final int CHATBOX_INPUT_CLOSE_SCRIPT_ID = 138;
 
-    @Inject
-    private Client client;
-    @Inject
-    private ClientThread clientThread;
-    @Inject
-    private BUPluginConfig buPluginConfig;
-    @Inject
-    private MemberService memberService;
-    @Inject
-    private BUChatService buChatService;
-    @Inject
-    private ChatMessageProvider chatMessageProvider;
-    @Inject
-    private BUSoundHelper buSoundHelper;
-    @Inject
-    private KeyManager keyManager;
-
+    @Inject private Client client;
+    @Inject private ClientThread clientThread;
+    @Inject private MemberService memberService;
+    @Inject private BUChatService buChatService;
+    @Inject private KeyManager keyManager;
     private volatile boolean isStarted = false;
-    private volatile boolean isReadFriendsHouseChatboxInputLoopRunning = false;
-    private String lastFriendsHouseEnteredName = null;
+    private volatile boolean isInputLoopRunning = false;
+    private String lastEnteredName = null;
     private KeyListener keyListener;
 
     @Inject
     public PlayerOwnedHousePolicy(AccountConfigurationService accountConfigurationService,
-        GameRulesService gameRulesService, PolicyService policyService,
-        WorldTypeService worldTypeService) {
-        super(accountConfigurationService, gameRulesService, policyService, worldTypeService);
+        GameRulesService gameRulesService, PolicyService policyService) {
+        super(accountConfigurationService, gameRulesService, policyService);
+    }
+
+    private boolean hasEnteredName() {
+        return isInputLoopRunning && lastEnteredName != null && !lastEnteredName.isEmpty();
     }
 
     @Override
     public void startUp() throws Exception {
         isStarted = true;
-
         keyListener = new KeyListener() {
             @Override
             public void keyTyped(KeyEvent e) {
-                if (!isReadFriendsHouseChatboxInputLoopRunning) {
-                    return;
-                }
-
-                if (e.getKeyChar() == '\n') {
-                    if (lastFriendsHouseEnteredName != null
-                        && !lastFriendsHouseEnteredName.isEmpty()) {
-                        e.consume();
-                    }
-                }
+                if (hasEnteredName() && e.getKeyChar() == '\n') e.consume();
             }
-
             @Override
             public void keyPressed(KeyEvent e) {
-                if (!isReadFriendsHouseChatboxInputLoopRunning) {
-                    return;
-                }
-
-                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-                    if (lastFriendsHouseEnteredName != null
-                        && !lastFriendsHouseEnteredName.isEmpty()) {
-                        PolicyContext context = createContext();
-                        if (!context.shouldApplyForRules(GameRules::isPreventPlayerOwnedHouse)) {
-                            return;
-                        }
-                        enforcePolicyEnterKeyPressedOnFriendsHouseName(e);
+                if (hasEnteredName() && e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    PolicyContext ctx = createContext();
+                    if (ctx.shouldApplyForRules(GameRules::isPreventPlayerOwnedHouse)) {
+                        enforcePolicyEnterKeyPressed(e);
                     }
                 }
             }
-
             @Override
             public void keyReleased(KeyEvent e) {
-                if (!isReadFriendsHouseChatboxInputLoopRunning) {
-                    return;
-                }
-
-                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-                    if (lastFriendsHouseEnteredName != null
-                        && !lastFriendsHouseEnteredName.isEmpty()) {
-                        e.consume();
-                    }
-                }
+                if (hasEnteredName() && e.getKeyCode() == KeyEvent.VK_ENTER) e.consume();
             }
         };
         keyManager.registerKeyListener(keyListener);
@@ -126,243 +84,122 @@ public class PlayerOwnedHousePolicy extends PolicyBase implements BUPluginLifecy
     public void shutDown() throws Exception {
         keyManager.unregisterKeyListener(keyListener);
         keyListener = null;
-
         isStarted = false;
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
-        if (!accountConfigurationService.isBronzemanEnabled()) {
-            return;
-        }
-
+        if (!accountConfigurationService.isBronzemanEnabled()) return;
         PolicyContext context = createContext();
-        if (!context.shouldApplyForRules(GameRules::isPreventPlayerOwnedHouse)) {
-            return;
-        }
-        MenuAction menuAction = event.getMenuAction();
+        if (!context.shouldApplyForRules(GameRules::isPreventPlayerOwnedHouse)) return;
+
         String menuOption = event.getMenuOption();
-        // Enter house via POH board
         if (menuOption.equalsIgnoreCase("enter house")) {
-            enforcePolicyEnterHouseMenuOptionClicked(event);
+            enforcePolicyEnterHouse(event);
         }
-        // Enter house via menu option right click on portal
         if (menuOption.equalsIgnoreCase("friend's house")) {
-            enforcePolicyViewHouseMenuOptionClicked(event);
+            waitAndStartInputLoop();
         }
-        // Potentially continue'ing
-
-        if (menuAction.ordinal() == MenuAction.WIDGET_CONTINUE.ordinal()) {
+        if (event.getMenuAction().ordinal() == MenuAction.WIDGET_CONTINUE.ordinal()) {
             Widget widget = event.getWidget();
-            if (widget == null) {
-                return;
-            }
-            String text = widget.getText();
-            if (text.equalsIgnoreCase("go to a friend's house")) {
-                enforcePolicyGoToAFriendsHouseMenuOptionClicked(event);
+            if (widget != null && "go to a friend's house".equalsIgnoreCase(widget.getText())) {
+                waitAndStartInputLoop();
             }
         }
     }
 
-    private void enforcePolicyEnterHouseMenuOptionClicked(MenuOptionClicked event) {
+    private void enforcePolicyEnterHouse(MenuOptionClicked event) {
         Widget buttonWidget = event.getWidget();
-        if (buttonWidget == null) {
-            log.error("Button widget is null played owner house policy");
-            return;
-        }
+        if (buttonWidget == null) { log.error("Button widget is null POH policy"); return; }
         Widget pohboardNameWidget = client.getWidget(InterfaceID.PohBoard.NAME);
-        if (pohboardNameWidget == null) {
-            log.error("Pohboard name widget is null player owned house policy");
-            return;
-        }
-        int buttonWidgetIdx = buttonWidget.getIndex();
-        Widget pohNameWidget = pohboardNameWidget.getChild(buttonWidgetIdx);
-        if (pohNameWidget == null) {
-            log.error("Poh name widget is null player owned house policy");
-            return;
-        }
-        String pohNameWidgetText = pohNameWidget.getText();
-        if (pohNameWidgetText == null) {
-            log.error("Poh name widget text is null player owned house policy");
-            return;
-        }
-
-        boolean couldEnter = validateHouseEntryForPlayer(pohNameWidgetText);
-        if (!couldEnter) {
-            event.consume();
-        }
+        if (pohboardNameWidget == null) { log.error("Pohboard name widget is null POH policy"); return; }
+        Widget pohNameWidget = pohboardNameWidget.getChild(buttonWidget.getIndex());
+        if (pohNameWidget == null) { log.error("Poh name widget is null POH policy"); return; }
+        String text = pohNameWidget.getText();
+        if (text == null) { log.error("Poh name widget text is null POH policy"); return; }
+        if (!validateHouseEntryForPlayer(text)) event.consume();
     }
 
-    private void enforcePolicyViewHouseMenuOptionClicked(MenuOptionClicked event) {
-        log.debug(
-            "Friend's house menu option clicked, waiting for friends house chatbox input ready");
-        waitForFriendsHouseChatboxInputReady()
-            .whenComplete((__, throwable) -> {
-                if (throwable != null) {
-                    log.error("Error waiting for friends house chatbox input ready", throwable);
-                    return;
-                }
-
-                log.debug("Friends house chatbox input ready, starting checker");
-                startReadFriendsHouseChatboxInputLoop();
-            });
+    private void waitAndStartInputLoop() {
+        waitForChatboxInputReady().whenComplete((__, throwable) -> {
+            if (throwable != null) {
+                log.error("Error waiting for friends house chatbox input ready", throwable);
+                return;
+            }
+            startInputLoop();
+        });
     }
 
-    private void enforcePolicyGoToAFriendsHouseMenuOptionClicked(MenuOptionClicked event) {
-        log.debug(
-            "Go to a friend's house menu option clicked, waiting for friends house chatbox input ready");
-        waitForFriendsHouseChatboxInputReady()
-            .whenComplete((__, throwable) -> {
-                if (throwable != null) {
-                    log.error("Error waiting for friends house chatbox input ready", throwable);
-                    return;
-                }
-
-                log.debug("Friends house chatbox input ready, starting checker");
-                startReadFriendsHouseChatboxInputLoop();
-            });
-    }
-
-
-    private CompletableFuture<Void> waitForFriendsHouseChatboxInputReady() {
+    private CompletableFuture<Void> waitForChatboxInputReady() {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        AtomicReference<Runnable> runnableRef = new AtomicReference<>();
-        Runnable runnable = () -> {
-            if (!isStarted) {
-                Exception ex = new IllegalStateException("Policy is not started");
-                future.completeExceptionally(ex);
-                return;
-            }
-            boolean isReady = isFriendsHouseChatboxInputReady();
-            if (isReady) {
-                future.complete(null);
-                return;
-            }
-            clientThread.invokeLater(runnableRef.get());
+        AtomicReference<Runnable> ref = new AtomicReference<>();
+        Runnable r = () -> {
+            if (!isStarted) { future.completeExceptionally(new IllegalStateException("Not started")); return; }
+            if (isChatboxInputReady()) { future.complete(null); return; }
+            clientThread.invokeLater(ref.get());
         };
-        runnableRef.set(runnable);
-        clientThread.invokeLater(runnable);
-
+        ref.set(r);
+        clientThread.invokeLater(r);
         return future;
     }
 
-    private boolean isFriendsHouseChatboxInputReady() {
-        Widget mesTextWidget = client.getWidget(InterfaceID.Chatbox.MES_TEXT);
-        if (mesTextWidget == null || mesTextWidget.isHidden()) {
-            return false;
-        }
-        Widget mesText2Widget = client.getWidget(InterfaceID.Chatbox.MES_TEXT2);
-        if (mesText2Widget == null || mesText2Widget.isHidden()) {
-            return false;
-        }
-        String mesTextWidgetText = mesTextWidget.getText();
-        if (mesTextWidgetText == null) {
-            return false;
-        }
-        String mesText2WidgetText = mesText2Widget.getText();
-        if (mesText2WidgetText == null) {
-            return false;
-        }
-        return mesTextWidgetText.equalsIgnoreCase("enter name:");
+    private boolean isChatboxInputReady() {
+        Widget mesText = client.getWidget(InterfaceID.Chatbox.MES_TEXT);
+        Widget mesText2 = client.getWidget(InterfaceID.Chatbox.MES_TEXT2);
+        if (mesText == null || mesText.isHidden() || mesText2 == null || mesText2.isHidden()) return false;
+        return mesText.getText() != null && mesText2.getText() != null
+            && mesText.getText().equalsIgnoreCase("enter name:");
     }
 
-    private void startReadFriendsHouseChatboxInputLoop() {
-        if (isReadFriendsHouseChatboxInputLoopRunning) {
-            return;
-        }
-        isReadFriendsHouseChatboxInputLoopRunning = true;
-
-        AtomicReference<Runnable> monitorLoopRef = new AtomicReference<>();
-        Runnable monitorLoop = () -> {
-            if (!isReadFriendsHouseChatboxInputLoopRunning) {
-                return;
-            }
-
-            if (!isFriendsHouseChatboxInputReady()) {
-                log.debug(
-                    "reading friends house chatbox input halted because chatbox is not ready anymore");
-                isReadFriendsHouseChatboxInputLoopRunning = false;
-                return;
-            }
-            clientThread.invokeLater(monitorLoopRef.get());
+    private void startInputLoop() {
+        if (isInputLoopRunning) return;
+        isInputLoopRunning = true;
+        AtomicReference<Runnable> ref = new AtomicReference<>();
+        Runnable loop = () -> {
+            if (!isInputLoopRunning) return;
+            if (!isChatboxInputReady()) { isInputLoopRunning = false; return; }
+            clientThread.invokeLater(ref.get());
         };
-        monitorLoopRef.set(monitorLoop);
-        clientThread.invokeLater(monitorLoopRef.get());
+        ref.set(loop);
+        clientThread.invokeLater(ref.get());
     }
 
     public void onScriptPreFired(ScriptPreFired event) {
-        if (!accountConfigurationService.isBronzemanEnabled()) {
-            return;
-        }
-        if (!isReadFriendsHouseChatboxInputLoopRunning) {
-            return;
-        }
-
+        if (!accountConfigurationService.isBronzemanEnabled() || !isInputLoopRunning) return;
         if (event.getScriptId() == CHATBOX_INPUT_SCRIPT_ID) {
-            ScriptEvent scriptEvent = event.getScriptEvent();
-            int typedChar = scriptEvent.getTypedKeyChar();
-            if (typedChar == 0) {
-                return;
-            }
-            if (typedChar == 8) {
-                // 'Backspace'
-                if (lastFriendsHouseEnteredName != null && !lastFriendsHouseEnteredName.isEmpty()) {
-                    String newName = lastFriendsHouseEnteredName.substring(
-                        0,
-                        lastFriendsHouseEnteredName.length() - 1
-                    );
-                    if (newName.isEmpty()) {
-                        newName = null;
-                    }
-                    setLastFriendsHouseEnteredName(newName);
+            ScriptEvent se = event.getScriptEvent();
+            int ch = se.getTypedKeyChar();
+            if (ch == 0 || ch == 10) return;
+            if (ch == 8) {
+                if (lastEnteredName != null && !lastEnteredName.isEmpty()) {
+                    String n = lastEnteredName.substring(0, lastEnteredName.length() - 1);
+                    setLastEnteredName(n.isEmpty() ? null : n);
                 }
                 return;
             }
-            if (typedChar == 10) {
-                return;
-            }
-            char typedCharChar = (char) typedChar;
-            String newName =
-                lastFriendsHouseEnteredName == null ? "" : lastFriendsHouseEnteredName;
-            newName += typedCharChar;
-            setLastFriendsHouseEnteredName(newName);
+            setLastEnteredName((lastEnteredName == null ? "" : lastEnteredName) + (char) ch);
         } else if (event.getScriptId() == CHATBOX_INPUT_CLOSE_SCRIPT_ID) {
-            isReadFriendsHouseChatboxInputLoopRunning = false;
-
-            lastFriendsHouseEnteredName = null;
+            isInputLoopRunning = false;
+            lastEnteredName = null;
         }
     }
 
-    private void setLastFriendsHouseEnteredName(String name) {
-        if (Objects.equals(lastFriendsHouseEnteredName, name)) {
-            return;
-        }
-        lastFriendsHouseEnteredName = name;
+    private void setLastEnteredName(String name) {
+        if (!Objects.equals(lastEnteredName, name)) lastEnteredName = name;
     }
 
-    private void enforcePolicyEnterKeyPressedOnFriendsHouseName(KeyEvent e) {
-        boolean couldEnter = validateHouseEntryForPlayer(lastFriendsHouseEnteredName);
-        if (!couldEnter) {
+    private void enforcePolicyEnterKeyPressed(KeyEvent e) {
+        if (!validateHouseEntryForPlayer(lastEnteredName)) {
             e.consume();
-            clientThread.invoke(() -> client.runScript(
-                CHATBOX_INPUT_CLOSE_SCRIPT_ID));
+            clientThread.invoke(() -> client.runScript(CHATBOX_INPUT_CLOSE_SCRIPT_ID));
         }
     }
 
     private boolean validateHouseEntryForPlayer(String inputName) {
         String playerName = TextUtils.sanitizePlayerName(inputName);
         Member member;
-        try {
-            member = memberService.getMemberByName(playerName);
-        } catch (Exception ex) {
-            buChatService.sendRestrictionMessage(MessageKey.STILL_LOADING_PLEASE_WAIT);
-            return false;
-        }
-
-        if (member == null) {
-            buChatService.sendRestrictionMessage(MessageKey.POH_ENTER_RESTRICTION);
-            return false;
-        }
-
+        try { member = memberService.getMemberByName(playerName); }
+        catch (Exception ex) { buChatService.sendRestrictionMessage(MessageKey.STILL_LOADING_PLEASE_WAIT); return false; }
+        if (member == null) { buChatService.sendRestrictionMessage(MessageKey.POH_ENTER_RESTRICTION); return false; }
         return true;
     }
 }

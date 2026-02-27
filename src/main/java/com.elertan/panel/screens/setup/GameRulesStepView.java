@@ -1,5 +1,7 @@
 package com.elertan.panel.screens.setup;
 
+import com.elertan.models.GameRules;
+import com.elertan.panel.components.ErrorLabel;
 import com.elertan.panel.components.GameRulesEditor;
 import com.elertan.panel.components.GameRulesEditorViewModel;
 import com.elertan.ui.Bindings;
@@ -10,6 +12,7 @@ import com.google.inject.Singleton;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -20,15 +23,18 @@ import javax.swing.JPanel;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 
+@Slf4j
 public class GameRulesStepView extends JPanel implements AutoCloseable {
 
+    private final Listener listener;
+    private final Property<Boolean> isSubmitting = new Property<>(false);
+    private final Property<String> errorMessage = new Property<>(null);
+    private final ErrorLabel errorLabel;
     private final AutoCloseable backButtonEnabledBinding;
     private final AutoCloseable finishButtonEnabledBinding;
-    private final AutoCloseable errorMessageContainerVisibleBinding;
-    private final AutoCloseable errorMessageLabelTextBinding;
 
-    private GameRulesStepView(GameRulesStepViewViewModel viewModel,
-        GameRulesEditor gameRulesEditor) {
+    private GameRulesStepView(Listener listener, GameRulesEditor gameRulesEditor) {
+        this.listener = listener;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
 
@@ -43,111 +49,85 @@ public class GameRulesStepView extends JPanel implements AutoCloseable {
         add(header);
 
         gameRulesEditor.setMaximumSize(new Dimension(
-            Integer.MAX_VALUE,
-            gameRulesEditor.getPreferredSize().height
-        ));
+            Integer.MAX_VALUE, gameRulesEditor.getPreferredSize().height));
         add(gameRulesEditor);
 
-        JPanel errorMessageContainer = new JPanel();
-        errorMessageContainer.setLayout(new BoxLayout(errorMessageContainer, BoxLayout.Y_AXIS));
-        errorMessageContainer.setBorder(BorderFactory.createEmptyBorder(0, 0, 20, 0));
-        errorMessageContainerVisibleBinding = Bindings.bindVisible(
-            errorMessageContainer,
-            viewModel.errorMessage.derive(errorMessage -> errorMessage != null
-                && !errorMessage.isEmpty())
-        );
-
-        JLabel errorMessageLabel = new JLabel();
-        errorMessageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        errorMessageLabelTextBinding = Bindings.bindLabelText(
-            errorMessageLabel, viewModel.errorMessage.derive(errorMessage -> {
-                if (errorMessage == null || errorMessage.isEmpty()) {
-                    return "";
-                }
-
-                String sb = "<html><div style=\"text-align:center;color:red;\">" +
-                    errorMessage +
-                    "</div></html>";
-
-                return sb;
-            })
-        );
-        errorMessageContainer.add(errorMessageLabel);
-        add(errorMessageContainer);
+        errorLabel = new ErrorLabel(errorMessage);
+        errorLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 20, 0));
+        add(errorLabel);
 
         JPanel buttonRow = new JPanel();
         buttonRow.setLayout(new BoxLayout(buttonRow, BoxLayout.X_AXIS));
         buttonRow.setOpaque(false);
 
         JButton backButton = new JButton("Go back");
-        backButton.addActionListener(e -> viewModel.onBackButtonClicked());
-        backButtonEnabledBinding = Bindings.bindEnabled(
-            backButton,
-            viewModel.isSubmitting.derive(b -> !b)
-        );
+        backButton.addActionListener(e -> listener.onBack());
+        backButtonEnabledBinding = Bindings.bindEnabled(backButton, isSubmitting.derive(b -> !b));
         buttonRow.add(backButton);
-
         buttonRow.add(Box.createHorizontalGlue());
 
         JButton finishButton = new JButton("Finish");
-        finishButton.addActionListener(e -> viewModel.onFinishButtonClicked());
-        finishButtonEnabledBinding = Bindings.bindEnabled(
-            finishButton,
-            viewModel.isSubmitting.derive(b -> !b)
-        );
+        finishButton.addActionListener(e -> onFinishButtonClicked());
+        finishButtonEnabledBinding = Bindings.bindEnabled(finishButton, isSubmitting.derive(b -> !b));
         buttonRow.add(finishButton);
-
         add(buttonRow);
 
         add(Box.createVerticalGlue());
     }
 
+    private void onFinishButtonClicked() {
+        isSubmitting.set(true);
+        listener.onFinish().whenComplete((__, throwable) -> {
+            try {
+                if (throwable != null) {
+                    log.error("error saving game rules", throwable);
+                    errorMessage.set("An error occurred while trying to save the game rules.");
+                    return;
+                }
+                errorMessage.set(null);
+            } finally {
+                isSubmitting.set(false);
+            }
+        });
+    }
+
     @Override
     public void close() throws Exception {
-        errorMessageLabelTextBinding.close();
-        errorMessageContainerVisibleBinding.close();
+        errorLabel.close();
         finishButtonEnabledBinding.close();
         backButtonEnabledBinding.close();
     }
 
+    public interface Listener {
+        void onBack();
+        CompletableFuture<Void> onFinish();
+    }
+
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
-
-        GameRulesStepView create(GameRulesStepViewViewModel viewModel,
+        GameRulesStepView create(Property<GameRules> gameRules, Listener listener,
             Property<Boolean> gameRulesAreViewOnly);
     }
 
-    @Slf4j
     @Singleton
     private static final class FactoryImpl implements Factory {
-
-        @Inject
-        GameRulesEditor.Factory gameRulesEditorFactory;
-        @Inject
-        GameRulesEditorViewModel.Factory gameRulesEditorViewModelFactory;
-        @Inject
-        private Client client;
+        @Inject private GameRulesEditor.Factory gameRulesEditorFactory;
+        @Inject private GameRulesEditorViewModel.Factory gameRulesEditorViewModelFactory;
+        @Inject private Client client;
 
         @Override
-        public GameRulesStepView create(GameRulesStepViewViewModel viewModel,
+        public GameRulesStepView create(Property<GameRules> gameRules, Listener listener,
             Property<Boolean> gameRulesAreViewOnly) {
             Supplier<GameRulesEditorViewModel.Props> makeProps = () -> {
-                Boolean gameRulesAreViewOnlyValue = gameRulesAreViewOnly.get();
+                Boolean viewOnly = gameRulesAreViewOnly.get();
                 return new GameRulesEditorViewModel.Props(
-                    client.getAccountHash(),
-                    viewModel.gameRules.get(),
-                    viewModel.gameRules::set,
-                    gameRulesAreViewOnlyValue != null && gameRulesAreViewOnlyValue
-                );
+                    client.getAccountHash(), gameRules.get(), gameRules::set,
+                    viewOnly != null && viewOnly);
             };
-            GameRulesEditorViewModel gameRulesEditorViewModel = gameRulesEditorViewModelFactory.create(
-                makeProps.get());
-
-            viewModel.gameRules.addListener((event) -> gameRulesEditorViewModel.setProps(makeProps.get()));
-            gameRulesAreViewOnly.addListener((event) -> gameRulesEditorViewModel.setProps(makeProps.get()));
-
-            GameRulesEditor gameRulesEditor = gameRulesEditorFactory.create(gameRulesEditorViewModel);
-            return new GameRulesStepView(viewModel, gameRulesEditor);
+            GameRulesEditorViewModel vm = gameRulesEditorViewModelFactory.create(makeProps.get());
+            gameRules.addListener(e -> vm.setProps(makeProps.get()));
+            gameRulesAreViewOnly.addListener(e -> vm.setProps(makeProps.get()));
+            return new GameRulesStepView(listener, gameRulesEditorFactory.create(vm));
         }
     }
 }

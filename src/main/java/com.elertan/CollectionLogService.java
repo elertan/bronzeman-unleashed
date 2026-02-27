@@ -13,48 +13,30 @@ import net.runelite.api.events.GameTick;
 @Slf4j
 @Singleton
 public class CollectionLogService implements BUPluginLifecycle {
-
     private static final int EXPIRY_TICKS = 12;
-
-    private final Map<String, Integer> recentCollectionLogUnlocks = new ConcurrentHashMap<>();
+    private final Map<String, Integer> recentUnlocks = new ConcurrentHashMap<>();
     private volatile int currentTick = 0;
+    @Inject private Client client;
 
-    @Inject
-    private Client client;
-
-    @Override
-    public void startUp() throws Exception {
-        // No initialization needed
-    }
+    @Override public void startUp() throws Exception {}
 
     @Override
     public void shutDown() throws Exception {
-        recentCollectionLogUnlocks.clear();
+        recentUnlocks.clear();
         currentTick = 0;
     }
 
-    /**
-     * Track a collection log unlock for overlay suppression.
-     * Called synchronously when "New item added to your collection log" is parsed.
-     * Thread-safe: can be called from event bus thread.
-     */
     public void addRecentCollectionLogUnlock(String itemName) {
-        recentCollectionLogUnlocks.put(itemName, currentTick);
+        recentUnlocks.put(itemName, currentTick);
     }
 
-    /**
-     * Check if item should have its unlock overlay suppressed.
-     * Returns true and removes the entry if present (one-time consumption).
-     * Should be called from client thread.
-     */
     public boolean tryConsumeOverlaySuppression(String itemName) {
-        return recentCollectionLogUnlocks.remove(itemName) != null;
+        return recentUnlocks.remove(itemName) != null;
     }
 
     public void onGameTick(GameTick event) {
         currentTick = client.getTickCount();
-
-        recentCollectionLogUnlocks.entrySet().removeIf(entry -> {
+        recentUnlocks.entrySet().removeIf(entry -> {
             if (currentTick - entry.getValue() > EXPIRY_TICKS) {
                 log.warn("Collection log item '{}' not matched by unlock within {} ticks",
                     entry.getKey(), EXPIRY_TICKS);
@@ -65,8 +47,6 @@ public class CollectionLogService implements BUPluginLifecycle {
     }
 
     public void onGameStateChanged(GameStateChanged event) {
-        if (event.getGameState() == GameState.LOGIN_SCREEN) {
-            recentCollectionLogUnlocks.clear();
-        }
+        if (event.getGameState() == GameState.LOGIN_SCREEN) recentUnlocks.clear();
     }
 }

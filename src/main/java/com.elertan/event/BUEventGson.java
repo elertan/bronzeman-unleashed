@@ -12,23 +12,21 @@ public class BUEventGson {
         BUEventType.class);
 
     static {
-        REGISTRY.put(BUEventType.SkillLevelUpAchievement, SkillLevelUpAchievementBUEvent.class);
-        REGISTRY.put(BUEventType.TotalLevelAchievement, TotalLevelAchievementBUEvent.class);
-        REGISTRY.put(BUEventType.CombatTaskAchievement, CombatTaskAchievementBUEvent.class);
-        REGISTRY.put(
-            BUEventType.QuestCompletionAchievement,
-            QuestCompletionAchievementBUEvent.class
-        );
-        REGISTRY.put(
-            BUEventType.DiaryCompletionAchievement,
-            DiaryCompletionAchievementBUEvent.class
-        );
-        REGISTRY.put(
-            BUEventType.CollectionLogUnlockAchievement,
-            CollectionLogUnlockAchievementBUEvent.class
-        );
-        REGISTRY.put(BUEventType.ValuableLoot, ValuableLootBUEvent.class);
-        REGISTRY.put(BUEventType.PetDrop, PetDropBUEvent.class);
+        Object[][] entries = {
+            {BUEventType.SkillLevelUpAchievement, BUEvent.SkillLevelUpAchievementBUEvent.class},
+            {BUEventType.TotalLevelAchievement, BUEvent.TotalLevelAchievementBUEvent.class},
+            {BUEventType.CombatTaskAchievement, BUEvent.CombatTaskAchievementBUEvent.class},
+            {BUEventType.QuestCompletionAchievement, BUEvent.QuestCompletionAchievementBUEvent.class},
+            {BUEventType.DiaryCompletionAchievement, BUEvent.DiaryCompletionAchievementBUEvent.class},
+            {BUEventType.CollectionLogUnlockAchievement, BUEvent.CollectionLogUnlockAchievementBUEvent.class},
+            {BUEventType.ValuableLoot, BUEvent.ValuableLootBUEvent.class},
+            {BUEventType.PetDrop, BUEvent.PetDropBUEvent.class},
+        };
+        for (Object[] e : entries) {
+            @SuppressWarnings("unchecked")
+            Class<? extends BUEvent> clazz = (Class<? extends BUEvent>) e[1];
+            REGISTRY.put((BUEventType) e[0], clazz);
+        }
     }
 
     public static JsonElement serialize(Gson gson, BUEvent value) {

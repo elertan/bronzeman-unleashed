@@ -27,37 +27,21 @@ public class GroundItemOwnedByKey implements Comparable<GroundItemOwnedByKey> {
     private final int worldX;
     private final int worldY;
 
-    public static GroundItemOwnedByKey of(int itemId, int world, int worldViewId, WorldPoint worldPoint) {
-        return new GroundItemOwnedByKey(
-            itemId,
-            world,
-            worldViewId,
-            worldPoint.getPlane(),
-            worldPoint.getX(),
-            worldPoint.getY()
-        );
+    public static GroundItemOwnedByKey of(int itemId, int world, int worldViewId, WorldPoint wp) {
+        return new GroundItemOwnedByKey(itemId, world, worldViewId, wp.getPlane(), wp.getX(), wp.getY());
     }
 
     public static GroundItemOwnedByKey fromKey(String key) {
-        if (key == null) {
-            throw new IllegalArgumentException("Key is null");
-        }
+        if (key == null) throw new IllegalArgumentException("Key is null");
         String k = key;
-        if (k.startsWith("{") && k.endsWith("}")) {
-            k = k.substring(1, k.length() - 1);
-        }
+        if (k.startsWith("{") && k.endsWith("}")) k = k.substring(1, k.length() - 1);
         String[] parts = k.split("_", -1);
-        if (parts.length != 6) {
-            throw new IllegalArgumentException("Invalid key format: " + key);
-        }
+        if (parts.length != 6) throw new IllegalArgumentException("Invalid key format: " + key);
         try {
-            int itemId = Integer.parseInt(parts[0]);
-            int world = Integer.parseInt(parts[1]);
-            int worldViewId = Integer.parseInt(parts[2]);
-            int plane = Integer.parseInt(parts[3]);
-            int worldX = Integer.parseInt(parts[4]);
-            int worldY = Integer.parseInt(parts[5]);
-            return new GroundItemOwnedByKey(itemId, world, worldViewId, plane, worldX, worldY);
+            return new GroundItemOwnedByKey(
+                Integer.parseInt(parts[0]), Integer.parseInt(parts[1]),
+                Integer.parseInt(parts[2]), Integer.parseInt(parts[3]),
+                Integer.parseInt(parts[4]), Integer.parseInt(parts[5]));
         } catch (NumberFormatException e) {
             log.error("Invalid key format: {}", key, e);
             throw new IllegalArgumentException("Invalid key format: " + key, e);
@@ -65,60 +49,31 @@ public class GroundItemOwnedByKey implements Comparable<GroundItemOwnedByKey> {
     }
 
     public String toKey() {
-        // Emit the raw form used by fromKey(); add braces only for display if desired
-        return String.format(
-            "%d_%d_%d_%d_%d_%d",
-            itemId,
-            world,
-            worldViewId,
-            plane,
-            worldX,
-            worldY
-        );
+        return String.format("%d_%d_%d_%d_%d_%d", itemId, world, worldViewId, plane, worldX, worldY);
     }
 
     @Override
     public String toString() {
-        String key = toKey();
-        StringBuilder sb = new StringBuilder();
-        sb.append("GroundItemOwnedByKey{");
-        sb.append("itemId=").append(itemId);
-        sb.append(", world=").append(world);
-        sb.append(", worldViewId=").append(worldViewId);
-        sb.append(", plane=").append(plane);
-        sb.append(", worldX=").append(worldX);
-        sb.append(", worldY=").append(worldY);
-        sb.append(", key='").append(key).append('\'');
-        sb.append('}');
-        return sb.toString();
+        return "GroundItemOwnedByKey{itemId=" + itemId + ", world=" + world
+            + ", worldViewId=" + worldViewId + ", plane=" + plane
+            + ", worldX=" + worldX + ", worldY=" + worldY
+            + ", key='" + toKey() + "'}";
     }
 
     @Override
-    public int compareTo(GroundItemOwnedByKey o) {
-        return toKey().compareTo(o.toKey());
-    }
-
+    public int compareTo(GroundItemOwnedByKey o) { return toKey().compareTo(o.toKey()); }
 
     public static final class Adapter extends TypeAdapter<GroundItemOwnedByKey> {
-
         @Override
         public void write(JsonWriter out, GroundItemOwnedByKey val) throws IOException {
-            if (val == null) {
-                out.nullValue();
-                return;
-            }
-            out.value(val.toKey()); // raw key only
+            if (val == null) { out.nullValue(); return; }
+            out.value(val.toKey());
         }
 
         @Override
         public GroundItemOwnedByKey read(JsonReader in) throws IOException {
-            if (in.peek() == com.google.gson.stream.JsonToken.NULL) {
-                in.nextNull();
-                return null;
-            }
-            String text = in.nextString();
-            return GroundItemOwnedByKey.fromKey(text);
+            if (in.peek() == com.google.gson.stream.JsonToken.NULL) { in.nextNull(); return null; }
+            return GroundItemOwnedByKey.fromKey(in.nextString());
         }
     }
 }
-

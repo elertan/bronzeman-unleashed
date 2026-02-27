@@ -1,106 +1,94 @@
 package com.elertan.panel;
 
+import com.elertan.AccountConfigurationService;
+import com.elertan.models.AccountConfiguration;
 import com.elertan.panel.screens.MainScreen;
-import com.elertan.panel.screens.MainScreenViewModel;
 import com.elertan.panel.screens.SetupScreen;
 import com.elertan.panel.screens.SetupScreenViewModel;
 import com.elertan.panel.screens.WaitForLoginScreen;
 import com.elertan.ui.Bindings;
+import com.elertan.ui.Property;
+import com.elertan.utils.Subscription;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.awt.CardLayout;
 import javax.swing.JPanel;
+import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.client.ui.PluginPanel;
 
 public class BUPanel extends PluginPanel implements AutoCloseable {
 
-    private final BUPanelViewModel viewModel;
-    private final WaitForLoginScreen.Factory waitForLoginScreenFactory;
-    private final SetupScreenViewModel setupScreenViewModel;
-    private final SetupScreen.Factory setupScreenFactory;
-    private final MainScreenViewModel mainScreenViewModel;
-    private final MainScreen.Factory mainScreenFactory;
+    public final Property<Screen> screen = new Property<>(Screen.WAIT_FOR_LOGIN);
     private final AutoCloseable cardLayoutBinding;
+    private Subscription accountConfigSubscription;
 
     private BUPanel(
-        BUPanelViewModel viewModel,
+        AccountConfigurationService accountConfigurationService,
+        Client client,
         WaitForLoginScreen.Factory waitForLoginScreenFactory,
-        SetupScreenViewModel setupScreenViewModel,
+        SetupScreenViewModel.Factory setupScreenViewModelFactory,
         SetupScreen.Factory setupScreenFactory,
-        MainScreenViewModel mainScreenViewModel,
         MainScreen.Factory mainScreenFactory
     ) {
         super(false);
 
-        this.viewModel = viewModel;
-        this.waitForLoginScreenFactory = waitForLoginScreenFactory;
-        this.setupScreenViewModel = setupScreenViewModel;
-        this.setupScreenFactory = setupScreenFactory;
-        this.mainScreenViewModel = mainScreenViewModel;
-        this.mainScreenFactory = mainScreenFactory;
+        accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::setScreenForAccountConfiguration);
+        if (accountConfigurationService.isReady() && client.getGameState() == GameState.LOGGED_IN) {
+            setScreenForAccountConfiguration(accountConfigurationService.getCurrentAccountConfiguration());
+        }
 
         CardLayout cardLayout = new CardLayout();
         setLayout(cardLayout);
-
-        cardLayoutBinding = Bindings.bindCardLayout(
-            this,
-            cardLayout,
-            viewModel.screen,
-            this::buildScreen
-        );
+        cardLayoutBinding = Bindings.bindCardLayout(this, cardLayout, screen, s -> {
+            switch (s) {
+                case WAIT_FOR_LOGIN: return waitForLoginScreenFactory.create();
+                case SETUP: return setupScreenFactory.create(setupScreenViewModelFactory.create());
+                case MAIN: return mainScreenFactory.create();
+            }
+            throw new IllegalStateException("Unknown screen: " + s);
+        });
     }
 
     @Override
     public void close() throws Exception {
         cardLayoutBinding.close();
-        viewModel.close();
+        if (accountConfigSubscription != null) {
+            accountConfigSubscription.dispose();
+            accountConfigSubscription = null;
+        }
     }
 
-    private JPanel buildScreen(BUPanelViewModel.Screen screen) {
-        switch (screen) {
-            case WAIT_FOR_LOGIN:
-                return waitForLoginScreenFactory.create();
-            case SETUP:
-                return setupScreenFactory.create(setupScreenViewModel);
-            case MAIN:
-                return mainScreenFactory.create(mainScreenViewModel);
-        }
+    private void setScreenForAccountConfiguration(AccountConfiguration config) {
+        screen.set(config == null ? Screen.SETUP : Screen.MAIN);
+    }
 
-        throw new IllegalStateException("Unknown screen: " + screen);
+    public enum Screen {
+        WAIT_FOR_LOGIN, SETUP, MAIN
     }
 
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
-
-        BUPanel create(BUPanelViewModel viewModel);
+        BUPanel create();
     }
 
     @Singleton
     private static final class FactoryImpl implements Factory {
-
-        @Inject
-        private WaitForLoginScreen.Factory waitForLoginScreenFactory;
-        @Inject
-        private SetupScreenViewModel.Factory setupScreenViewModelFactory;
-        @Inject
-        private SetupScreen.Factory setupScreenFactory;
-        @Inject
-        private MainScreenViewModel.Factory mainScreenViewModelFactory;
-        @Inject
-        private MainScreen.Factory mainScreenFactory;
+        @Inject private AccountConfigurationService accountConfigurationService;
+        @Inject private Client client;
+        @Inject private WaitForLoginScreen.Factory waitForLoginScreenFactory;
+        @Inject private SetupScreenViewModel.Factory setupScreenViewModelFactory;
+        @Inject private SetupScreen.Factory setupScreenFactory;
+        @Inject private MainScreen.Factory mainScreenFactory;
 
         @Override
-        public BUPanel create(BUPanelViewModel viewModel) {
-            SetupScreenViewModel setupScreenViewModel = setupScreenViewModelFactory.create();
-            MainScreenViewModel mainScreenViewModel = mainScreenViewModelFactory.create();
+        public BUPanel create() {
             return new BUPanel(
-                viewModel,
-                waitForLoginScreenFactory,
-                setupScreenViewModel,
-                setupScreenFactory,
-                mainScreenViewModel,
-                mainScreenFactory
+                accountConfigurationService, client,
+                waitForLoginScreenFactory, setupScreenViewModelFactory,
+                setupScreenFactory, mainScreenFactory
             );
         }
     }

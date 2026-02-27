@@ -2,13 +2,10 @@ package com.elertan.policies;
 
 import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
-import com.elertan.BUPluginConfig;
 import com.elertan.BUPluginLifecycle;
 import com.elertan.GameRulesService;
 import com.elertan.MinigameService;
 import com.elertan.PolicyService;
-import com.elertan.WorldTypeService;
-import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
 import com.elertan.data.GroundItemOwnedByDataProvider;
 import com.elertan.models.GameRules;
@@ -28,7 +25,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import lombok.NonNull;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Actor;
 import net.runelite.api.Client;
 import net.runelite.api.Player;
 import net.runelite.api.WorldView;
@@ -44,224 +40,104 @@ import net.runelite.client.game.ItemStack;
 @Singleton
 public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLifecycle {
 
-    @Inject
-    private Client client;
-    @Inject
-    private BUChatService buChatService;
-    @Inject
-    private ChatMessageProvider chatMessageProvider;
-    @Inject
-    private GroundItemOwnedByDataProvider groundItemOwnedByDataProvider;
-    @Inject
-    private BUPluginConfig buPluginConfig;
-    @Inject
-    private MinigameService minigameService;
-
-    private ConcurrentHashMap<String, ConcurrentLinkedQueue<PlayerDeathLocation>> playerDeathLocationsByPlayerName;
+    @Inject private Client client;
+    @Inject private BUChatService buChatService;
+    @Inject private GroundItemOwnedByDataProvider groundItemOwnedByDataProvider;
+    @Inject private MinigameService minigameService;
+    private ConcurrentHashMap<String, ConcurrentLinkedQueue<PlayerDeathLocation>> deathsByPlayer;
 
     @Inject
     public PlayerVersusPlayerPolicy(AccountConfigurationService accountConfigurationService,
-        GameRulesService gameRulesService, PolicyService policyService,
-        WorldTypeService worldTypeService) {
-        super(accountConfigurationService, gameRulesService, policyService, worldTypeService);
+        GameRulesService gameRulesService, PolicyService policyService) {
+        super(accountConfigurationService, gameRulesService, policyService);
     }
 
     @Override
-    public void startUp() throws Exception {
-        playerDeathLocationsByPlayerName = new ConcurrentHashMap<>();
-    }
+    public void startUp() throws Exception { deathsByPlayer = new ConcurrentHashMap<>(); }
 
     @Override
-    public void shutDown() throws Exception {
-        playerDeathLocationsByPlayerName = null;
-    }
+    public void shutDown() throws Exception { deathsByPlayer = null; }
 
     public void onActorDeath(ActorDeath e) {
-        if (!accountConfigurationService.isBronzemanEnabled()) {
-            return;
-        }
-
-        Actor actor = e.getActor();
-        boolean isPlayer = actor instanceof Player;
-        if (!isPlayer) {
-            log.debug("Actor is not a player");
-            return;
-        }
-        Player otherPlayer = (Player) actor;
-        Player localPlayer = client.getLocalPlayer();
-        if (Objects.equals(actor, localPlayer)) {
-            log.debug("we died...");
-            return;
-        }
-        if (playerDeathLocationsByPlayerName == null) {
-            log.debug("playerDeathLocations is null");
-            return;
-        }
-
-        PolicyContext policyContext = createContext();
-        if (!policyContext.shouldApplyForRules(GameRules::isRestrictPlayerVersusPlayerLoot)) {
-            return;
-        }
+        if (!accountConfigurationService.isBronzemanEnabled()) return;
+        if (!(e.getActor() instanceof Player)) return;
+        Player otherPlayer = (Player) e.getActor();
+        if (Objects.equals(otherPlayer, client.getLocalPlayer())) return;
+        if (deathsByPlayer == null) return;
+        PolicyContext ctx = createContext();
+        if (!ctx.shouldApplyForRules(GameRules::isRestrictPlayerVersusPlayerLoot)) return;
         addPlayerDeathLocation(otherPlayer);
     }
 
     public void onPlayerLootReceived(PlayerLootReceived e) {
-        if (!accountConfigurationService.isBronzemanEnabled()) {
-            return;
-        }
-
-        // This covers PvP loot, including loot keys when opened.
-        // Tag this batch as PvP using e.getPlayerName() or source info.
+        if (!accountConfigurationService.isBronzemanEnabled()) return;
         Player player = e.getPlayer();
-        if (player == null) {
-            return;
-        }
-        Collection<ItemStack> itemStacks = e.getItems();
-
-        PolicyContext policyContext = createContext();
-        GameRules gameRules = policyContext.getGameRules();
-        if (policyContext.isMustEnforceStrictPolicies()) {
-            enforcePlayerLootReceivedPolicy(player, itemStacks);
-            return;
-        }
-        if (gameRules == null || !gameRules.isRestrictPlayerVersusPlayerLoot()) {
-            return;
-        }
-        enforcePlayerLootReceivedPolicy(player, itemStacks);
+        if (player == null) return;
+        PolicyContext ctx = createContext();
+        if (!ctx.shouldApplyForRules(GameRules::isRestrictPlayerVersusPlayerLoot)) return;
+        enforcePlayerLootReceivedPolicy(player, e.getItems());
     }
 
     private void enforcePlayerLootReceivedPolicy(Player player, Collection<ItemStack> itemStacks) {
-        // Disable for last man standing
-        if (minigameService.isPlayingLastManStanding()) {
-            return;
-        }
-
+        if (minigameService.isPlayingLastManStanding()) return;
         String playerName = TextUtils.sanitizePlayerName(player.getName());
         log.info("loot received for player: {}", playerName);
-
-        if (playerDeathLocationsByPlayerName == null) {
-            log.info("playerDeathLocations is null");
-            return;
-        }
-        ConcurrentLinkedQueue<PlayerDeathLocation> playerDeathLocations = playerDeathLocationsByPlayerName.get(
-            playerName);
-        if (playerDeathLocations == null) {
-            log.info("playerDeathLocations is null for player: {}", playerName);
-            return;
-        }
-        if (playerDeathLocations.isEmpty()) {
-            log.info("playerDeathLocations is empty for player: {}", playerName);
-            return;
-        }
-        PlayerDeathLocation lastDeathLocation = playerDeathLocations.remove();
-        if (lastDeathLocation == null) {
-            log.info("lastDeathLocation is null for player: {}", playerName);
-            return;
-        }
-
-        if (itemStacks == null) {
-            log.info("item stacks is null, ignoring");
-            return;
-        }
-        for (ItemStack itemStack : itemStacks) {
-            if (itemStack == null) {
-                continue;
-            }
-
-            int itemId = itemStack.getId();
-            WorldPoint worldPoint = lastDeathLocation.getWorldPoint();
-            WorldView worldView = lastDeathLocation.getWorldView();
+        if (deathsByPlayer == null) { log.info("deathsByPlayer is null"); return; }
+        ConcurrentLinkedQueue<PlayerDeathLocation> deaths = deathsByPlayer.get(playerName);
+        if (deaths == null || deaths.isEmpty()) { log.info("no death locations for: {}", playerName); return; }
+        PlayerDeathLocation loc = deaths.remove();
+        if (loc == null || itemStacks == null) return;
+        for (ItemStack stack : itemStacks) {
+            if (stack == null) continue;
             GroundItemOwnedByKey key = GroundItemOwnedByKey.of(
-                itemId, lastDeathLocation.getWorld(), worldView.getId(), worldPoint);
-
-            markGroundItemOwnedByAsPlayerVersusPlayerLoot(key, playerName)
-                .whenComplete((__, throwable) -> {
-                    if (throwable != null) {
-                        log.error(
-                            "Failed to mark ground item as player versus player loot",
-                            throwable
-                        );
-                    }
-                });
+                stack.getId(), loc.getWorld(), loc.getWorldView().getId(), loc.getWorldPoint());
+            markAsPvpLoot(key, playerName).whenComplete((__, t) -> {
+                if (t != null) log.error("Failed to mark ground item as PvP loot", t);
+            });
         }
     }
 
     private void addPlayerDeathLocation(Player player) {
-        long tickCount = client.getTickCount();
-
-        String playerName = TextUtils.sanitizePlayerName(player.getName());
-        WorldPoint worldPoint = player.getWorldLocation();
-
-        int world = client.getWorld();
-        WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
-
-        ConcurrentLinkedQueue<PlayerDeathLocation> deathLocations = playerDeathLocationsByPlayerName.computeIfAbsent(
-            playerName,
-            k -> new ConcurrentLinkedQueue<>()
-        );
-        PlayerDeathLocation playerDeathLocation = new PlayerDeathLocation(
-            world,
-            worldPoint,
-            worldView,
-            tickCount
-        );
-        deathLocations.add(playerDeathLocation);
-        log.info(
-            "Added death location for player {} at tick count {} for x: {}, y: {}",
-            playerName,
-            tickCount,
-            worldPoint.getX(),
-            worldPoint.getY()
-        );
+        String name = TextUtils.sanitizePlayerName(player.getName());
+        WorldPoint wp = player.getWorldLocation();
+        WorldView wv = client.findWorldViewFromWorldPoint(wp);
+        ConcurrentLinkedQueue<PlayerDeathLocation> q =
+            deathsByPlayer.computeIfAbsent(name, k -> new ConcurrentLinkedQueue<>());
+        q.add(new PlayerDeathLocation(client.getWorld(), wp, wv, client.getTickCount()));
+        log.info("Added death location for {} at tick {} for x:{}, y:{}",
+            name, client.getTickCount(), wp.getX(), wp.getY());
     }
 
-    private CompletableFuture<Void> markGroundItemOwnedByAsPlayerVersusPlayerLoot(
+    private CompletableFuture<Void> markAsPvpLoot(
         @NonNull GroundItemOwnedByKey key, @NonNull String playerName) {
-        // PvP loot despawns after 3 minutes (300 ticks)
-        ISOOffsetDateTime despawnsAt = new ISOOffsetDateTime(OffsetDateTime.now()
-            .plus(Duration.ofMinutes(3)));
-        GroundItemOwnedByData data = new GroundItemOwnedByData(client.getAccountHash(), despawnsAt, playerName);
-
-        return groundItemOwnedByDataProvider.addEntry(key, data)
-            .thenApply(__ -> null);
+        ISOOffsetDateTime despawnsAt = new ISOOffsetDateTime(
+            OffsetDateTime.now().plus(Duration.ofMinutes(3)));
+        GroundItemOwnedByData data = new GroundItemOwnedByData(
+            client.getAccountHash(), despawnsAt, playerName);
+        return groundItemOwnedByDataProvider.addEntry(key, data).thenApply(__ -> null);
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
-        if (!accountConfigurationService.isBronzemanEnabled()) {
-            return;
-        }
-
-        PolicyContext context = createContext();
-        if (!context.shouldApplyForRules(GameRules::isRestrictPlayerVersusPlayerLoot)) {
-            return;
-        }
-
-        String menuOption = event.getMenuOption();
+        if (!accountConfigurationService.isBronzemanEnabled()) return;
+        PolicyContext ctx = createContext();
+        if (!ctx.shouldApplyForRules(GameRules::isRestrictPlayerVersusPlayerLoot)) return;
         Widget widget = event.getWidget();
-        if (widget == null) {
-            return;
-        }
+        if (widget == null) return;
+        String menuOption = event.getMenuOption();
         int widgetId = widget.getId();
-        if (widgetId == InterfaceID.WildyLootChest.ITEMS) {
-            if (menuOption.startsWith("Take") || menuOption.startsWith("Bank")) {
-                event.consume();
-                buChatService.sendRestrictionMessage(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_KEY_RESTRICTION);
-                return;
-            }
-        }
-        if (widgetId == InterfaceID.WildyLootChest.WITHDRAWBANK
+        if (widgetId == InterfaceID.WildyLootChest.ITEMS
+            && (menuOption.startsWith("Take") || menuOption.startsWith("Bank"))) {
+            event.consume();
+            buChatService.sendRestrictionMessage(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_KEY_RESTRICTION);
+        } else if (widgetId == InterfaceID.WildyLootChest.WITHDRAWBANK
             || widgetId == InterfaceID.WildyLootChest.WITHDRAWINV) {
             event.consume();
             buChatService.sendRestrictionMessage(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_KEY_RESTRICTION);
         }
     }
 
-    private void enforceOnMenuOptionClicked(MenuOptionClicked event) {
-    }
-
     @Value
     private static class PlayerDeathLocation {
-
         int world;
         WorldPoint worldPoint;
         WorldView worldView;

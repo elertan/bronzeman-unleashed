@@ -2,7 +2,6 @@ package com.elertan.panel.screens;
 
 import com.elertan.panel.ViewportWidthTrackingPanel;
 import com.elertan.panel.screens.setup.GameRulesStepView;
-import com.elertan.panel.screens.setup.GameRulesStepViewViewModel;
 import com.elertan.panel.screens.setup.RemoteStepView;
 import com.elertan.panel.screens.setup.RemoteStepViewViewModel;
 import com.elertan.ui.Bindings;
@@ -30,21 +29,18 @@ public class SetupScreen extends JPanel implements AutoCloseable {
     private final RemoteStepView.Factory remoteStepViewFactory;
     private final RemoteStepViewViewModel remoteStepViewViewModel;
     private final GameRulesStepView.Factory gameRulesStepViewFactory;
-    private final GameRulesStepViewViewModel gameRulesStepViewViewModel;
     private final AutoCloseable contentCardLayoutBinding;
 
     private SetupScreen(
         SetupScreenViewModel viewModel,
         RemoteStepView.Factory remoteStepViewFactory,
         RemoteStepViewViewModel remoteStepViewViewModel,
-        GameRulesStepView.Factory gameRulesStepViewFactory,
-        GameRulesStepViewViewModel gameRulesStepViewViewModel
+        GameRulesStepView.Factory gameRulesStepViewFactory
     ) {
         this.viewModel = viewModel;
         this.remoteStepViewFactory = remoteStepViewFactory;
         this.remoteStepViewViewModel = remoteStepViewViewModel;
         this.gameRulesStepViewFactory = gameRulesStepViewFactory;
-        this.gameRulesStepViewViewModel = gameRulesStepViewViewModel;
 
         setLayout(new BorderLayout());
 
@@ -61,25 +57,18 @@ public class SetupScreen extends JPanel implements AutoCloseable {
         subtitleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 18f));
         subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         inner.add(subtitleLabel);
-
         inner.add(Box.createVerticalStrut(15));
 
-        JLabel getStartedLabel = new JLabel();
-        getStartedLabel.setText(
+        JLabel getStartedLabel = new JLabel(
             "<html><div style=\"text-align:center;\">Let's get you started by configuring settings for your account.</div></html>");
         getStartedLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         inner.add(getStartedLabel);
-
         inner.add(Box.createVerticalStrut(10));
 
         CardLayout contentCardLayout = new CardLayout();
         JPanel contentPanel = new JPanel(contentCardLayout);
         contentCardLayoutBinding = Bindings.bindCardLayout(
-            contentPanel,
-            contentCardLayout,
-            viewModel.step,
-            this::buildStep
-        );
+            contentPanel, contentCardLayout, viewModel.step, this::buildStep);
 
         ViewportWidthTrackingPanel viewportWrapper = new ViewportWidthTrackingPanel(new BorderLayout());
         viewportWrapper.add(contentPanel, BorderLayout.NORTH);
@@ -88,28 +77,21 @@ public class SetupScreen extends JPanel implements AutoCloseable {
         scrollPane.setBorder(null);
         scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
-        // Dynamically add right padding only when vertical scrollbar is visible
         scrollPane.getVerticalScrollBar().addAdjustmentListener(e -> {
             boolean visible = scrollPane.getVerticalScrollBar().isVisible();
-            if (visible) {
-                viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 10));
-            } else {
-                viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
-            }
+            viewportWrapper.setBorder(visible
+                ? BorderFactory.createEmptyBorder(0, 0, 0, 10)
+                : BorderFactory.createEmptyBorder(0, 0, 0, 0));
             viewportWrapper.revalidate();
         });
-
         inner.add(scrollPane);
-
         inner.add(Box.createVerticalStrut(15));
 
         JButton dontAskMeAgainButton = new JButton("Don't ask me again for this account");
         dontAskMeAgainButton.setAlignmentX(Component.CENTER_ALIGNMENT);
         dontAskMeAgainButton.setBorder(BorderFactory.createEmptyBorder(15, 0, 15, 0));
         dontAskMeAgainButton.setMaximumSize(new Dimension(
-            Integer.MAX_VALUE,
-            dontAskMeAgainButton.getPreferredSize().height
-        ));
+            Integer.MAX_VALUE, dontAskMeAgainButton.getPreferredSize().height));
         dontAskMeAgainButton.addActionListener(e -> viewModel.onDontAskMeAgainButtonClick());
         inner.add(dontAskMeAgainButton);
 
@@ -128,56 +110,35 @@ public class SetupScreen extends JPanel implements AutoCloseable {
                 return remoteStepViewFactory.create(remoteStepViewViewModel);
             case GAME_RULES:
                 return gameRulesStepViewFactory.create(
-                    gameRulesStepViewViewModel,
+                    viewModel.gameRules,
+                    new GameRulesStepView.Listener() {
+                        @Override public void onBack() { viewModel.onGameRulesStepBack(); }
+                        @Override public CompletableFuture<Void> onFinish() { return viewModel.onGameRulesStepFinish(); }
+                    },
                     viewModel.gameRulesAreViewOnly
                 );
         }
-
         throw new IllegalStateException("Unknown step: " + step);
     }
 
-
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
-
         SetupScreen create(SetupScreenViewModel viewModel);
     }
 
     @Singleton
     static final class FactoryImpl implements Factory {
-
-        @Inject
-        RemoteStepView.Factory remoteStepViewFactory;
-        @Inject
-        RemoteStepViewViewModel.Factory remoteStepViewViewModelFactory;
-        @Inject
-        GameRulesStepView.Factory gameRulesStepViewFactory;
-        @Inject
-        GameRulesStepViewViewModel.Factory gameRulesStepViewViewModelFactory;
+        @Inject RemoteStepView.Factory remoteStepViewFactory;
+        @Inject RemoteStepViewViewModel.Factory remoteStepViewViewModelFactory;
+        @Inject GameRulesStepView.Factory gameRulesStepViewFactory;
 
         @Override
         public SetupScreen create(SetupScreenViewModel viewModel) {
-            RemoteStepViewViewModel remoteStepViewViewModel = remoteStepViewViewModelFactory.create(
-                viewModel::onRemoteStepFinished);
-            GameRulesStepViewViewModel gameRulesStepViewViewModel = gameRulesStepViewViewModelFactory.create(
-                viewModel.gameRules, new GameRulesStepViewViewModel.Listener() {
-                    @Override
-                    public void onBack() {
-                        viewModel.onGameRulesStepBack();
-                    }
-
-                    @Override
-                    public CompletableFuture<Void> onFinish() {
-                        return viewModel.onGameRulesStepFinish();
-                    }
-                }
-            );
             return new SetupScreen(
                 viewModel,
                 remoteStepViewFactory,
-                remoteStepViewViewModel,
-                gameRulesStepViewFactory,
-                gameRulesStepViewViewModel
+                remoteStepViewViewModelFactory.create(viewModel::onRemoteStepFinished),
+                gameRulesStepViewFactory
             );
         }
     }
