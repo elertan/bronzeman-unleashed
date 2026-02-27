@@ -5,6 +5,7 @@ import com.elertan.BUChatService;
 import com.elertan.BUPluginConfig;
 import com.elertan.GameRulesService;
 import com.elertan.PolicyService;
+import com.elertan.WorldTypeService;
 import com.elertan.chat.ChatMessageProvider;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
 import com.elertan.models.GameRules;
@@ -27,8 +28,9 @@ public class FaladorPartyRoomPolicy extends PolicyBase {
 
     @Inject
     public FaladorPartyRoomPolicy(AccountConfigurationService accountConfigurationService,
-        GameRulesService gameRulesService, PolicyService policyService) {
-        super(accountConfigurationService, gameRulesService, policyService);
+        GameRulesService gameRulesService, PolicyService policyService,
+        WorldTypeService worldTypeService) {
+        super(accountConfigurationService, gameRulesService, policyService, worldTypeService);
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {

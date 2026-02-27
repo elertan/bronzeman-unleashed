@@ -22,10 +22,6 @@ import net.runelite.client.events.ServerNpcLoot;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemMapping;
 import net.runelite.client.game.ItemStack;
-import net.runelite.client.game.WorldService;
-import net.runelite.http.api.worlds.World;
-import net.runelite.http.api.worlds.WorldResult;
-import net.runelite.http.api.worlds.WorldType;
 
 import com.elertan.utils.Subscription;
 import java.time.OffsetDateTime;
@@ -125,22 +121,12 @@ public class ItemUnlockService implements BUPluginLifecycle {
         InventoryID.LOOTING_BAG, // Looting bag
         InventoryID.PMOON_REWARDINV // Moons of Peril reward
     );
-    private static final Set<WorldType> supportedWorldTypes = ImmutableSet.of(
-        WorldType.MEMBERS,
-        WorldType.PVP,
-        WorldType.SKILL_TOTAL,
-        WorldType.HIGH_RISK,
-        WorldType.FRESH_START_WORLD,
-        WorldType.LAST_MAN_STANDING
-    );
     private Subscription stateSubscription;
     private Subscription accountConfigSubscription;
     @Inject
     private Client client;
     @Inject
     private ClientThread clientThread;
-    @Inject
-    private WorldService worldService;
     @Inject
     private ItemManager itemManager;
     @Inject
@@ -163,6 +149,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private MinigameService minigameService;
     @Inject
     private CollectionLogService collectionLogService;
+    @Inject
+    private WorldTypeService worldTypeService;
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private volatile boolean hasNotifiedPlayerOfNonSupportedWorldType = false;
 
@@ -439,12 +427,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
     }
 
     private void checkAndNotifyNonSupportedWorldType() {
-        boolean isSupported;
-        try {
-            isSupported = isCurrentWorldSupportedForUnlockingItems();
-        } catch (Exception e) {
-            return;
-        }
+        boolean isSupported = worldTypeService.isCurrentWorldSupported();
 
         if (isSupported) {
             return;
@@ -469,13 +452,9 @@ public class ItemUnlockService implements BUPluginLifecycle {
         }
 
         // We don't support all world types, for example we don't want unlocks on seasonal modes
-        try {
-            if (!isCurrentWorldSupportedForUnlockingItems()) {
-                log.info("Current world is not supported for unlocking items");
-                return CompletableFuture.completedFuture(null);
-            }
-        } catch (Exception ex) {
-            return CompletableFuture.failedFuture(ex);
+        if (!worldTypeService.isCurrentWorldSupported()) {
+            log.info("Current world is not supported for unlocking items");
+            return CompletableFuture.completedFuture(null);
         }
 
         // Disable LMS unlocks
@@ -557,23 +536,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
         // essentially the same item
         String itemName = client.getItemDefinition(itemId).getName();
         return MAP_ITEM_NAMES.getOrDefault(itemName, itemId);
-    }
-
-    private boolean isCurrentWorldSupportedForUnlockingItems() throws Exception {
-        int worldNumber = client.getWorld();
-        WorldResult worldResult = worldService.getWorlds();
-        if (worldResult == null) {
-            throw new Exception("Failed to get worlds");
-        }
-        World world = worldResult.findWorld(worldNumber);
-        if (world == null) {
-            throw new Exception("Failed to find world with id " + worldNumber);
-        }
-        EnumSet<WorldType> worldTypes = world.getTypes();
-        boolean hasUnsupportedWorldType = !worldTypes.isEmpty() && worldTypes.stream()
-            .anyMatch(t -> !supportedWorldTypes.contains(t));
-
-        return !hasUnsupportedWorldType;
     }
 
     private void unlockedItemDataProviderStateListener(AbstractDataProvider.State state) {

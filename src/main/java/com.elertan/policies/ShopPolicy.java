@@ -6,6 +6,7 @@ import com.elertan.BUResourceService;
 import com.elertan.GameRulesService;
 import com.elertan.ItemUnlockService;
 import com.elertan.PolicyService;
+import com.elertan.WorldTypeService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.awt.AlphaComposite;
@@ -48,8 +49,9 @@ public class ShopPolicy extends PolicyBase {
 
     @Inject
     public ShopPolicy(AccountConfigurationService accountConfigurationService,
-        GameRulesService gameRulesService, PolicyService policyService) {
-        super(accountConfigurationService, gameRulesService, policyService);
+        GameRulesService gameRulesService, PolicyService policyService,
+        WorldTypeService worldTypeService) {
+        super(accountConfigurationService, gameRulesService, policyService, worldTypeService);
     }
 
     public void onWidgetLoaded(WidgetLoaded event) {
