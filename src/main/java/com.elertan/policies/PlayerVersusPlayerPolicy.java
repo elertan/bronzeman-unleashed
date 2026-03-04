@@ -137,30 +137,30 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
         }
 
         String playerName = TextUtils.sanitizePlayerName(player.getName());
-        log.info("loot received for player: {}", playerName);
+        log.debug("loot received for player: {}", playerName);
 
         if (playerDeathLocationsByPlayerName == null) {
-            log.info("playerDeathLocations is null");
+            log.debug("playerDeathLocations is null");
             return;
         }
         ConcurrentLinkedQueue<PlayerDeathLocation> playerDeathLocations = playerDeathLocationsByPlayerName.get(
             playerName);
         if (playerDeathLocations == null) {
-            log.info("playerDeathLocations is null for player: {}", playerName);
+            log.debug("playerDeathLocations is null for player: {}", playerName);
             return;
         }
         if (playerDeathLocations.isEmpty()) {
-            log.info("playerDeathLocations is empty for player: {}", playerName);
+            log.debug("playerDeathLocations is empty for player: {}", playerName);
             return;
         }
         PlayerDeathLocation lastDeathLocation = playerDeathLocations.remove();
         if (lastDeathLocation == null) {
-            log.info("lastDeathLocation is null for player: {}", playerName);
+            log.debug("lastDeathLocation is null for player: {}", playerName);
             return;
         }
 
         if (itemStacks == null) {
-            log.info("item stacks is null, ignoring");
+            log.debug("item stacks is null, ignoring");
             return;
         }
         for (ItemStack itemStack : itemStacks) {
@@ -206,7 +206,7 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
             tickCount
         );
         deathLocations.add(playerDeathLocation);
-        log.info(
+        log.debug(
             "Added death location for player {} at tick count {} for x: {}, y: {}",
             playerName,
             tickCount,

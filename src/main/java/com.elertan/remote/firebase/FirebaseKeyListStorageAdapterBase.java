@@ -206,7 +206,7 @@ public class FirebaseKeyListStorageAdapterBase<K, V> implements KeyListStoragePo
             K key = stringToKeyTransformer.apply(strKey);
             handleEntryUpdate(key, entryKey, event.getData());
         } else {
-            log.info(
+            log.debug(
                 "FirebaseKeyListStorageAdapterBase ({}): too many path parts, ignoring: {}",
                 basePath,
                 path

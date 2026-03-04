@@ -16,6 +16,7 @@ import java.util.function.Consumer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
+import okhttp3.ConnectionPool;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -54,6 +55,7 @@ public class FirebaseSSEStream {
         this.gson = gson;
         this.databaseURL = databaseURL;
         this.sseClient = httpClient.newBuilder()
+            .connectionPool(new ConnectionPool())
             .retryOnConnectionFailure(true)
             // Keep the TCP/TLS connection alive and detect dead HTTP/2 sockets after sleep
             .pingInterval(Duration.ofSeconds(30))

@@ -37,7 +37,7 @@ public class MembersDataProvider extends AbstractDataProvider {
         storagePortListener = new KeyValueStoragePort.Listener<Long, Member>() {
             @Override
             public void onFullUpdate(Map<Long, Member> map) {
-                log.info("members data provider -> on full update");
+                log.debug("members data provider -> on full update");
                 if (membersMap == null) {
                     return;
                 }
@@ -46,7 +46,7 @@ public class MembersDataProvider extends AbstractDataProvider {
 
             @Override
             public void onUpdate(Long key, Member member) {
-                log.info("members data provider -> on update");
+                log.debug("members data provider -> on update");
                 if (membersMap == null) {
                     return;
                 }
@@ -70,7 +70,7 @@ public class MembersDataProvider extends AbstractDataProvider {
 
             @Override
             public void onDelete(Long key) {
-                log.info("members data provider -> on delete");
+                log.debug("members data provider -> on delete");
                 if (membersMap == null) {
                     return;
                 }
