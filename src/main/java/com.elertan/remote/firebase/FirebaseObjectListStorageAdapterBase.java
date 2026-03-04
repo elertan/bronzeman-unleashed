@@ -132,7 +132,7 @@ public class FirebaseObjectListStorageAdapterBase<V> implements ObjectListStorag
             String entryKey = pathParts[1];
             handleEntryUpdate(entryKey, event.getData());
         } else {
-            log.info(
+            log.debug(
                 "FirebaseObjectListStorageAdapterBase ({}): too many path parts, ignoring: {}",
                 basePath,
                 path

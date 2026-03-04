@@ -411,7 +411,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
         }
 
         return unlockedItemsDataProvider.removeUnlockedItemById(itemId)
-            .thenRun(() -> log.info("Removed unlocked item with id {}", itemId));
+            .thenRun(() -> log.debug("Removed unlocked item with id {}", itemId));
     }
 
     private boolean unlockedItemsDataProviderNotReady() {
@@ -453,7 +453,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
         // We don't support all world types, for example we don't want unlocks on seasonal modes
         if (!worldTypeService.isCurrentWorldSupported()) {
-            log.info("Current world is not supported for unlocking items");
+            log.debug("Current world is not supported for unlocking items");
             return CompletableFuture.completedFuture(null);
         }
 
@@ -509,7 +509,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     acquiredAt,
                     droppedByNPCId
                 );
-                log.info("Unlocked item ({}) '{}'", fItemId, fItemName);
+                log.debug("Unlocked item ({}) '{}'", fItemId, fItemName);
                 return unlockedItemsDataProvider.addUnlockedItem(unlockedItem);
             });
     }

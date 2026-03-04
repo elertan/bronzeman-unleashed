@@ -274,7 +274,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                     for (GroundItemOwnedByData data : entries.values()) {
                         String droppedByPlayerName = data.getDroppedByPlayerName();
                         if (droppedByPlayerName != null) {
-                            log.info(
+                            log.debug(
                                 "Performing player versus player loot check for item '{}' dropped by {}",
                                 itemId,
                                 droppedByPlayerName
@@ -286,11 +286,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                             } catch (Exception ignored) {
                             }
                             if (member != null) {
-                                log.info("Player '{}' is part of our group, allow take", droppedByPlayerName);
+                                log.debug("Player '{}' is part of our group, allow take", droppedByPlayerName);
                                 continue;
                             }
 
-                            log.info("Player '{}' is not part of our group, deny take", droppedByPlayerName);
+                            log.debug("Player '{}' is not part of our group, deny take", droppedByPlayerName);
                             buChatService.sendRestrictionMessage(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION);
                             return;
                         }

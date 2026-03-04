@@ -185,7 +185,7 @@ public class FirebaseKeyValueStorageAdapterBase<K, V> implements KeyValueStorage
                 notifyListenersOnUpdate(key, value);
             }
         } else {
-            log.info(
+            log.debug(
                 "RepositoryFirebaseStorageAdapterbase ({}): too many path parts for unlocked items sse event, will ignored: {}",
                 basePath,
                 path
