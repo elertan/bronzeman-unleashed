@@ -66,7 +66,7 @@ public class UnlockedItemsScreenViewModel extends BaseViewModel {
 
     private void sortedByListener(PropertyChangeEvent event) {
         SortedBy sortedByValue = (SortedBy) event.getNewValue();
-        log.info("sorted by changed to: {}", sortedByValue);
+        log.debug("sorted by changed to: {}", sortedByValue);
     }
 
     public enum Screen {

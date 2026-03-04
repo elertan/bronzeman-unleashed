@@ -220,7 +220,7 @@ public class MemberService implements BUPluginLifecycle {
             Member member = membersMap.get(accountHash);
             String memberName = member.getName();
             if (memberName == null || !memberName.equals(name)) {
-                log.info(
+                log.debug(
                     "member service -> name changed from '{}' to '{}' issue-ing member update",
                     memberName,
                     name
@@ -236,7 +236,7 @@ public class MemberService implements BUPluginLifecycle {
         );
 
         if (shouldUpdateMember) {
-            log.info("adding member...");
+            log.debug("adding member...");
             ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
 
             MemberRole memberRole = shouldBeOwner ? MemberRole.Owner : MemberRole.Member;
@@ -252,7 +252,7 @@ public class MemberService implements BUPluginLifecycle {
                     log.error("member service error whilst adding member", addMemberThrowable);
                     return;
                 }
-                log.info("member added!");
+                log.debug("member added!");
             });
         }
     }

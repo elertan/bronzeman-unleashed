@@ -81,7 +81,7 @@ public class LootValuationService implements BUPluginLifecycle {
                         log.error("error publishing valuable loot event", throwable);
                         return;
                     }
-                    log.info("published valuable loot event");
+                    log.debug("published valuable loot event");
                 });
             }
         }

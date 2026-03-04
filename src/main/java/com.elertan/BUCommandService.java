@@ -89,7 +89,7 @@ public class BUCommandService implements BUPluginLifecycle {
         String commandName = args[0].toLowerCase();
         String argument = args.length > 1 ? args[1] : null;
 
-        log.info("Parsed command: '{}', argument: '{}'", commandName, argument);
+        log.debug("Parsed command: '{}', argument: '{}'", commandName, argument);
 
         Stream<CommandInfo> commandStream = config.enableDebugCommands()
             ? Stream.concat(commands.stream(), debugCommands.stream())

@@ -33,6 +33,8 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 public class ShopPolicy extends PolicyBase {
 
     private final ShopmainOverlay shopmainOverlay = new ShopmainOverlay();
+    private volatile boolean shopOpen = false;
+
     @Inject
     private Client client;
     @Inject
@@ -52,6 +54,17 @@ public class ShopPolicy extends PolicyBase {
         GameRulesService gameRulesService, PolicyService policyService,
         WorldTypeService worldTypeService) {
         super(accountConfigurationService, gameRulesService, policyService, worldTypeService);
+    }
+
+    @Override
+    public void startUp() throws Exception {
+        overlayManager.add(shopmainOverlay);
+    }
+
+    @Override
+    public void shutDown() throws Exception {
+        shopOpen = false;
+        overlayManager.remove(shopmainOverlay);
     }
 
     public void onWidgetLoaded(WidgetLoaded event) {
@@ -79,11 +92,11 @@ public class ShopPolicy extends PolicyBase {
     }
 
     private void onShopmainOpened() {
-        overlayManager.add(shopmainOverlay);
+        shopOpen = true;
     }
 
     private void onShopmainClosed() {
-        overlayManager.remove(shopmainOverlay);
+        shopOpen = false;
     }
 
     /**
@@ -101,6 +114,9 @@ public class ShopPolicy extends PolicyBase {
 
         @Override
         public Dimension render(Graphics2D g) {
+            if (!shopOpen) {
+                return null;
+            }
             if (!buPluginConfig.showUnlockedItemsIndicatorInShops()) {
                 return null;
             }
