@@ -1,5 +1,6 @@
 package com.elertan;
 
+import com.elertan.utils.TextUtils;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.Map;
@@ -16,7 +17,21 @@ public class CollectionLogService implements BUPluginLifecycle {
 
     private static final int EXPIRY_TICKS = 12;
 
-    private final Map<String, Integer> recentCollectionLogUnlocks = new ConcurrentHashMap<>();
+    private static final class RecentUnlock {
+        private final String rawItemName;
+        private final int tick;
+
+        private RecentUnlock(String rawItemName, int tick) {
+            this.rawItemName = rawItemName;
+            this.tick = tick;
+        }
+    }
+
+    /**
+     * Keyed by normalized item name (tags/whitespace removed) so collection log chat text can match
+     * item composition names used during unlock processing.
+     */
+    private final Map<String, RecentUnlock> recentCollectionLogUnlocks = new ConcurrentHashMap<>();
     private volatile int currentTick = 0;
 
     @Inject
@@ -39,7 +54,11 @@ public class CollectionLogService implements BUPluginLifecycle {
      * Thread-safe: can be called from event bus thread.
      */
     public void addRecentCollectionLogUnlock(String itemName) {
-        recentCollectionLogUnlocks.put(itemName, currentTick);
+        String key = normalizeItemNameKey(itemName);
+        if (key == null) {
+            return;
+        }
+        recentCollectionLogUnlocks.put(key, new RecentUnlock(itemName, currentTick));
     }
 
     /**
@@ -48,16 +67,21 @@ public class CollectionLogService implements BUPluginLifecycle {
      * Should be called from client thread.
      */
     public boolean tryConsumeOverlaySuppression(String itemName) {
-        return recentCollectionLogUnlocks.remove(itemName) != null;
+        String key = normalizeItemNameKey(itemName);
+        if (key == null) {
+            return false;
+        }
+        return recentCollectionLogUnlocks.remove(key) != null;
     }
 
     public void onGameTick(GameTick event) {
         currentTick = client.getTickCount();
 
         recentCollectionLogUnlocks.entrySet().removeIf(entry -> {
-            if (currentTick - entry.getValue() > EXPIRY_TICKS) {
+            RecentUnlock unlock = entry.getValue();
+            if (currentTick - unlock.tick > EXPIRY_TICKS) {
                 log.warn("Collection log item '{}' not matched by unlock within {} ticks",
-                    entry.getKey(), EXPIRY_TICKS);
+                    unlock.rawItemName, EXPIRY_TICKS);
                 return true;
             }
             return false;
@@ -68,5 +92,9 @@ public class CollectionLogService implements BUPluginLifecycle {
         if (event.getGameState() == GameState.LOGIN_SCREEN) {
             recentCollectionLogUnlocks.clear();
         }
+    }
+
+    private static String normalizeItemNameKey(String itemName) {
+        return TextUtils.sanitizeItemName(itemName);
     }
 }

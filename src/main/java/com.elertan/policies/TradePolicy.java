@@ -96,13 +96,13 @@ public class TradePolicy extends PolicyBase {
         String menuTarget = event.getMenuTarget();
         String sanitizedTargetName = TextUtils.sanitizePlayerName(menuTarget);
 
-        log.info("Player is trying to trade with '{}'...", sanitizedTargetName);
+        log.debug("Player is trying to trade with '{}'...", sanitizedTargetName);
         Member member = memberService.getMemberByName(sanitizedTargetName);
         if (member != null) {
-            log.info("...and is a member of our group. All good!");
+            log.debug("...and is a member of our group. All good!");
             return;
         }
-        log.info("...and is not a member of are group.");
+        log.debug("...and is not a member of are group.");
 
         event.consume();
         tradeRestrictionError();
