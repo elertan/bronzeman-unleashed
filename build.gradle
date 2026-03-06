@@ -24,7 +24,7 @@ dependencies {
 }
 
 group = 'com.elertan'
-version = '0.0.1'
+version = '0.1.0'
 
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs << '-Xlint:unchecked' << '-Xlint:deprecation'

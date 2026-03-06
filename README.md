@@ -2,7 +2,7 @@
 
 ![Bronzeman Unleashed Banner](assets/banner.png)
 
-**Ironman without the chores.** Unlock items before you can trade them. Play solo or sync with your group.
+**Ironman without the chores. Flexible rule sets for solo and group play. Works with existing or fresh accounts.**
 
 ---
 
