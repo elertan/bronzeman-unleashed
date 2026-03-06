@@ -2,7 +2,7 @@
 
 ![Bronzeman Unleashed Banner](assets/banner.png)
 
-**Ironman without the chores. Flexible rule sets for solo play or shared group progression.**
+**Ironman without the chores. Flexible rule sets for solo and group play. Works with existing or fresh accounts.**
 
 ---
 
