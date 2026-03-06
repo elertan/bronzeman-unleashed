@@ -1,5 +1,6 @@
 package com.elertan.chat;
 
+import com.elertan.utils.TextUtils;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
@@ -107,7 +108,7 @@ public class GameMessageParser {
             return null;
         }
 
-        String itemName = matcher.group(1);
+        String itemName = TextUtils.sanitizeItemName(matcher.group(1));
         return new CollectionLogUnlockParsedGameMessage(itemName);
     }
 }
