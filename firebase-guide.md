@@ -42,7 +42,12 @@ Delete everything in that box and replace it with this:
 
 Then click **“Publish.”**
 
-## Step 7: Copy the Database URL  
+## Step 7: Optional - Disable insecure rules alerts
+Because these rules allow anyone with the database URL to read and write data, Firebase may warn you that your Realtime Database has insecure rules. This open-rule configuration is a temporary workaround. Access is kept private by using a hard-to-guess project name and only sharing the database URL with trusted people.
+
+If you do not want repeated warnings, open **Project Overview** in the top-left corner of the Firebase console and click **Alerts** in the popover. Scroll down to **Realtime Database** (not **Cloud Firestore**) and find **Your Realtime Database has insecure rules**. Disable it for **In Firebase console** if you want, and especially for **Email** if you want to avoid daily warning emails.
+
+## Step 8: Copy the Database URL  
 Once the rules are published, return to the **Data** tab. At the top, you will see your database’s reference URL — it looks something like this:
 
 ```
@@ -52,7 +57,7 @@ https://your-project-name-default-rtdb.firebaseio.com/
 Copy this URL using the link button on the left.
 You’re done! Your Firebase database is now ready to connect to the plugin.
 
-## Step 8: Connect the Plugin to Firebase
+## Step 9: Connect the Plugin to Firebase
 Paste your database URL into the plugin to set up your account.  
 The first person to connect using the URL becomes the **group owner**.
 
