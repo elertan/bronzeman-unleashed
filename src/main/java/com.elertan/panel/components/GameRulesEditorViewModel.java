@@ -87,8 +87,6 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         addListener(restrictFaladorPartyRoomBalloonsProperty, updateListener);
         addListener(shareAchievementNotificationsProperty, updateListener);
         addListener(valuableLootNotificationThresholdProperty, updateListener);
-        addListener(partyPasswordProperty, updateListener);
-
         if (setGameRules) {
             initialProps.onGameRulesChanged.accept(gameRules);
         }
@@ -120,12 +118,11 @@ public class GameRulesEditorViewModel extends BaseViewModel {
     }
 
     private boolean isValid() {
-        String partyPassword = partyPasswordProperty.get();
         Integer valuableLootNotificationThreshold = valuableLootNotificationThresholdProperty.get();
         if (valuableLootNotificationThreshold != null && valuableLootNotificationThreshold < 0) {
             return false;
         }
-        return partyPassword == null || partyPassword.length() <= 20;
+        return true;
     }
 
     private void tryUpdateGameRules() {
@@ -133,6 +130,9 @@ public class GameRulesEditorViewModel extends BaseViewModel {
             props.onGameRulesChanged.accept(null);
             return;
         }
+
+        GameRules currentGameRules = props.getGameRules();
+        String partyPassword = currentGameRules == null ? null : currentGameRules.getPartyPassword();
 
         GameRules newGameRules = GameRules.builder()
             .lastUpdatedByAccountHash(props.getAccountHash())
@@ -147,7 +147,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
             .restrictFaladorPartyRoomBalloons(restrictFaladorPartyRoomBalloonsProperty.get())
             .shareAchievementNotifications(shareAchievementNotificationsProperty.get())
             .valuableLootNotificationThreshold(valuableLootNotificationThresholdProperty.get())
-            .partyPassword(partyPasswordProperty.get())
+            .partyPassword(partyPassword)
             .build();
         props.onGameRulesChanged.accept(newGameRules);
     }

@@ -522,15 +522,13 @@ public class GameRulesEditor extends JPanel {
         gbc.insets = new Insets(0, 0, 5, 0);
 
         JPasswordField partyPasswordTextField = new JPasswordField();
+        partyPasswordTextField.setEditable(false);
+        partyPasswordTextField.setEnabled(false);
         Bindings.bindTextFieldText(partyPasswordTextField, viewModel.partyPasswordProperty);
-        Bindings.bindEnabled(
-            partyPasswordTextField,
-            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
-        );
         panel.add(
             createTextFieldInput(
                 "Party password",
-                "When auto-join is enabled in the plugin configuration, use this password to join the group's party",
+                "Reserved for a future party-join action. This value is currently read-only.",
                 partyPasswordTextField
             ), gbc
         );
