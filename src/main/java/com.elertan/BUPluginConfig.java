@@ -25,7 +25,6 @@ public interface BUPluginConfig extends Config {
     String minigameSection = "minigameSection";
     @ConfigSection(name = "Debug", description = "Debug settings for testing", position = 99)
     String debugSection = "debugSection";
-    String SHOULD_AUTOMATICALLY_JOIN_PARTY_KEY = "shouldAutomaticallyJoinParty";
     String SHOULD_CHANGE_TO_PARTY_EVEN_IF_ALREADY_IN_PARTY = "shouldChangeToPartyEvenIfAlreadyInParty";
     String ACCOUNT_CONFIG_MAP_JSON_KEY = "accountConfigMapJson";
     String AUTO_OPEN_ACCOUNT_CONFIGURATION_DISABLED_FOR_ACCOUNT_HASHES_JSON_KEY = "autoOpenAccountConfigurationDisabledForAccountHashesJson";
@@ -136,11 +135,6 @@ public interface BUPluginConfig extends Config {
 
     @ConfigItem(keyName = "useItemIconsInChat", name = "Use item icons", description = "Whether to prepend item icons before the item name in the chat", section = chatSection)
     default boolean useItemIconsInChat() {
-        return true;
-    }
-
-    @ConfigItem(keyName = SHOULD_AUTOMATICALLY_JOIN_PARTY_KEY, name = "Auto-join party on login", description = "Whether to automatically join the party when you login on a Bronzeman character (when a party password is set)", section = partySection)
-    default boolean shouldAutomaticallyJoinPartyOnLogin() {
         return true;
     }
 
