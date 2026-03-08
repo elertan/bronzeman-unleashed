@@ -33,59 +33,61 @@ public class BUPartyService implements BUPluginLifecycle {
     public void onGameStateChanged(GameStateChanged event) {
         GameState gameState = event.getGameState();
         if (gameState == GameState.LOGGING_IN) {
-            log.debug("Player logging in...");
-
-            if (isWaitingUntilGameRulesReady) {
-                log.debug("Already waiting for game rules to be ready, not waiting again");
-                return;
-            }
-
-            isWaitingUntilGameRulesReady = true;
-            gameRulesService.waitUntilGameRulesReady(null)
-                .whenComplete((__, throwable) -> {
-                    isWaitingUntilGameRulesReady = false;
-
-                    if (throwable != null) {
-                        log.error("error waiting for game rules to be ready", throwable);
-                        return;
-                    }
-
-                    log.debug(
-                        "Waited after login for game rules to be ready, attempting to join party if configured");
-
-                    GameRules gameRules = gameRulesService.getGameRules().get();
-                    String partyPassword = gameRules.getPartyPassword();
-                    if (partyPassword == null || partyPassword.isEmpty()) {
-                        log.debug("No party password set, not attempting to join party");
-                        return;
-                    }
-                    String trimmedPartyPassword = partyPassword.trim();
-                    if (trimmedPartyPassword.isEmpty()) {
-                        log.debug("Party password is empty, not attempting to join party");
-                        return;
-                    }
-
-                    if (!buPluginConfig.shouldAutomaticallyJoinPartyOnLogin()) {
-                        log.debug(
-                            "Plugin is not configured to automatically join the party on login");
-
-                        ChatMessageBuilder builder = new ChatMessageBuilder();
-                        builder.append(
-                            "The bronzeman game rules configuration has a password set, but the plugin is configured to not automatically join the party on login.");
-                        buChatService.sendMessage(builder.build());
-                        return;
-                    }
-
-                    log.debug("Attempting to join party with password {}", trimmedPartyPassword);
-                    partyService.changeParty(trimmedPartyPassword);
-
-                    ChatMessageBuilder builder = new ChatMessageBuilder();
-                    builder.append(
-                        "Automatically joined party using bronzeman game rules configuration.");
-                    buChatService.sendMessage(builder.build());
-
-                    log.debug("Joined party with password {}", trimmedPartyPassword);
-                });
+            // Auto-join on login is disabled for now. Keep the previous flow commented so the
+            // same join logic can be reused when a dedicated manual join action is added.
+//            log.debug("Player logging in...");
+//
+//            if (isWaitingUntilGameRulesReady) {
+//                log.debug("Already waiting for game rules to be ready, not waiting again");
+//                return;
+//            }
+//
+//            isWaitingUntilGameRulesReady = true;
+//            gameRulesService.waitUntilGameRulesReady(null)
+//                .whenComplete((__, throwable) -> {
+//                    isWaitingUntilGameRulesReady = false;
+//
+//                    if (throwable != null) {
+//                        log.error("error waiting for game rules to be ready", throwable);
+//                        return;
+//                    }
+//
+//                    log.debug(
+//                        "Waited after login for game rules to be ready, attempting to join party if configured");
+//
+//                    GameRules gameRules = gameRulesService.getGameRules().get();
+//                    String partyPassword = gameRules.getPartyPassword();
+//                    if (partyPassword == null || partyPassword.isEmpty()) {
+//                        log.debug("No party password set, not attempting to join party");
+//                        return;
+//                    }
+//                    String trimmedPartyPassword = partyPassword.trim();
+//                    if (trimmedPartyPassword.isEmpty()) {
+//                        log.debug("Party password is empty, not attempting to join party");
+//                        return;
+//                    }
+//
+//                    if (!buPluginConfig.shouldAutomaticallyJoinPartyOnLogin()) {
+//                        log.debug(
+//                            "Plugin is not configured to automatically join the party on login");
+//
+//                        ChatMessageBuilder builder = new ChatMessageBuilder();
+//                        builder.append(
+//                            "The bronzeman game rules configuration has a password set, but the plugin is configured to not automatically join the party on login.");
+//                        buChatService.sendMessage(builder.build());
+//                        return;
+//                    }
+//
+//                    log.debug("Attempting to join party with password {}", trimmedPartyPassword);
+//                    partyService.changeParty(trimmedPartyPassword);
+//
+//                    ChatMessageBuilder builder = new ChatMessageBuilder();
+//                    builder.append(
+//                        "Automatically joined party using bronzeman game rules configuration.");
+//                    buChatService.sendMessage(builder.build());
+//
+//                    log.debug("Joined party with password {}", trimmedPartyPassword);
+//                });
         }
     }
 }
