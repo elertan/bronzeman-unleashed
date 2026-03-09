@@ -61,7 +61,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         JPanel onlineCard = createOptionCard(
             "Online",
             "Use Firebase to keep your unlocks and rules online.",
-            "Best for groups and for solo play across multiple devices.",
+            "Required for groups and best for solo play across multiple devices.",
             "Use Online Storage",
             viewModel::onPlayWithGroupClicked
         );
