@@ -1,5 +1,6 @@
 package com.elertan.panel.screens;
 
+import com.elertan.BUResourceService;
 import com.elertan.panel.ViewportWidthTrackingPanel;
 import com.elertan.panel.screens.setup.GameRulesStepView;
 import com.elertan.panel.screens.setup.GameRulesStepViewViewModel;
@@ -31,6 +32,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
 
     private final SetupScreenViewModel viewModel;
     private final StorageModeStepViewModel storageModeStepViewModel;
+    private final BUResourceService buResourceService;
     private final RemoteStepView.Factory remoteStepViewFactory;
     private final RemoteStepViewViewModel remoteStepViewViewModel;
     private final GameRulesStepView.Factory gameRulesStepViewFactory;
@@ -41,6 +43,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
     private SetupScreen(
         SetupScreenViewModel viewModel,
         StorageModeStepViewModel storageModeStepViewModel,
+        BUResourceService buResourceService,
         RemoteStepView.Factory remoteStepViewFactory,
         RemoteStepViewViewModel remoteStepViewViewModel,
         GameRulesStepView.Factory gameRulesStepViewFactory,
@@ -48,6 +51,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
     ) {
         this.viewModel = viewModel;
         this.storageModeStepViewModel = storageModeStepViewModel;
+        this.buResourceService = buResourceService;
         this.remoteStepViewFactory = remoteStepViewFactory;
         this.remoteStepViewViewModel = remoteStepViewViewModel;
         this.gameRulesStepViewFactory = gameRulesStepViewFactory;
@@ -137,7 +141,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
     private JPanel buildStep(SetupScreenViewModel.Step step) {
         switch (step) {
             case STORAGE_MODE_CHOICE:
-                return new StorageModeStepView(storageModeStepViewModel);
+                return new StorageModeStepView(storageModeStepViewModel, buResourceService);
             case REMOTE:
                 return remoteStepViewFactory.create(remoteStepViewViewModel);
             case GAME_RULES:
@@ -162,6 +166,8 @@ public class SetupScreen extends JPanel implements AutoCloseable {
 
         @Inject
         StorageModeStepViewModel.Factory storageModeStepViewModelFactory;
+        @Inject
+        BUResourceService buResourceService;
         @Inject
         RemoteStepView.Factory remoteStepViewFactory;
         @Inject
@@ -206,6 +212,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
             return new SetupScreen(
                 viewModel,
                 storageModeStepViewModel,
+                buResourceService,
                 remoteStepViewFactory,
                 remoteStepViewViewModel,
                 gameRulesStepViewFactory,

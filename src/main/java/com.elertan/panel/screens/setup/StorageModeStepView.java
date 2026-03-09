@@ -1,13 +1,17 @@
 package com.elertan.panel.screens.setup;
 
+import com.elertan.BUResourceService;
+import com.elertan.resource.BUImageUtil;
 import com.elertan.panel.BUPanel;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.image.BufferedImage;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -28,7 +32,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
     private static final Color MUTED_TEXT = new Color(145, 145, 145);
     private final StorageModeStepViewModel viewModel;
 
-    public StorageModeStepView(StorageModeStepViewModel viewModel) {
+    public StorageModeStepView(StorageModeStepViewModel viewModel, BUResourceService buResourceService) {
         this.viewModel = viewModel;
 
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -52,6 +56,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         add(Box.createVerticalStrut(12));
 
         JPanel localCard = createOptionCard(
+            buResourceService.getLoginIconBufferedImage(),
             "Local",
             "Keep your unlocks and rules on this computer.",
             "No group play or device syncing.",
@@ -59,6 +64,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
             viewModel::onPlaySoloClicked
         );
         JPanel onlineCard = createOptionCard(
+            buResourceService.getCloudSyncIconBufferedImage(),
             "Online",
             "Use Firebase to keep your unlocks and rules online.",
             "Required for groups and best for solo play across multiple devices.",
@@ -86,6 +92,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
     }
 
     private JPanel createOptionCard(
+        BufferedImage iconImage,
         String title,
         String description,
         String detail,
@@ -102,6 +109,11 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         Border outerBorder = BorderFactory.createLineBorder(CARD_BORDER);
         Border innerBorder = BorderFactory.createEmptyBorder(14, 14, 14, 14);
         card.setBorder(BorderFactory.createCompoundBorder(outerBorder, innerBorder));
+
+        JLabel iconLabel = new JLabel(new ImageIcon(resizeCardIcon(iconImage)));
+        iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        card.add(iconLabel);
+        card.add(Box.createVerticalStrut(8));
 
         JLabel titleLabel = new JLabel(title);
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 20f));
@@ -139,6 +151,10 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         card.setPreferredSize(new Dimension(CARD_WIDTH, preferredSize.height));
         card.setMaximumSize(new Dimension(CARD_WIDTH, preferredSize.height));
         return card;
+    }
+
+    private static BufferedImage resizeCardIcon(BufferedImage image) {
+        return BUImageUtil.resizeNearest(image, 20, 20, 0, 0);
     }
 
     private static void equalizeCardHeights(JPanel... cards) {
