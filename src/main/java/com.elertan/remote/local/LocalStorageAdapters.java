@@ -37,6 +37,20 @@ public final class LocalStorageAdapters {
     private LocalStorageAdapters() {
     }
 
+    public static final class UnreadableLocalProgressException extends RuntimeException {
+
+        private final Path filePath;
+
+        public UnreadableLocalProgressException(Path filePath, Throwable cause) {
+            super("Failed to read local progress file: " + filePath, cause);
+            this.filePath = filePath;
+        }
+
+        public Path getFilePath() {
+            return filePath;
+        }
+    }
+
     public static final class JsonFileKeyValueStorageAdapter<K, V> implements KeyValueStoragePort<K, V> {
 
         private final Path filePath;
@@ -157,7 +171,7 @@ public final class LocalStorageAdapters {
                     cache.put(stringToKey.apply(entry.getKey()), entry.getValue());
                 }
             } catch (Exception e) {
-                throw new RuntimeException("Failed to read " + filePath, e);
+                throw new UnreadableLocalProgressException(filePath, e);
             }
         }
 
@@ -254,7 +268,7 @@ public final class LocalStorageAdapters {
             try (Reader reader = Files.newBufferedReader(filePath, StandardCharsets.UTF_8)) {
                 cache = gson.fromJson(reader, valueType);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to read " + filePath, e);
+                throw new UnreadableLocalProgressException(filePath, e);
             }
         }
 

@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 
 @Slf4j
-public class ConfigScreenViewModel {
+public class ConfigScreenViewModel implements AutoCloseable {
 
     public final Property<GameRulesEditorViewModel.Props> gameRulesEditorViewModelPropsProperty;
     public final Property<Boolean> isSubmittingProperty = new Property<>(false);
@@ -31,11 +31,13 @@ public class ConfigScreenViewModel {
     private final AccountConfigurationService accountConfigurationService;
     private final MemberService memberService;
     private final GameRulesDataProvider gameRulesDataProvider;
+    private final MembersDataProvider membersDataProvider;
     private final Runnable navigateToMainScreen;
     private final MembersDataProvider.MemberMapListener memberMapListener;
 
     private GameRules gameRules;
     private Supplier<GameRulesEditorViewModel.Props> propsSupplier;
+    private volatile boolean closed;
 
     private ConfigScreenViewModel(Client client,
         AccountConfigurationService accountConfigurationService, GameRulesService gameRulesService,
@@ -45,6 +47,7 @@ public class ConfigScreenViewModel {
         this.accountConfigurationService = accountConfigurationService;
         this.memberService = memberService;
         this.gameRulesDataProvider = gameRulesDataProvider;
+        this.membersDataProvider = membersDataProvider;
         this.navigateToMainScreen = navigateToMainScreen;
         propsSupplier = () -> {
             GameRules gameRules = gameRulesService.getGameRules().get();
@@ -103,6 +106,12 @@ public class ConfigScreenViewModel {
             });
     }
 
+    @Override
+    public void close() {
+        closed = true;
+        membersDataProvider.removeMemberMapListener(memberMapListener);
+    }
+
     public void onBackButtonClick() {
         // Reset game rules to the last saved game rules.
         gameRulesEditorViewModelPropsProperty.set(propsSupplier.get());
@@ -151,6 +160,9 @@ public class ConfigScreenViewModel {
     }
 
     private void refreshGameRulesEditorProps() {
+        if (closed) {
+            return;
+        }
         gameRulesEditorViewModelPropsProperty.set(propsSupplier.get());
     }
 
