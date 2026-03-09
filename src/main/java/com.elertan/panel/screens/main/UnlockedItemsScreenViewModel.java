@@ -1,9 +1,11 @@
 package com.elertan.panel.screens.main;
 
 import com.elertan.data.UnlockedItemsDataProvider;
+import com.elertan.data.AbstractDataProvider.State;
 import com.elertan.models.UnlockedItem;
 import com.elertan.panel.BaseViewModel;
 import com.elertan.ui.Property;
+import com.elertan.utils.Subscription;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -25,6 +27,7 @@ public class UnlockedItemsScreenViewModel extends BaseViewModel {
     private final UnlockedItemsDataProvider unlockedItemsDataProvider;
     private final UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private final PropertyChangeListener sortedByListener = this::sortedByListener;
+    private final Subscription unlockedItemsStateSubscription;
 
     private UnlockedItemsScreenViewModel(UnlockedItemsDataProvider unlockedItemsDataProvider) {
         this.unlockedItemsDataProvider = unlockedItemsDataProvider;
@@ -47,12 +50,23 @@ public class UnlockedItemsScreenViewModel extends BaseViewModel {
             }
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
+        unlockedItemsStateSubscription = unlockedItemsDataProvider.getState().subscribeImmediate(
+            (state, oldState) -> {
+                if (state == State.Ready) {
+                    allUnlockedItems.set(allUnlockedItemsSupplier.get());
+                } else {
+                    allUnlockedItems.set(null);
+                }
+            }
+        );
 
         unlockedItemsDataProvider.await(null).whenComplete((__, throwable) -> {
             if (throwable != null) {
                 return;
             }
-            allUnlockedItems.set(allUnlockedItemsSupplier.get());
+            if (unlockedItemsDataProvider.getState().get() == State.Ready) {
+                allUnlockedItems.set(allUnlockedItemsSupplier.get());
+            }
         });
 
         addListener(sortedBy, sortedByListener);
@@ -61,6 +75,7 @@ public class UnlockedItemsScreenViewModel extends BaseViewModel {
     @Override
     public void close() throws Exception {
         super.close();
+        unlockedItemsStateSubscription.dispose();
         unlockedItemsDataProvider.removeUnlockedItemsMapListener(unlockedItemsMapListener);
     }
 
