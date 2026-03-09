@@ -36,6 +36,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
     private final GameRulesStepView.Factory gameRulesStepViewFactory;
     private final GameRulesStepViewViewModel gameRulesStepViewViewModel;
     private final AutoCloseable contentCardLayoutBinding;
+    private final AutoCloseable skipSetupButtonVisibleBinding;
 
     private SetupScreen(
         SetupScreenViewModel viewModel,
@@ -117,6 +118,10 @@ public class SetupScreen extends JPanel implements AutoCloseable {
             dontAskMeAgainButton.getPreferredSize().height
         ));
         dontAskMeAgainButton.addActionListener(e -> viewModel.onDontAskMeAgainButtonClick());
+        skipSetupButtonVisibleBinding = Bindings.bindVisible(
+            dontAskMeAgainButton,
+            viewModel.step.derive(step -> step == SetupScreenViewModel.Step.STORAGE_MODE_CHOICE)
+        );
         inner.add(dontAskMeAgainButton);
 
         add(inner, BorderLayout.CENTER);
@@ -124,6 +129,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        skipSetupButtonVisibleBinding.close();
         contentCardLayoutBinding.close();
         viewModel.close();
     }
