@@ -1,11 +1,15 @@
 package com.elertan.panel.screens.main.unlockedItems.items;
 
+import com.elertan.AccountConfigurationService;
+import com.elertan.models.AccountConfiguration;
+import com.elertan.models.AccountConfiguration.StorageMode;
 import com.elertan.data.MembersDataProvider;
 import com.elertan.models.Member;
 import com.elertan.models.UnlockedItem;
 import com.elertan.panel.screens.main.UnlockedItemsScreenViewModel;
 import com.elertan.panel.screens.main.UnlockedItemsScreenViewModel.SortedBy;
 import com.elertan.ui.Property;
+import com.elertan.utils.Subscription;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -21,17 +25,21 @@ public class HeaderViewViewModel implements AutoCloseable {
     public final Property<String> searchText;
     public final Property<UnlockedItemsScreenViewModel.SortedBy> sortedBy;
     public final Property<Long> unlockedByAccountHash;
+    public final Property<List<UnlockedItemsScreenViewModel.SortedBy>> sortedByOptions;
+    public final Property<Boolean> showUnlockedByFilter;
     public final Property<List<Long>> accountHashesFromAllUnlockedItems;
     public final Property<Map<Long, String>> accountHashToMemberNameMap;
     private final Runnable navigateToConfiguration;
     private final MembersDataProvider membersDataProvider;
     private final MembersDataProvider.MemberMapListener memberMapListener;
+    private final Subscription accountConfigurationSubscription;
 
     private HeaderViewViewModel(
         Property<List<UnlockedItem>> allUnlockedItems,
         Property<String> searchText,
         Property<SortedBy> sortedBy,
         Property<Long> unlockedByAccountHash,
+        AccountConfigurationService accountConfigurationService,
         MembersDataProvider membersDataProvider,
         Runnable navigateToConfiguration) {
         this.membersDataProvider = membersDataProvider;
@@ -39,6 +47,8 @@ public class HeaderViewViewModel implements AutoCloseable {
         this.searchText = searchText;
         this.sortedBy = sortedBy;
         this.unlockedByAccountHash = unlockedByAccountHash;
+        this.sortedByOptions = new Property<>(buildSortedByOptions(false));
+        this.showUnlockedByFilter = new Property<>(true);
 
         accountHashesFromAllUnlockedItems = allUnlockedItems.deriveAsync(items -> {
             if (items == null || items.isEmpty()) {
@@ -73,10 +83,17 @@ public class HeaderViewViewModel implements AutoCloseable {
             }
             accountHashToMemberNameMap.set(buildAccountHashToMemberNameMap());
         });
+
+        accountConfigurationSubscription = accountConfigurationService.currentAccountConfiguration()
+            .subscribe(this::onAccountConfigurationChanged);
+        if (accountConfigurationService.isReady()) {
+            onAccountConfigurationChanged(accountConfigurationService.currentAccountConfiguration().get());
+        }
     }
 
     @Override
     public void close() throws Exception {
+        accountConfigurationSubscription.dispose();
         membersDataProvider.removeMemberMapListener(memberMapListener);
     }
 
@@ -97,6 +114,36 @@ public class HeaderViewViewModel implements AutoCloseable {
         return accountHashToMemberNameMap;
     }
 
+    private void onAccountConfigurationChanged(AccountConfiguration accountConfiguration) {
+        boolean isLocalMode = accountConfiguration != null
+            && accountConfiguration.getStorageMode() == StorageMode.LOCAL;
+        sortedByOptions.set(buildSortedByOptions(isLocalMode));
+        showUnlockedByFilter.set(!isLocalMode);
+
+        if (isLocalMode) {
+            SortedBy sortedByValue = sortedBy.get();
+            if (sortedByValue == SortedBy.PLAYER_ASC || sortedByValue == SortedBy.PLAYER_DESC) {
+                sortedBy.set(SortedBy.UNLOCKED_AT_DESC);
+            }
+            unlockedByAccountHash.set(null);
+        }
+    }
+
+    private List<SortedBy> buildSortedByOptions(boolean isLocalMode) {
+        List<SortedBy> options = new ArrayList<>();
+        options.add(SortedBy.UNLOCKED_AT_ASC);
+        options.add(SortedBy.ALPHABETICAL_ASC);
+        if (!isLocalMode) {
+            options.add(SortedBy.PLAYER_ASC);
+        }
+        options.add(SortedBy.UNLOCKED_AT_DESC);
+        options.add(SortedBy.ALPHABETICAL_DESC);
+        if (!isLocalMode) {
+            options.add(SortedBy.PLAYER_DESC);
+        }
+        return options;
+    }
+
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
 
@@ -113,6 +160,8 @@ public class HeaderViewViewModel implements AutoCloseable {
     private static final class FactoryImpl implements Factory {
 
         @Inject
+        private AccountConfigurationService accountConfigurationService;
+        @Inject
         private MembersDataProvider membersDataProvider;
 
         @Override
@@ -128,6 +177,7 @@ public class HeaderViewViewModel implements AutoCloseable {
                 searchText,
                 sortedBy,
                 unlockedByAccountHash,
+                accountConfigurationService,
                 membersDataProvider,
                 navigateToConfiguration
             );

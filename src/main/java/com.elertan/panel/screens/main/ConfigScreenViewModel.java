@@ -54,12 +54,19 @@ public class ConfigScreenViewModel {
             } catch (Exception ignored) {
             }
             boolean isViewOnlyMode = member == null || member.getRole() != MemberRole.Owner;
+            boolean isLocalMode = false;
+            AccountConfiguration accountConfiguration =
+                accountConfigurationService.currentAccountConfiguration().get();
+            if (accountConfiguration != null) {
+                isLocalMode = accountConfiguration.getStorageMode() == StorageMode.LOCAL;
+            }
 
             return new GameRulesEditorViewModel.Props(
                 client.getAccountHash(),
                 gameRules,
                 (newGameRules) -> setGameRules(newGameRules),
-                isViewOnlyMode
+                isViewOnlyMode,
+                isLocalMode
             );
         };
 

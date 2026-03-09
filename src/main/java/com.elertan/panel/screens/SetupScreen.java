@@ -189,7 +189,9 @@ public class SetupScreen extends JPanel implements AutoCloseable {
                 }
             );
             GameRulesStepViewViewModel gameRulesStepViewViewModel = gameRulesStepViewViewModelFactory.create(
-                viewModel.gameRules, new GameRulesStepViewViewModel.Listener() {
+                viewModel.gameRules,
+                viewModel.isLocalMode,
+                new GameRulesStepViewViewModel.Listener() {
                     @Override
                     public void onBack() {
                         viewModel.onGameRulesStepBack();

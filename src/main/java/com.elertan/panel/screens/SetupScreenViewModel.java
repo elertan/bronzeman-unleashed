@@ -27,6 +27,7 @@ import okhttp3.OkHttpClient;
 public final class SetupScreenViewModel implements AutoCloseable {
 
     public final Property<Step> step = new Property<>(Step.STORAGE_MODE_CHOICE);
+    public final Property<Boolean> isLocalMode = new Property<>(false);
     public final Property<Boolean> gameRulesAreViewOnly = new Property<>(null);
     public final Property<GameRules> gameRules = new Property<>(null);
     private final Client client;
@@ -86,6 +87,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
 
     public void onStorageModeChosen(StorageMode storageMode) {
         chosenStorageMode = storageMode;
+        isLocalMode.set(storageMode == StorageMode.LOCAL);
         if (storageMode == StorageMode.LOCAL) {
             handleLocalStorageChoice();
             return;
@@ -127,6 +129,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
 
     public void onRemoteStepBack() {
         chosenStorageMode = null;
+        isLocalMode.set(false);
         step.set(Step.STORAGE_MODE_CHOICE);
     }
 
@@ -134,6 +137,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
         if (chosenStorageMode == StorageMode.LOCAL) {
             step.set(Step.STORAGE_MODE_CHOICE);
             chosenStorageMode = null;
+            isLocalMode.set(false);
         } else {
             step.set(Step.REMOTE);
         }
@@ -164,6 +168,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
 
         Runnable finalize = () -> {
             step.set(Step.STORAGE_MODE_CHOICE);
+            isLocalMode.set(false);
             gameRulesAreViewOnly.set(null);
             gameRules.set(null);
             chosenStorageMode = null;
@@ -273,11 +278,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
         );
 
         if (result == 0) {
-            accountConfigurationService.setAccountConfiguration(
-                AccountConfiguration.forLocal(accountHash),
-                accountHash
-            );
-            resetSetupState();
+            continueExistingLocalProgress(accountHash);
             return;
         }
 
@@ -304,6 +305,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
     }
 
     private void startFreshLocalSetup() {
+        isLocalMode.set(true);
         gameRulesAreViewOnly.set(false);
         gameRules.set(
             GameRules.createWithDefaults(
@@ -316,9 +318,46 @@ public final class SetupScreenViewModel implements AutoCloseable {
 
     private void resetSetupState() {
         step.set(Step.STORAGE_MODE_CHOICE);
+        isLocalMode.set(false);
         gameRulesAreViewOnly.set(null);
         gameRules.set(null);
         chosenStorageMode = null;
+    }
+
+    private void continueExistingLocalProgress(long accountHash) {
+        LocalStorageSession localStorageSession = localStorageSessionFactory.create(accountHash);
+        localStorageSession.getGameRulesStoragePort().read().whenComplete((existingGameRules, throwable) -> {
+            try {
+                localStorageSession.close();
+            } catch (Exception closeException) {
+                if (throwable == null) {
+                    throwable = closeException;
+                } else {
+                    throwable.addSuppressed(closeException);
+                }
+            }
+
+            if (throwable != null || existingGameRules == null) {
+                log.error("Failed to continue existing local progress", throwable);
+                JOptionPane.showMessageDialog(
+                    null,
+                    "Your local game rules could not be read.\n"
+                        + "Bronzeman could not continue with this local progress.\n"
+                        + "Please start setup again from this panel.",
+                    "Could not open local progress",
+                    JOptionPane.ERROR_MESSAGE
+                );
+                chosenStorageMode = null;
+                isLocalMode.set(false);
+                return;
+            }
+
+            accountConfigurationService.setAccountConfiguration(
+                AccountConfiguration.forLocal(accountHash),
+                accountHash
+            );
+            resetSetupState();
+        });
     }
 
     public enum Step {
