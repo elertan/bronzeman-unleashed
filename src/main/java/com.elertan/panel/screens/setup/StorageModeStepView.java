@@ -35,7 +35,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
         setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel titleLabel = new JLabel("Choose your setup");
+        JLabel titleLabel = new JLabel("Choose your storage");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 15f));
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
@@ -44,7 +44,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         add(Box.createVerticalStrut(4));
 
         add(createWrappedTextPane(
-            "Choose how you want to store your progress. You can change this later.",
+            "Pick where your progress lives. You can switch later.",
             MUTED_TEXT,
             CONTENT_WIDTH,
             SwingConstants.CENTER
@@ -52,18 +52,18 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         add(Box.createVerticalStrut(12));
 
         add(createOptionCard(
-            "Play Solo",
-            "Store your unlocks and rules on this computer.",
-            "No groups or device syncing. Your progress stays on this computer only.",
-            "Choose Solo",
+            "Store Locally",
+            "Keep your unlocks and rules on this computer.",
+            "No group play or device syncing. You can migrate to online storage later.",
+            "Use Local Storage",
             viewModel::onPlaySoloClicked
         ));
         add(Box.createVerticalStrut(10));
         add(createOptionCard(
-            "Play with Group",
-            "Use Firebase to sync unlocks and rules with friends.",
-            "Best for group play and playing on multiple devices.",
-            "Choose Group",
+            "Store Online",
+            "Use Firebase to keep your unlocks and rules online.",
+            "Best for groups and for solo play across multiple devices.",
+            "Use Online Storage",
             viewModel::onPlayWithGroupClicked
         ));
         add(Box.createVerticalGlue());
