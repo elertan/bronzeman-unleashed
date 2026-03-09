@@ -44,27 +44,39 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         add(Box.createVerticalStrut(4));
 
         add(createWrappedTextPane(
-            "Pick where your progress lives. You can switch later.",
+            "Pick where your progress lives.",
             MUTED_TEXT,
             CONTENT_WIDTH,
             SwingConstants.CENTER
         ));
         add(Box.createVerticalStrut(12));
 
-        add(createOptionCard(
-            "Store Locally",
+        JPanel localCard = createOptionCard(
+            "Local",
             "Keep your unlocks and rules on this computer.",
-            "No group play or device syncing. You can migrate to online storage later.",
+            "No group play or device syncing.",
             "Use Local Storage",
             viewModel::onPlaySoloClicked
-        ));
-        add(Box.createVerticalStrut(10));
-        add(createOptionCard(
-            "Store Online",
+        );
+        JPanel onlineCard = createOptionCard(
+            "Online",
             "Use Firebase to keep your unlocks and rules online.",
             "Best for groups and for solo play across multiple devices.",
             "Use Online Storage",
             viewModel::onPlayWithGroupClicked
+        );
+
+        equalizeCardHeights(localCard, onlineCard);
+
+        add(localCard);
+        add(Box.createVerticalStrut(16));
+        add(onlineCard);
+        add(Box.createVerticalStrut(12));
+        add(createWrappedTextPane(
+            "Moving from Local to Online is not available yet. Migration support will come in a future update.",
+            MUTED_TEXT,
+            CONTENT_WIDTH - 10,
+            SwingConstants.CENTER
         ));
         add(Box.createVerticalGlue());
     }
@@ -127,6 +139,18 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         card.setPreferredSize(new Dimension(CARD_WIDTH, preferredSize.height));
         card.setMaximumSize(new Dimension(CARD_WIDTH, preferredSize.height));
         return card;
+    }
+
+    private static void equalizeCardHeights(JPanel... cards) {
+        int maxHeight = 0;
+        for (JPanel card : cards) {
+            maxHeight = Math.max(maxHeight, card.getPreferredSize().height);
+        }
+
+        for (JPanel card : cards) {
+            card.setPreferredSize(new Dimension(CARD_WIDTH, maxHeight));
+            card.setMaximumSize(new Dimension(CARD_WIDTH, maxHeight));
+        }
     }
 
     private static JTextPane createWrappedTextPane(String text, Color color, int width, int horizontalAlignment) {

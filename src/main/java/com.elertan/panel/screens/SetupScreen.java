@@ -109,7 +109,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
 
         inner.add(Box.createVerticalStrut(15));
 
-        JButton dontAskMeAgainButton = new JButton("Don't ask me again for this account");
+        JButton dontAskMeAgainButton = new JButton("Skip setup for this account");
         dontAskMeAgainButton.setAlignmentX(Component.CENTER_ALIGNMENT);
         dontAskMeAgainButton.setBorder(BorderFactory.createEmptyBorder(15, 0, 15, 0));
         dontAskMeAgainButton.setMaximumSize(new Dimension(

@@ -69,9 +69,9 @@ public final class SetupScreenViewModel implements AutoCloseable {
     public void onDontAskMeAgainButtonClick() {
         int result = JOptionPane.showConfirmDialog(
             null,
-            "We won't ask you again to set up bronzeman mode for this account.\n"
-                + "You can set up bronzeman mode at any time by re-opening this panel.",
-            "Confirm setup choice",
+            "Setup will be skipped for this account.\n"
+                + "You can still configure it later by reopening this panel.",
+            "Skip setup for this account?",
             JOptionPane.OK_CANCEL_OPTION,
             JOptionPane.WARNING_MESSAGE
         );
