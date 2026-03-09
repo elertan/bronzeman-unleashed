@@ -15,14 +15,13 @@ import com.google.gson.Gson;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Comparator;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import net.runelite.client.RuneLite;
 
 public class LocalStorageSession implements StorageSession {
 
-    private static final String RUNELITE_DIRECTORY = ".runelite";
     private static final String PLUGIN_DIRECTORY = "bronzeman-unleashed";
 
     private final KeyValueStoragePort<Long, Member> membersStoragePort;
@@ -54,17 +53,9 @@ public class LocalStorageSession implements StorageSession {
     }
 
     public static Path getAccountStorageDir(long accountHash) {
-        String userHome = System.getProperty("user.home");
-        if (userHome == null || userHome.isEmpty()) {
-            userHome = ".";
-        }
-
-        return Paths.get(
-            userHome,
-            RUNELITE_DIRECTORY,
-            PLUGIN_DIRECTORY,
-            String.valueOf(accountHash)
-        );
+        return RuneLite.RUNELITE_DIR.toPath()
+            .resolve(PLUGIN_DIRECTORY)
+            .resolve(String.valueOf(accountHash));
     }
 
     public static boolean hasExistingProgress(long accountHash) {
