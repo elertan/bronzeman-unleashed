@@ -121,6 +121,7 @@ public class HeaderViewViewModel implements AutoCloseable {
         showUnlockedByFilter.set(!isLocalMode);
 
         if (isLocalMode) {
+            // Normalize hidden multiplayer-only state when switching into local mode.
             SortedBy sortedByValue = sortedBy.get();
             if (sortedByValue == SortedBy.PLAYER_ASC || sortedByValue == SortedBy.PLAYER_DESC) {
                 sortedBy.set(SortedBy.UNLOCKED_AT_DESC);

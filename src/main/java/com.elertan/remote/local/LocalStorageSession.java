@@ -34,6 +34,8 @@ public class LocalStorageSession implements StorageSession {
     public LocalStorageSession(Gson gson, long accountHash) {
         Path accountStorageDirectory = getAccountStorageDir(accountHash);
 
+        // Solo mode persists only durable personal progress. Group/event-oriented ports stay
+        // in memory or no-op because those features are not supported locally.
         unlockedItemsStoragePort = new LocalStorageAdapters.JsonFileKeyValueStorageAdapter<>(
             accountStorageDirectory.resolve("UnlockedItems.json"),
             gson,

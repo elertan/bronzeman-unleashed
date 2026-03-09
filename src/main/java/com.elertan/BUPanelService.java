@@ -91,6 +91,8 @@ public class BUPanelService implements BUPluginLifecycle {
     }
 
     private void onLocalProgressOpenFailure(StorageService.LocalProgressOpenFailure failure) {
+        // Drop back to setup before showing the error so the panel is not left bound to an
+        // unusable local session.
         accountConfigurationService.setCurrentAccountConfiguration(null);
         SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
             null,

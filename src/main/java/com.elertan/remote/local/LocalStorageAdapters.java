@@ -180,6 +180,8 @@ public final class LocalStorageAdapters {
             for (Map.Entry<K, V> entry : cache.entrySet()) {
                 raw.put(keyToString.apply(entry.getKey()), entry.getValue());
             }
+            // Use the adapter gson for type-aware serialization, then pretty-print the resulting
+            // JSON tree so the on-disk files stay stable and readable.
             writeJsonFile(filePath, PRETTY_GSON.toJson(gson.toJsonTree(raw)));
         }
     }
@@ -277,6 +279,8 @@ public final class LocalStorageAdapters {
                 deleteFile(filePath);
                 return;
             }
+            // Use the adapter gson for type-aware serialization, then pretty-print the resulting
+            // JSON tree so the on-disk files stay stable and readable.
             writeJsonFile(filePath, PRETTY_GSON.toJson(gson.toJsonTree(cache)));
         }
     }

@@ -200,6 +200,8 @@ public class StorageService implements BUPluginLifecycle {
 
     private CompletableFuture<StorageSession> openLocalStorageSession(long localAccountHash) {
         LocalStorageSession localStorageSession = localStorageSessionFactory.create(localAccountHash);
+        // Pre-read the durable local files so unreadable local progress fails before the session
+        // becomes active and the rest of the plugin starts waiting on it.
         CompletableFuture<GameRules> readGameRulesFuture =
             localStorageSession.getGameRulesStoragePort().read();
         CompletableFuture<Map<Integer, UnlockedItem>> readUnlockedItemsFuture =

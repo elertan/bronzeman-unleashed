@@ -149,6 +149,7 @@ public class MainView extends JPanel implements AutoCloseable {
 
             AsyncBufferedImage icon = listItem.getIcon();
             int itemId = listItem.getItem().getId();
+            // The renderer is invoked repeatedly, so register at most one repaint hook per item id.
             if (iconRepaintHooks.add(itemId)) {
                 icon.onLoaded(() -> Bindings.invokeOnEDT(list::repaint));
             }
