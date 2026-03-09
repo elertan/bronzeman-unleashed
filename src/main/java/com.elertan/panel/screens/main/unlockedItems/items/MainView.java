@@ -14,7 +14,9 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeListener;
 import java.time.OffsetDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
@@ -95,6 +97,7 @@ public class MainView extends JPanel implements AutoCloseable {
 
     private JPanel buildReadyViewState() {
         JPanel panel = new JPanel(new BorderLayout());
+        Set<Integer> iconRepaintHooks = new HashSet<>();
 
         JList<MainViewViewModel.ListItem> list = new JList<>();
         list.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
@@ -145,6 +148,10 @@ public class MainView extends JPanel implements AutoCloseable {
             label.setHorizontalAlignment(SwingConstants.CENTER);
 
             AsyncBufferedImage icon = listItem.getIcon();
+            int itemId = listItem.getItem().getId();
+            if (iconRepaintHooks.add(itemId)) {
+                icon.onLoaded(() -> Bindings.invokeOnEDT(list::repaint));
+            }
             icon.addTo(label);
 
             UnlockedItem item = listItem.getItem();
