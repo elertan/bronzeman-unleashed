@@ -4,6 +4,7 @@ import com.elertan.AccountConfigurationService;
 import com.elertan.GameRulesService;
 import com.elertan.MemberService;
 import com.elertan.data.GameRulesDataProvider;
+import com.elertan.data.MembersDataProvider;
 import com.elertan.models.GameRules;
 import com.elertan.models.Member;
 import com.elertan.models.MemberRole;
@@ -29,13 +30,15 @@ public class ConfigScreenViewModel {
     private final MemberService memberService;
     private final GameRulesDataProvider gameRulesDataProvider;
     private final Runnable navigateToMainScreen;
+    private final MembersDataProvider.MemberMapListener memberMapListener;
 
     private GameRules gameRules;
     private Supplier<GameRulesEditorViewModel.Props> propsSupplier;
 
     private ConfigScreenViewModel(Client client,
         AccountConfigurationService accountConfigurationService, GameRulesService gameRulesService,
-        GameRulesDataProvider gameRulesDataProvider, MemberService memberService,
+        GameRulesDataProvider gameRulesDataProvider, MembersDataProvider membersDataProvider,
+        MemberService memberService,
         Runnable navigateToMainScreen) {
         this.accountConfigurationService = accountConfigurationService;
         this.memberService = memberService;
@@ -59,6 +62,27 @@ public class ConfigScreenViewModel {
         };
 
         gameRulesEditorViewModelPropsProperty = new Property<>(propsSupplier.get());
+        memberMapListener = new MembersDataProvider.MemberMapListener() {
+            @Override
+            public void onUpdate(Member newMember, Member oldMember) {
+                refreshGameRulesEditorProps();
+            }
+
+            @Override
+            public void onDelete(Member member) {
+                refreshGameRulesEditorProps();
+            }
+        };
+        membersDataProvider.addMemberMapListener(memberMapListener);
+        membersDataProvider.await(null)
+            .whenComplete((__, throwable) -> {
+                if (throwable != null) {
+                    log.error("error waiting for members data to be ready", throwable);
+                    return;
+                }
+                refreshGameRulesEditorProps();
+            });
+
         gameRulesService.waitUntilGameRulesReady(null)
             .whenComplete((__, throwable) -> {
                 if (throwable != null) {
@@ -66,7 +90,7 @@ public class ConfigScreenViewModel {
                     return;
                 }
                 setGameRules(gameRulesService.getGameRules().get());
-                gameRulesEditorViewModelPropsProperty.set(propsSupplier.get());
+                refreshGameRulesEditorProps();
             });
     }
 
@@ -115,6 +139,10 @@ public class ConfigScreenViewModel {
     private void setGameRules(GameRules gameRules) {
         this.gameRules = gameRules;
         log.debug("config screen set game rules: {}", gameRules);
+    }
+
+    private void refreshGameRulesEditorProps() {
+        gameRulesEditorViewModelPropsProperty.set(propsSupplier.get());
     }
 
     public void leaveButtonClick() {
@@ -197,6 +225,8 @@ public class ConfigScreenViewModel {
         @Inject
         private GameRulesDataProvider gameRulesDataProvider;
         @Inject
+        private MembersDataProvider membersDataProvider;
+        @Inject
         private MemberService memberService;
 
         @Override
@@ -206,6 +236,7 @@ public class ConfigScreenViewModel {
                 accountConfigurationService,
                 gameRulesService,
                 gameRulesDataProvider,
+                membersDataProvider,
                 memberService,
                 navigateToMainScreen
             );
