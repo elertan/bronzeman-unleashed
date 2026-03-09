@@ -12,8 +12,11 @@ import com.elertan.remote.ObjectListStoragePort;
 import com.elertan.remote.ObjectStoragePort;
 import com.elertan.remote.StorageSession;
 import com.google.gson.Gson;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Comparator;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
@@ -60,6 +63,36 @@ public class LocalStorageSession implements StorageSession {
             PLUGIN_DIRECTORY,
             String.valueOf(accountHash)
         );
+    }
+
+    public static boolean hasExistingProgress(long accountHash) {
+        Path accountStorageDirectory = getAccountStorageDir(accountHash);
+        return Files.exists(accountStorageDirectory.resolve("UnlockedItems.json"))
+            || Files.exists(accountStorageDirectory.resolve("GameRules.json"));
+    }
+
+    public static void deleteExistingProgress(long accountHash) throws IOException {
+        Path accountStorageDirectory = getAccountStorageDir(accountHash);
+        if (!Files.exists(accountStorageDirectory)) {
+            return;
+        }
+
+        try (java.util.stream.Stream<Path> stream = Files.walk(accountStorageDirectory)) {
+            stream
+                .sorted(Comparator.reverseOrder())
+                .forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+        } catch (RuntimeException e) {
+            if (e.getCause() instanceof IOException) {
+                throw (IOException) e.getCause();
+            }
+            throw e;
+        }
     }
 
     @Override

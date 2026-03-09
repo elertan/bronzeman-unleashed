@@ -12,6 +12,7 @@ import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.remote.firebase.storageAdapters.GameRulesFirebaseObjectStorageAdapter;
 import com.elertan.ui.Property;
 import com.google.gson.Gson;
+import java.io.IOException;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -86,14 +87,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
     public void onStorageModeChosen(StorageMode storageMode) {
         chosenStorageMode = storageMode;
         if (storageMode == StorageMode.LOCAL) {
-            gameRulesAreViewOnly.set(false);
-            gameRules.set(
-                GameRules.createWithDefaults(
-                    client.getAccountHash(),
-                    new ISOOffsetDateTime(OffsetDateTime.now())
-                )
-            );
-            step.set(Step.GAME_RULES);
+            handleLocalStorageChoice();
             return;
         }
 
@@ -253,12 +247,78 @@ public final class SetupScreenViewModel implements AutoCloseable {
                     AccountConfiguration.forLocal(accountHash),
                     accountHash
                 );
-                step.set(Step.STORAGE_MODE_CHOICE);
-                gameRulesAreViewOnly.set(null);
-                gameRules.set(null);
-                chosenStorageMode = null;
+                resetSetupState();
                 future.complete(null);
             });
+    }
+
+    private void handleLocalStorageChoice() {
+        long accountHash = client.getAccountHash();
+        if (!LocalStorageSession.hasExistingProgress(accountHash)) {
+            startFreshLocalSetup();
+            return;
+        }
+
+        Object[] options = { "Continue Existing", "Start Fresh", "Cancel" };
+        int result = JOptionPane.showOptionDialog(
+            null,
+            "Local progress already exists for this account.\n"
+                + "Do you want to continue your existing local progress or start fresh and replace it?",
+            "Local progress found",
+            JOptionPane.DEFAULT_OPTION,
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            options,
+            options[0]
+        );
+
+        if (result == 0) {
+            accountConfigurationService.setAccountConfiguration(
+                AccountConfiguration.forLocal(accountHash),
+                accountHash
+            );
+            resetSetupState();
+            return;
+        }
+
+        if (result == 1) {
+            try {
+                LocalStorageSession.deleteExistingProgress(accountHash);
+            } catch (IOException e) {
+                log.error("Failed to clear existing local progress", e);
+                JOptionPane.showMessageDialog(
+                    null,
+                    "Could not clear existing local progress. Please try again.",
+                    "Error clearing local progress",
+                    JOptionPane.ERROR_MESSAGE
+                );
+                chosenStorageMode = null;
+                return;
+            }
+
+            startFreshLocalSetup();
+            return;
+        }
+
+        chosenStorageMode = null;
+    }
+
+    private void startFreshLocalSetup() {
+        gameRulesAreViewOnly.set(false);
+        gameRules.set(
+            GameRules.createWithDefaults(
+                client.getAccountHash(),
+                new ISOOffsetDateTime(OffsetDateTime.now())
+            )
+        );
+        step.set(Step.GAME_RULES);
+    }
+
+    private void resetSetupState() {
+        step.set(Step.STORAGE_MODE_CHOICE);
+        gameRulesAreViewOnly.set(null);
+        gameRules.set(null);
+        chosenStorageMode = null;
     }
 
     public enum Step {
