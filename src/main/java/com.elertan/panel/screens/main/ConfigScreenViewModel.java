@@ -5,9 +5,11 @@ import com.elertan.GameRulesService;
 import com.elertan.MemberService;
 import com.elertan.data.GameRulesDataProvider;
 import com.elertan.data.MembersDataProvider;
+import com.elertan.models.AccountConfiguration;
 import com.elertan.models.GameRules;
 import com.elertan.models.Member;
 import com.elertan.models.MemberRole;
+import com.elertan.models.AccountConfiguration.StorageMode;
 import com.elertan.panel.components.GameRulesEditorViewModel;
 import com.elertan.ui.Property;
 import com.google.inject.ImplementedBy;
@@ -148,27 +150,10 @@ public class ConfigScreenViewModel {
     public void leaveButtonClick() {
         boolean isPlayingAlone = memberService.isPlayingAlone();
         Member member = memberService.getMyMember();
-
-        StringBuilder messageBuilder = new StringBuilder();
-        messageBuilder.append("Are you sure you want to leave?\n");
-        messageBuilder.append(
-            "You will no longer be able to access the unlocked items panel and Bronzeman mode will be deactivated for your account.\n\n");
-        if (!isPlayingAlone) {
-            messageBuilder.append("You will also be removed from the group");
-            if (member.getRole() == MemberRole.Owner) {
-                messageBuilder.append(
-                    ", and will pass on the ownership of the group to the member who has been in the group the longest");
-            }
-            messageBuilder.append(".\n\n");
-        }
-        messageBuilder.append(
-            "This will NOT delete the data associated with your progress, you can simply re-open the panel and get going through the setup again.");
-
-        // TODO: More stuff
         int result = JOptionPane.showConfirmDialog(
             null,
-            messageBuilder.toString(),
-            "Confirm Leave Bronzeman",
+            buildLeaveConfirmationMessage(isPlayingAlone, member),
+            "Leave Bronzeman for this account?",
             JOptionPane.OK_CANCEL_OPTION,
             JOptionPane.WARNING_MESSAGE
         );
@@ -205,6 +190,36 @@ public class ConfigScreenViewModel {
             isSubmittingProperty.set(false);
         });
 
+    }
+
+    private String buildLeaveConfirmationMessage(boolean isPlayingAlone, Member member) {
+        StringBuilder messageBuilder = new StringBuilder();
+        messageBuilder.append("This will turn off Bronzeman for this account.\n");
+
+        if (!isPlayingAlone) {
+            messageBuilder.append("You will also be removed from the group.\n");
+            if (member != null && member.getRole() == MemberRole.Owner) {
+                messageBuilder.append(
+                    "Group ownership will be passed to the member who has been in the group the longest.\n"
+                );
+            }
+        }
+
+        StorageMode storageMode = null;
+        AccountConfiguration accountConfiguration =
+            accountConfigurationService.currentAccountConfiguration().get();
+        if (accountConfiguration != null) {
+            storageMode = accountConfiguration.getStorageMode();
+        }
+
+        if (storageMode == StorageMode.LOCAL) {
+            messageBuilder.append("Your local progress will stay saved on this computer.\n");
+        } else {
+            messageBuilder.append("Your saved progress will not be deleted.\n");
+        }
+
+        messageBuilder.append("You can set Bronzeman up again later from this panel.");
+        return messageBuilder.toString();
     }
 
     @ImplementedBy(FactoryImpl.class)
