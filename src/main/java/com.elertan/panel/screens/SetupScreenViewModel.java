@@ -131,6 +131,11 @@ public final class SetupScreenViewModel implements AutoCloseable {
         return future;
     }
 
+    public void onRemoteStepBack() {
+        chosenStorageMode = null;
+        step.set(Step.STORAGE_MODE_CHOICE);
+    }
+
     public void onGameRulesStepBack() {
         if (chosenStorageMode == StorageMode.LOCAL) {
             step.set(Step.STORAGE_MODE_CHOICE);

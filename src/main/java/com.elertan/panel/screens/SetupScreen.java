@@ -7,6 +7,7 @@ import com.elertan.panel.screens.setup.RemoteStepView;
 import com.elertan.panel.screens.setup.RemoteStepViewViewModel;
 import com.elertan.panel.screens.setup.StorageModeStepView;
 import com.elertan.panel.screens.setup.StorageModeStepViewModel;
+import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.ui.Bindings;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
@@ -97,7 +98,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
         scrollPane.getVerticalScrollBar().addAdjustmentListener(e -> {
             boolean visible = scrollPane.getVerticalScrollBar().isVisible();
             if (visible) {
-                viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 10));
+                viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
             } else {
                 viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
             }
@@ -169,7 +170,18 @@ public class SetupScreen extends JPanel implements AutoCloseable {
             StorageModeStepViewModel storageModeStepViewModel =
                 storageModeStepViewModelFactory.create(viewModel::onStorageModeChosen);
             RemoteStepViewViewModel remoteStepViewViewModel = remoteStepViewViewModelFactory.create(
-                viewModel::onRemoteStepFinished);
+                new RemoteStepViewViewModel.Listener() {
+                    @Override
+                    public CompletableFuture<Void> onRemoteStepFinished(FirebaseRealtimeDatabaseURL url) {
+                        return viewModel.onRemoteStepFinished(url);
+                    }
+
+                    @Override
+                    public void onBack() {
+                        viewModel.onRemoteStepBack();
+                    }
+                }
+            );
             GameRulesStepViewViewModel gameRulesStepViewViewModel = gameRulesStepViewViewModelFactory.create(
                 viewModel.gameRules, new GameRulesStepViewViewModel.Listener() {
                     @Override
