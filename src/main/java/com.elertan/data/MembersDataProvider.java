@@ -2,7 +2,7 @@ package com.elertan.data;
 
 import com.elertan.models.Member;
 import com.elertan.remote.KeyValueStoragePort;
-import com.elertan.remote.RemoteStorageService;
+import com.elertan.remote.StorageService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.Collections;
@@ -21,15 +21,15 @@ public class MembersDataProvider extends AbstractDataProvider {
     private final ConcurrentSkipListSet<Long> optimisticallyAddedMembers = new ConcurrentSkipListSet<>();
 
     @Inject
-    private RemoteStorageService remoteStorageService;
+    private StorageService storageService;
 
     private KeyValueStoragePort<Long, Member> keyValueStoragePort;
     private KeyValueStoragePort.Listener<Long, Member> storagePortListener;
     private ConcurrentHashMap<Long, Member> membersMap = new ConcurrentHashMap<>();
 
     @Override
-    protected RemoteStorageService getRemoteStorageService() {
-        return remoteStorageService;
+    protected StorageService getStorageService() {
+        return storageService;
     }
 
     @Override
@@ -91,7 +91,7 @@ public class MembersDataProvider extends AbstractDataProvider {
 
     @Override
     protected void onRemoteStorageReady() {
-        keyValueStoragePort = remoteStorageService.getMembersStoragePort();
+        keyValueStoragePort = storageService.getMembersStoragePort();
         keyValueStoragePort.addListener(storagePortListener);
 
         keyValueStoragePort.readAll().whenComplete((map, throwable) -> {

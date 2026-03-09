@@ -14,7 +14,7 @@ import com.elertan.policies.PlayerOwnedHousePolicy;
 import com.elertan.policies.PlayerVersusPlayerPolicy;
 import com.elertan.policies.ShopPolicy;
 import com.elertan.policies.TradePolicy;
-import com.elertan.remote.RemoteStorageService;
+import com.elertan.remote.StorageService;
 import com.google.inject.Inject;
 import com.elertan.utils.Subscription;
 import com.google.inject.Provides;
@@ -66,7 +66,7 @@ public final class BUPlugin extends Plugin {
     @Inject
     private AccountConfigurationService accountConfigurationService;
     @Inject
-    private RemoteStorageService remoteStorageService;
+    private StorageService storageService;
     @Inject
     private MembersDataProvider membersDataProvider;
     @Inject
@@ -144,7 +144,7 @@ public final class BUPlugin extends Plugin {
         // Core
         lifecycleDependencies.add(buResourceService);
         lifecycleDependencies.add(accountConfigurationService);
-        lifecycleDependencies.add(remoteStorageService);
+        lifecycleDependencies.add(storageService);
         // Data providers
         lifecycleDependencies.add(membersDataProvider);
         lifecycleDependencies.add(gameRulesDataProvider);

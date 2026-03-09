@@ -189,7 +189,40 @@ public class AccountConfigurationService implements BUPluginLifecycle {
             // Defensive: gson can return null for malformed or "null" input
             parsed = new ConcurrentHashMap<>();
         }
-        setAccountConfigurationMap(new ConcurrentHashMap<>(parsed));
+
+        ConcurrentHashMap<Long, AccountConfiguration> map = new ConcurrentHashMap<>(parsed);
+        // Older persisted configs only stored a Firebase URL. If we detect one of those legacy
+        // entries, we upgrade it in memory to the new explicit FIREBASE mode and write it back once.
+        boolean migratedLegacyConfig = false;
+        for (Map.Entry<Long, AccountConfiguration> entry : map.entrySet()) {
+            AccountConfiguration accountConfiguration = entry.getValue();
+            if (accountConfiguration == null) {
+                continue;
+            }
+
+            if (accountConfiguration.getStorageMode() != null) {
+                continue;
+            }
+
+            if (accountConfiguration.getFirebaseRealtimeDatabaseURL() == null) {
+                continue;
+            }
+
+            map.put(
+                entry.getKey(),
+                AccountConfiguration.forFirebase(
+                    accountConfiguration.getFirebaseRealtimeDatabaseURL()
+                )
+            );
+            migratedLegacyConfig = true;
+        }
+
+        setAccountConfigurationMap(map);
+        if (migratedLegacyConfig) {
+            storeAccountConfigurationMap();
+            return;
+        }
+
         lastStoredAccountConfigurationMapJson = json;
     }
 
