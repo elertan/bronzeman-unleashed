@@ -37,6 +37,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
     private final Gson gson;
     private final LocalStorageSession.Factory localStorageSessionFactory;
     private StorageMode chosenStorageMode;
+    private boolean shouldDeleteExistingLocalProgressOnFinish;
     private FirebaseRealtimeDatabase firebaseRealtimeDatabase;
     private GameRulesFirebaseObjectStorageAdapter gameRulesStoragePort;
 
@@ -230,6 +231,14 @@ public final class SetupScreenViewModel implements AutoCloseable {
         }
 
         long accountHash = client.getAccountHash();
+        if (shouldDeleteExistingLocalProgressOnFinish) {
+            try {
+                LocalStorageSession.deleteExistingProgress(accountHash);
+            } catch (IOException e) {
+                future.completeExceptionally(e);
+                return;
+            }
+        }
         LocalStorageSession localStorageSession = localStorageSessionFactory.create(accountHash);
         localStorageSession.getGameRulesStoragePort().update(gameRulesValue)
             .whenComplete((__, throwable) -> {
@@ -264,8 +273,29 @@ public final class SetupScreenViewModel implements AutoCloseable {
             return;
         }
 
-        Object[] options = { "Continue Existing", "Start Fresh", "Cancel" };
-        int result = JOptionPane.showOptionDialog(
+        ExistingLocalProgressChoice choice = showExistingLocalProgressChoiceDialog();
+
+        if (choice == ExistingLocalProgressChoice.CONTINUE_EXISTING) {
+            continueExistingLocalProgress(accountHash);
+            return;
+        }
+
+        if (choice == ExistingLocalProgressChoice.START_FRESH) {
+            startFreshLocalSetup(true);
+            return;
+        }
+
+        chosenStorageMode = null;
+    }
+
+    private ExistingLocalProgressChoice showExistingLocalProgressChoiceDialog() {
+        ExistingLocalProgressChoice[] options = ExistingLocalProgressChoice.values();
+        String[] optionLabels = new String[options.length];
+        for (int i = 0; i < options.length; i++) {
+            optionLabels[i] = options[i].label;
+        }
+
+        int selectedOptionIndex = JOptionPane.showOptionDialog(
             null,
             "Local progress already exists for this account.\n"
                 + "Do you want to continue your existing local progress or start fresh and replace it?",
@@ -273,38 +303,23 @@ public final class SetupScreenViewModel implements AutoCloseable {
             JOptionPane.DEFAULT_OPTION,
             JOptionPane.QUESTION_MESSAGE,
             null,
-            options,
-            options[0]
+            optionLabels,
+            optionLabels[0]
         );
 
-        if (result == 0) {
-            continueExistingLocalProgress(accountHash);
-            return;
+        if (selectedOptionIndex < 0 || selectedOptionIndex >= options.length) {
+            return ExistingLocalProgressChoice.CANCEL;
         }
 
-        if (result == 1) {
-            try {
-                LocalStorageSession.deleteExistingProgress(accountHash);
-            } catch (IOException e) {
-                log.error("Failed to clear existing local progress", e);
-                JOptionPane.showMessageDialog(
-                    null,
-                    "Could not clear existing local progress. Please try again.",
-                    "Error clearing local progress",
-                    JOptionPane.ERROR_MESSAGE
-                );
-                chosenStorageMode = null;
-                return;
-            }
-
-            startFreshLocalSetup();
-            return;
-        }
-
-        chosenStorageMode = null;
+        return options[selectedOptionIndex];
     }
 
     private void startFreshLocalSetup() {
+        startFreshLocalSetup(false);
+    }
+
+    private void startFreshLocalSetup(boolean deleteExistingProgressOnFinish) {
+        shouldDeleteExistingLocalProgressOnFinish = deleteExistingProgressOnFinish;
         isLocalMode.set(true);
         gameRulesAreViewOnly.set(false);
         gameRules.set(
@@ -322,6 +337,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
         gameRulesAreViewOnly.set(null);
         gameRules.set(null);
         chosenStorageMode = null;
+        shouldDeleteExistingLocalProgressOnFinish = false;
     }
 
     private void continueExistingLocalProgress(long accountHash) {
@@ -349,6 +365,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 );
                 chosenStorageMode = null;
                 isLocalMode.set(false);
+                shouldDeleteExistingLocalProgressOnFinish = false;
                 return;
             }
 
@@ -364,6 +381,18 @@ public final class SetupScreenViewModel implements AutoCloseable {
         STORAGE_MODE_CHOICE,
         REMOTE,
         GAME_RULES,
+    }
+
+    private enum ExistingLocalProgressChoice {
+        CONTINUE_EXISTING("Continue Existing"),
+        START_FRESH("Start Fresh"),
+        CANCEL("Cancel");
+
+        private final String label;
+
+        ExistingLocalProgressChoice(String label) {
+            this.label = label;
+        }
     }
 
     @ImplementedBy(FactoryImpl.class)
