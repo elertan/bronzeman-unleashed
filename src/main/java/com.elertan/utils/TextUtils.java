@@ -10,7 +10,12 @@ public class TextUtils {
     }
 
     public static String sanitizeItemName(String itemName) {
+        if (itemName == null) {
+            return null;
+        }
         String sanitized = Text.removeTags(itemName);
+        // Some game strings contain non-breaking spaces; normalize for reliable matching.
+        sanitized = sanitized.replace('\u00A0', ' ').trim();
         return sanitized.replaceAll("\\s*\\(Members\\)$", "");
     }
 }
