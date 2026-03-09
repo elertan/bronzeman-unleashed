@@ -136,6 +136,8 @@ public class StorageService implements BUPluginLifecycle {
     }
 
     private void useAccountConfiguration(AccountConfiguration accountConfiguration) {
+        // Opening a storage session can now finish asynchronously. Track which open attempt is the
+        // latest so an older callback cannot overwrite a newer account configuration.
         int generation = sessionGeneration.incrementAndGet();
         try {
             clearCurrentSession();
@@ -231,6 +233,8 @@ public class StorageService implements BUPluginLifecycle {
 
     private static Throwable unwrap(Throwable throwable) {
         Throwable current = throwable;
+        // CompletableFuture commonly wraps the real failure in one or more CompletionExceptions.
+        // Peel those away so callers can reason about the underlying exception type.
         while (current instanceof CompletionException && current.getCause() != null) {
             current = current.getCause();
         }
