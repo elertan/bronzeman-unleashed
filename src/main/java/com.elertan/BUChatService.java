@@ -287,6 +287,7 @@ public class BUChatService implements BUPluginLifecycle {
     }
 
     static ChatboxStyle resolveChatboxStyle(boolean isResized, int chatboxTransparencyValue) {
+        // Fixed mode never uses the transparent chatbox palette.
         if (!isResized) {
             return ChatboxStyle.OPAQUE;
         }
@@ -304,6 +305,8 @@ public class BUChatService implements BUPluginLifecycle {
     }
 
     private boolean syncChatboxStyleFromClient(long generation) {
+        // Generation guards stop delayed client-thread work from an earlier login session
+        // from overriding the current session's chat style.
         if (generation != chatSessionGeneration.get()) {
             return false;
         }
@@ -334,6 +337,8 @@ public class BUChatService implements BUPluginLifecycle {
 
     private void drainPendingMessages(long generation) {
         try {
+            // Re-read the live client state immediately before formatting so chat colors track
+            // mode/transparency changes even if the expected varbit update was missed.
             if (!syncChatboxStyleFromClient(generation) || !isChatboxStyleReady.get()) {
                 return;
             }
