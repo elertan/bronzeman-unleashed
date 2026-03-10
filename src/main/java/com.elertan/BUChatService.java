@@ -18,19 +18,17 @@ import java.awt.Color;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.MessageNode;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ScriptCallbackEvent;
-import net.runelite.api.events.VarbitChanged;
-import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
@@ -49,13 +47,6 @@ public class BUChatService implements BUPluginLifecycle {
         ChatMessageType.CLAN_CHAT,
         ChatMessageType.FRIENDSCHAT,
         ChatMessageType.PRIVATECHAT
-    );
-    private static final Set<GameState> GAME_STATES_RESET_CHAT_SESSION = ImmutableSet.of(
-        GameState.STARTING,
-        GameState.LOGIN_SCREEN,
-        GameState.LOGIN_SCREEN_AUTHENTICATOR,
-        GameState.CONNECTION_LOST,
-        GameState.HOPPING
     );
     @Inject
     private Client client;
@@ -80,27 +71,20 @@ public class BUChatService implements BUPluginLifecycle {
     private BUSoundHelper buSoundHelper;
     @Inject
     private CollectionLogService collectionLogService;
-    private final ConcurrentLinkedQueue<PendingChatMessage> pendingMessages =
-        new ConcurrentLinkedQueue<>();
-    private final AtomicBoolean isChatboxStyleReady = new AtomicBoolean(false);
-    private final AtomicBoolean drainScheduled = new AtomicBoolean(false);
-    private final AtomicLong chatSessionGeneration = new AtomicLong(0L);
-    private volatile ChatboxStyle chatboxStyle = ChatboxStyle.OPAQUE;
+    private final ConcurrentLinkedQueue<String> pendingMessages = new ConcurrentLinkedQueue<>();
+    // Chatbox varbits are only reliable after the first post-login tick.
+    private volatile boolean awaitingFirstTickAfterLogin = false;
 
     @Override
     public void startUp() throws Exception {
-        resetChatSessionState(false);
+        clearPendingMessages();
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
 
         manageIconOnChatbox(false);
-        clientThread.invokeLater(() -> {
-            if (client.getGameState() == GameState.LOGGED_IN) {
-                if (syncChatboxStyleFromClient(chatSessionGeneration.get())) {
-                    schedulePendingMessageDrain();
-                }
-            }
-        });
+        if (client.getGameState() == GameState.LOGGED_IN) {
+            awaitingFirstTickAfterLogin = true;
+        }
     }
 
     @Override
@@ -110,7 +94,7 @@ public class BUChatService implements BUPluginLifecycle {
             accountConfigSubscription.dispose();
             accountConfigSubscription = null;
         }
-        resetChatSessionState(true);
+        clearPendingMessages();
     }
 
     public void onChatMessage(ChatMessage chatMessage) {
@@ -169,22 +153,15 @@ public class BUChatService implements BUPluginLifecycle {
     }
 
     public void onGameStateChanged(GameStateChanged event) {
-        GameState gameState = event.getGameState();
-        if (gameState == GameState.LOGGED_IN) {
-            scheduleChatboxStyleRefresh();
-            return;
-        }
-
-        if (GAME_STATES_RESET_CHAT_SESSION.contains(gameState)) {
-            resetChatSessionState(true);
+        if (event.getGameState() == GameState.LOGGED_IN) {
+            awaitingFirstTickAfterLogin = true;
         }
     }
 
-    public void onVarbitChanged(VarbitChanged event) {
-        int varbitId = event.getVarbitId();
-        if (varbitId == VarbitID.CHATBOX_TRANSPARENCY
-            || varbitId == VarbitID.SETTINGS_INTERFACE_RESIZING) {
-            scheduleChatboxStyleRefresh();
+    public void onGameTick(GameTick event) {
+        if (awaitingFirstTickAfterLogin && client.getGameState() == GameState.LOGGED_IN) {
+            awaitingFirstTickAfterLogin = false;
+            drainPendingMessages();
         }
     }
 
@@ -208,8 +185,8 @@ public class BUChatService implements BUPluginLifecycle {
 
     public void sendMessage(String message) {
         log.debug("Sending chat message: {}", message);
-        pendingMessages.add(new PendingChatMessage(chatSessionGeneration.get(), message));
-        schedulePendingMessageDrain();
+        pendingMessages.add(message);
+        clientThread.invokeLater(this::drainPendingMessages);
     }
 
     private void currentAccountConfigurationChangeListener(
@@ -295,86 +272,24 @@ public class BUChatService implements BUPluginLifecycle {
         return chatboxTransparencyValue == 1 ? ChatboxStyle.TRANSPARENT : ChatboxStyle.OPAQUE;
     }
 
-    private void scheduleChatboxStyleRefresh() {
-        long generation = chatSessionGeneration.get();
-        clientThread.invokeLater(() -> {
-            if (syncChatboxStyleFromClient(generation)) {
-                schedulePendingMessageDrain();
-            }
-        });
-    }
-
-    private boolean syncChatboxStyleFromClient(long generation) {
-        // Generation guards stop delayed client-thread work from an earlier login session
-        // from overriding the current session's chat style.
-        if (generation != chatSessionGeneration.get()) {
-            return false;
-        }
-        if (client.getGameState() != GameState.LOGGED_IN) {
-            return false;
-        }
-
-        ChatboxStyle resolvedStyle = resolveChatboxStyle(
-            client.isResized(),
-            client.getVarbitValue(VarbitID.CHATBOX_TRANSPARENCY)
-        );
-        if (chatboxStyle != resolvedStyle || !isChatboxStyleReady.get()) {
-            chatboxStyle = resolvedStyle;
-            log.debug("chatboxStyle set to {} for generation {}", chatboxStyle, generation);
-        }
-        isChatboxStyleReady.set(true);
-        return true;
-    }
-
-    private void schedulePendingMessageDrain() {
-        long generation = chatSessionGeneration.get();
-        if (!drainScheduled.compareAndSet(false, true)) {
+    private void drainPendingMessages() {
+        if (!isReadyToSendPendingMessages()) {
             return;
         }
 
-        clientThread.invokeLater(() -> drainPendingMessages(generation));
-    }
-
-    private void drainPendingMessages(long generation) {
-        try {
-            // Re-read the live client state immediately before formatting so chat colors track
-            // mode/transparency changes even if the expected varbit update was missed.
-            if (!syncChatboxStyleFromClient(generation) || !isChatboxStyleReady.get()) {
-                return;
-            }
-
-            PendingChatMessage pendingMessage;
-            while ((pendingMessage = pendingMessages.peek()) != null) {
-                if (pendingMessage.generation != generation) {
-                    if (pendingMessage.generation < generation) {
-                        pendingMessages.poll();
-                        continue;
-                    }
-                    return;
-                }
-
-                pendingMessages.poll();
-                queueFormattedMessage(pendingMessage.message, chatboxStyle);
-            }
-        } finally {
-            drainScheduled.set(false);
-            if (generation == chatSessionGeneration.get()
-                && isChatboxStyleReady.get()
-                && !pendingMessages.isEmpty()) {
-                schedulePendingMessageDrain();
-            }
+        String message;
+        while ((message = pendingMessages.poll()) != null) {
+            queueFormattedMessage(message);
         }
     }
 
-    private void queueFormattedMessage(String message, ChatboxStyle currentChatboxStyle) {
+    private void queueFormattedMessage(String message) {
         String messageChatIcon = getMessageChatIconTag();
         if (messageChatIcon == null) {
             throw new IllegalStateException("Chat icon has not been set");
         }
 
-        Color chatColor = currentChatboxStyle == ChatboxStyle.TRANSPARENT
-            ? config.chatColorTransparent()
-            : config.chatColorOpaque();
+        Color chatColor = resolveCurrentChatColor();
 
         ChatMessageBuilder builder = new ChatMessageBuilder();
         // We need to supply a color here, otherwise the image does not work...
@@ -399,28 +314,28 @@ public class BUChatService implements BUPluginLifecycle {
         chatMessageManager.queue(queuedMessage);
     }
 
-    private void resetChatSessionState(boolean incrementGeneration) {
-        long generation = incrementGeneration ? chatSessionGeneration.incrementAndGet()
-            : chatSessionGeneration.get();
+    private boolean isReadyToSendPendingMessages() {
+        return client.getGameState() == GameState.LOGGED_IN && !awaitingFirstTickAfterLogin;
+    }
+
+    private Color resolveCurrentChatColor() {
+        ChatboxStyle chatboxStyle = resolveChatboxStyle(
+            client.isResized(),
+            client.getVarbitValue(VarbitID.CHATBOX_TRANSPARENCY)
+        );
+        return chatboxStyle == ChatboxStyle.TRANSPARENT
+            ? config.chatColorTransparent()
+            : config.chatColorOpaque();
+    }
+
+    private void clearPendingMessages() {
         pendingMessages.clear();
-        isChatboxStyleReady.set(false);
-        drainScheduled.set(false);
-        chatboxStyle = ChatboxStyle.OPAQUE;
-        log.debug("chat session reset for generation {}", generation);
+        awaitingFirstTickAfterLogin = false;
+        log.debug("cleared pending chat messages");
     }
 
     enum ChatboxStyle {
         OPAQUE,
         TRANSPARENT
-    }
-
-    private static final class PendingChatMessage {
-        private final long generation;
-        private final String message;
-
-        private PendingChatMessage(long generation, String message) {
-            this.generation = generation;
-            this.message = message;
-        }
     }
 }
