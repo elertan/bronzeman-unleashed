@@ -268,6 +268,7 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onGameTick(GameTick event) {
+        buChatService.onGameTick(event);
         petDropService.onGameTick(event);
         collectionLogService.onGameTick(event);
     }
@@ -320,7 +321,6 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onVarbitChanged(VarbitChanged event) {
-        buChatService.onVarbitChanged(event);
         achievementDiaryService.onVarbitChanged(event);
     }
 
