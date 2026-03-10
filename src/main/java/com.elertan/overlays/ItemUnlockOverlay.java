@@ -13,6 +13,7 @@ import java.awt.Composite;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import javax.inject.Inject;
@@ -38,6 +39,7 @@ public class ItemUnlockOverlay extends Overlay {
     private static final int WIDTH = 250;
     private static final int HEIGHT = 70;
     private static final int ACQUIRED_BY_HEIGHT = 10;
+    private static final int VIEWPORT_TOP_MARGIN = 45;
 
     // Timings (ms)
 //    private static final int DISPLAY_TIME_MS = 1250; // per-item dwell
@@ -79,7 +81,7 @@ public class ItemUnlockOverlay extends Overlay {
 
     @Inject
     private ItemUnlockOverlay() {
-        setPosition(OverlayPosition.TOP_CENTER);
+        setPosition(OverlayPosition.DYNAMIC);
         setLayer(OverlayLayer.UNDER_WIDGETS);
     }
 
@@ -231,8 +233,14 @@ public class ItemUnlockOverlay extends Overlay {
             return new Dimension(WIDTH, sessionFrameHeight);
         }
 
-        int y = 40;
-        int frameX = WIDTH + -visibleWidth / 2; // TOP_CENTER anchor
+        Point overlayLocation = getViewportOverlayLocation();
+        setPreferredLocation(overlayLocation);
+
+        Point currentLocation = getBounds().getLocation();
+        int originX = overlayLocation.x - currentLocation.x;
+        int originY = overlayLocation.y - currentLocation.y;
+        int y = originY;
+        int frameX = originX + (WIDTH - visibleWidth) / 2;
 
         g.setComposite(AlphaComposite.SrcOver);
 
@@ -314,6 +322,13 @@ public class ItemUnlockOverlay extends Overlay {
         sessionFrameHeight =
             config.showAcquiredByInUnlockOverlay() ? (HEIGHT + ACQUIRED_BY_HEIGHT) : HEIGHT;
         phase = Phase.OPENING;
+    }
+
+    private Point getViewportOverlayLocation() {
+        return new Point(
+            client.getViewportXOffset() + (client.getViewportWidth() - WIDTH) / 2,
+            client.getViewportYOffset() + VIEWPORT_TOP_MARGIN
+        );
     }
 
     private void drawFrame(Graphics2D g, int x, int y, int w, int h) {
