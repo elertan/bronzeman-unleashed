@@ -28,6 +28,18 @@ public final class RelatedItemsRegistry {
     }
 
     /**
+     * Creates a default registry with curated equivalence groups for common item variants. This
+     * initial implementation starts without predefined mappings and will be extended in follow-up
+     * work.
+     */
+    public static RelatedItemsRegistry createDefault() {
+        return new RelatedItemsRegistry(
+            Collections.emptyMap(),
+            Collections.emptySet()
+        );
+    }
+
+    /**
      * Returns the full set of item IDs that are considered equivalent to the given item ID,
      * including the given ID itself. If no mapping exists, a singleton set containing only
      * {@code itemId} is returned.
