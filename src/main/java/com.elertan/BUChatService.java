@@ -9,17 +9,17 @@ import com.elertan.event.BUEvent;
 import com.elertan.event.GameMessageToEventTransformer;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.models.Member;
-import com.elertan.utils.Observable;
 import com.elertan.utils.Subscription;
 import com.elertan.utils.TextUtils;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import lombok.Getter;
 import java.awt.Color;
-import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -37,7 +37,6 @@ import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.util.ColorUtil;
-import net.runelite.client.util.Text;
 
 import static com.elertan.utils.AsyncUtils.withErrorLogging;
 
@@ -51,8 +50,13 @@ public class BUChatService implements BUPluginLifecycle {
         ChatMessageType.FRIENDSCHAT,
         ChatMessageType.PRIVATECHAT
     );
-    @Getter
-    private final Observable<Boolean> isChatboxTransparent = Observable.empty();
+    private static final Set<GameState> GAME_STATES_RESET_CHAT_SESSION = ImmutableSet.of(
+        GameState.STARTING,
+        GameState.LOGIN_SCREEN,
+        GameState.LOGIN_SCREEN_AUTHENTICATOR,
+        GameState.CONNECTION_LOST,
+        GameState.HOPPING
+    );
     @Inject
     private Client client;
     @Inject
@@ -76,13 +80,27 @@ public class BUChatService implements BUPluginLifecycle {
     private BUSoundHelper buSoundHelper;
     @Inject
     private CollectionLogService collectionLogService;
+    private final ConcurrentLinkedQueue<PendingChatMessage> pendingMessages =
+        new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean isChatboxStyleReady = new AtomicBoolean(false);
+    private final AtomicBoolean drainScheduled = new AtomicBoolean(false);
+    private final AtomicLong chatSessionGeneration = new AtomicLong(0L);
+    private volatile ChatboxStyle chatboxStyle = ChatboxStyle.OPAQUE;
 
     @Override
     public void startUp() throws Exception {
+        resetChatSessionState(false);
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
 
         manageIconOnChatbox(false);
+        clientThread.invokeLater(() -> {
+            if (client.getGameState() == GameState.LOGGED_IN) {
+                if (syncChatboxStyleFromClient(chatSessionGeneration.get())) {
+                    schedulePendingMessageDrain();
+                }
+            }
+        });
     }
 
     @Override
@@ -92,7 +110,7 @@ public class BUChatService implements BUPluginLifecycle {
             accountConfigSubscription.dispose();
             accountConfigSubscription = null;
         }
-        isChatboxTransparent.clear();
+        resetChatSessionState(true);
     }
 
     public void onChatMessage(ChatMessage chatMessage) {
@@ -151,19 +169,22 @@ public class BUChatService implements BUPluginLifecycle {
     }
 
     public void onGameStateChanged(GameStateChanged event) {
-        if (event.getGameState() == GameState.LOGGED_IN) {
-            // TODO: Find fix so we can wait till varbit value is correctly set....
-            boolean isTransparent =
-                client.getVarbitValue(VarbitID.CHATBOX_TRANSPARENCY) == 1;
-            setIsChatboxTransparent(isTransparent);
+        GameState gameState = event.getGameState();
+        if (gameState == GameState.LOGGED_IN) {
+            scheduleChatboxStyleRefresh();
+            return;
+        }
+
+        if (GAME_STATES_RESET_CHAT_SESSION.contains(gameState)) {
+            resetChatSessionState(true);
         }
     }
 
     public void onVarbitChanged(VarbitChanged event) {
         int varbitId = event.getVarbitId();
-        if (varbitId == VarbitID.CHATBOX_TRANSPARENCY) {
-            boolean isTransparent = event.getValue() == 1;
-            setIsChatboxTransparent(isTransparent);
+        if (varbitId == VarbitID.CHATBOX_TRANSPARENCY
+            || varbitId == VarbitID.SETTINGS_INTERFACE_RESIZING) {
+            scheduleChatboxStyleRefresh();
         }
     }
 
@@ -187,45 +208,8 @@ public class BUChatService implements BUPluginLifecycle {
 
     public void sendMessage(String message) {
         log.debug("Sending chat message: {}", message);
-
-        withErrorLogging(isChatboxTransparent.await(null),
-            "error waiting for isChatboxTransparent to become ready")
-            .thenAccept((isTransparent) -> {
-                String messageChatIcon = getMessageChatIconTag();
-
-                if (messageChatIcon == null) {
-                    throw new IllegalStateException("Chat icon has not been set");
-                }
-                Color chatColor = Boolean.TRUE.equals(isTransparent) ? config.chatColorTransparent()
-                    : config.chatColorOpaque();
-
-                ChatMessageBuilder builder = new ChatMessageBuilder();
-                // We need to supply a color here, otherwise the image does not work...
-                builder.append(chatColor, messageChatIcon + " ");
-                // Replacing all closing cols with our chat color to reset it back to our default
-                if (config.useChatColor()) {
-                    String pluginChatColorTag = ColorUtil.colorTag(chatColor);
-                    String chatColorFixedMessage = message.replaceAll(
-                        "</col>",
-                        pluginChatColorTag
-                    );
-                    builder.append(chatColor, chatColorFixedMessage);
-                } else {
-                    builder.append(message);
-                }
-
-                String formattedMessage = builder.build();
-                QueuedMessage queuedMessage = QueuedMessage.builder()
-                    .type(ChatMessageType.GAMEMESSAGE)
-                    .runeLiteFormattedMessage(formattedMessage)
-                    .build();
-                clientThread.invoke(() -> chatMessageManager.queue(queuedMessage));
-            });
-    }
-
-    private void setIsChatboxTransparent(Boolean isTransparent) {
-        log.debug("isChatboxTransparent set to {}", isTransparent);
-        isChatboxTransparent.set(isTransparent);
+        pendingMessages.add(new PendingChatMessage(chatSessionGeneration.get(), message));
+        schedulePendingMessageDrain();
     }
 
     private void currentAccountConfigurationChangeListener(
@@ -300,5 +284,138 @@ public class BUChatService implements BUPluginLifecycle {
             return getItemIconTag(itemId);
         }
         return CompletableFuture.completedFuture(null);
+    }
+
+    static ChatboxStyle resolveChatboxStyle(boolean isResized, int chatboxTransparencyValue) {
+        if (!isResized) {
+            return ChatboxStyle.OPAQUE;
+        }
+
+        return chatboxTransparencyValue == 1 ? ChatboxStyle.TRANSPARENT : ChatboxStyle.OPAQUE;
+    }
+
+    private void scheduleChatboxStyleRefresh() {
+        long generation = chatSessionGeneration.get();
+        clientThread.invokeLater(() -> {
+            if (syncChatboxStyleFromClient(generation)) {
+                schedulePendingMessageDrain();
+            }
+        });
+    }
+
+    private boolean syncChatboxStyleFromClient(long generation) {
+        if (generation != chatSessionGeneration.get()) {
+            return false;
+        }
+        if (client.getGameState() != GameState.LOGGED_IN) {
+            return false;
+        }
+
+        ChatboxStyle resolvedStyle = resolveChatboxStyle(
+            client.isResized(),
+            client.getVarbitValue(VarbitID.CHATBOX_TRANSPARENCY)
+        );
+        if (chatboxStyle != resolvedStyle || !isChatboxStyleReady.get()) {
+            chatboxStyle = resolvedStyle;
+            log.debug("chatboxStyle set to {} for generation {}", chatboxStyle, generation);
+        }
+        isChatboxStyleReady.set(true);
+        return true;
+    }
+
+    private void schedulePendingMessageDrain() {
+        long generation = chatSessionGeneration.get();
+        if (!drainScheduled.compareAndSet(false, true)) {
+            return;
+        }
+
+        clientThread.invokeLater(() -> drainPendingMessages(generation));
+    }
+
+    private void drainPendingMessages(long generation) {
+        try {
+            if (!syncChatboxStyleFromClient(generation) || !isChatboxStyleReady.get()) {
+                return;
+            }
+
+            PendingChatMessage pendingMessage;
+            while ((pendingMessage = pendingMessages.peek()) != null) {
+                if (pendingMessage.generation != generation) {
+                    if (pendingMessage.generation < generation) {
+                        pendingMessages.poll();
+                        continue;
+                    }
+                    return;
+                }
+
+                pendingMessages.poll();
+                queueFormattedMessage(pendingMessage.message, chatboxStyle);
+            }
+        } finally {
+            drainScheduled.set(false);
+            if (generation == chatSessionGeneration.get()
+                && isChatboxStyleReady.get()
+                && !pendingMessages.isEmpty()) {
+                schedulePendingMessageDrain();
+            }
+        }
+    }
+
+    private void queueFormattedMessage(String message, ChatboxStyle currentChatboxStyle) {
+        String messageChatIcon = getMessageChatIconTag();
+        if (messageChatIcon == null) {
+            throw new IllegalStateException("Chat icon has not been set");
+        }
+
+        Color chatColor = currentChatboxStyle == ChatboxStyle.TRANSPARENT
+            ? config.chatColorTransparent()
+            : config.chatColorOpaque();
+
+        ChatMessageBuilder builder = new ChatMessageBuilder();
+        // We need to supply a color here, otherwise the image does not work...
+        builder.append(chatColor, messageChatIcon + " ");
+        // Replacing all closing cols with our chat color to reset it back to our default
+        if (config.useChatColor()) {
+            String pluginChatColorTag = ColorUtil.colorTag(chatColor);
+            String chatColorFixedMessage = message.replaceAll(
+                "</col>",
+                pluginChatColorTag
+            );
+            builder.append(chatColor, chatColorFixedMessage);
+        } else {
+            builder.append(message);
+        }
+
+        String formattedMessage = builder.build();
+        QueuedMessage queuedMessage = QueuedMessage.builder()
+            .type(ChatMessageType.GAMEMESSAGE)
+            .runeLiteFormattedMessage(formattedMessage)
+            .build();
+        chatMessageManager.queue(queuedMessage);
+    }
+
+    private void resetChatSessionState(boolean incrementGeneration) {
+        long generation = incrementGeneration ? chatSessionGeneration.incrementAndGet()
+            : chatSessionGeneration.get();
+        pendingMessages.clear();
+        isChatboxStyleReady.set(false);
+        drainScheduled.set(false);
+        chatboxStyle = ChatboxStyle.OPAQUE;
+        log.debug("chat session reset for generation {}", generation);
+    }
+
+    enum ChatboxStyle {
+        OPAQUE,
+        TRANSPARENT
+    }
+
+    private static final class PendingChatMessage {
+        private final long generation;
+        private final String message;
+
+        private PendingChatMessage(long generation, String message) {
+            this.generation = generation;
+            this.message = message;
+        }
     }
 }
