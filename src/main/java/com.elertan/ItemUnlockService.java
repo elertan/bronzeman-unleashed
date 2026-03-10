@@ -516,9 +516,11 @@ public class ItemUnlockService implements BUPluginLifecycle {
                 );
                 log.debug("Unlocked item ({}) '{}'", fItemId, fItemName);
 
-                // Derive additional item IDs to unlock based on equivalence/recipe relationships.
-                // For now, only equivalence is applied; recipe-based unlocks will be added in a
-                // follow-up change.
+                // Derive additional item IDs to unlock based on equivalence and recipe
+                // relationships. We treat the current unlocked-items map as the "already owned"
+                // set, then:
+                // 1) add any missing equivalents for the primary item
+                // 2) add any recipe results that become satisfiable
                 Map<Integer, UnlockedItem> currentUnlockedItems =
                     unlockedItemsDataProvider.getUnlockedItemsMap();
                 if (currentUnlockedItems == null) {
@@ -534,9 +536,17 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     equivalentItemIds = copy;
                 }
 
-                // Create additional unlocks for equivalent IDs that are not yet unlocked.
-                // Keep the same acquiredAt/acquiredBy metadata so they look like a single unlock
-                // event from the player's perspective.
+                // Build the "owned" set for recipe evaluation: everything currently unlocked,
+                // plus all equivalents of the item we're about to add.
+                Set<Integer> ownedIdsForRecipes = new HashSet<>(currentUnlockedItems.keySet());
+                ownedIdsForRecipes.addAll(equivalentItemIds);
+
+                Set<Integer> recipeResultIds =
+                    relatedItemsRegistry.getRecipeResultItemIds(ownedIdsForRecipes);
+
+                // Create additional unlocks for equivalent and recipe result IDs that are not yet
+                // unlocked. Keep the same acquiredAt/acquiredBy metadata so they look like a single
+                // unlock event from the player's perspective.
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
                 futures.add(unlockedItemsDataProvider.addUnlockedItem(primaryUnlockedItem));
 
@@ -558,6 +568,26 @@ public class ItemUnlockService implements BUPluginLifecycle {
                         droppedByNPCId
                     );
                     futures.add(unlockedItemsDataProvider.addUnlockedItem(equivalentUnlockedItem));
+                }
+
+                for (int resultId : recipeResultIds) {
+                    if (resultId == fItemId) {
+                        continue;
+                    }
+                    if (currentUnlockedItems.containsKey(resultId)) {
+                        continue;
+                    }
+
+                    ItemComposition resultComposition = client.getItemDefinition(resultId);
+                    String resultName = resultComposition.getName();
+                    UnlockedItem resultUnlockedItem = new UnlockedItem(
+                        resultId,
+                        resultName,
+                        acquiredByAccountHash,
+                        acquiredAt,
+                        droppedByNPCId
+                    );
+                    futures.add(unlockedItemsDataProvider.addUnlockedItem(resultUnlockedItem));
                 }
 
                 if (futures.size() == 1) {

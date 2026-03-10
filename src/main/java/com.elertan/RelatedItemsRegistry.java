@@ -4,15 +4,15 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import net.runelite.api.ItemID;
 
 /**
  * Resolves relationships between items for unlocking.
  *
  * - Equivalent item groups (e.g. all doses of a potion, clean/grimy herb variants, broken/normal armor).
  * - Recipe-style relationships (e.g. if ingredients A and B are unlocked, unlock result C).
- *
- * This class starts with minimal behavior and will be extended with real mappings and recipes in
- * follow-up changes.
  */
 public final class RelatedItemsRegistry {
 
@@ -28,15 +28,26 @@ public final class RelatedItemsRegistry {
     }
 
     /**
-     * Creates a default registry with curated equivalence groups for common item variants. This
-     * initial implementation starts without predefined mappings and will be extended in follow-up
-     * work.
+     * Creates a default registry with explicit recipe mappings and no equivalence expansion.
      */
     public static RelatedItemsRegistry createDefault() {
+        Set<RecipeRule> recipes = new HashSet<>();
+        registerRecipes(recipes);
+
         return new RelatedItemsRegistry(
             Collections.emptyMap(),
-            Collections.emptySet()
+            Collections.unmodifiableSet(recipes)
         );
+    }
+
+    private static void registerRecipes(Set<RecipeRule> recipes) {
+        // Note: In RuneLite gameval IDs, "Amulet of torture" is exposed as ZENYTE_AMULET_ENCHANTED.
+        recipes.add(new RecipeRule(
+            IntStream.of(ItemID.ARAXYTE_FANG, ItemID.ZENYTE_AMULET_ENCHANTED)
+                .boxed()
+                .collect(Collectors.toUnmodifiableSet()),
+            Collections.singleton(ItemID.AMULET_OF_RANCOUR)
+        ));
     }
 
     /**
@@ -100,4 +111,3 @@ public final class RelatedItemsRegistry {
         }
     }
 }
-
