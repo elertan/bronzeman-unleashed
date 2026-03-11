@@ -85,10 +85,9 @@ public class HeaderViewViewModel implements AutoCloseable {
         });
 
         accountConfigurationSubscription = accountConfigurationService.currentAccountConfiguration()
-            .subscribe(this::onAccountConfigurationChanged);
-        if (accountConfigurationService.isReady()) {
-            onAccountConfigurationChanged(accountConfigurationService.currentAccountConfiguration().get());
-        }
+            .subscribeImmediate((accountConfiguration, __) ->
+                onAccountConfigurationChanged(accountConfiguration)
+            );
     }
 
     @Override

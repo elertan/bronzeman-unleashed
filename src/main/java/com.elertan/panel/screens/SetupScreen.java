@@ -142,7 +142,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
         switch (step) {
             case STORAGE_MODE_CHOICE:
                 return new StorageModeStepView(storageModeStepViewModel, buResourceService);
-            case REMOTE:
+            case ONLINE_CONFIG:
                 return remoteStepViewFactory.create(remoteStepViewViewModel);
             case GAME_RULES:
                 return gameRulesStepViewFactory.create(

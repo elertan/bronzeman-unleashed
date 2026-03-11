@@ -177,6 +177,7 @@ public class StorageService implements BUPluginLifecycle {
     private CompletableFuture<StorageSession> openStorageSession(AccountConfiguration accountConfiguration) {
         StorageMode storageMode = accountConfiguration.getStorageMode();
         if (storageMode == null) {
+            // Legacy account configs predate storageMode and only supported Firebase-backed sync.
             storageMode = StorageMode.FIREBASE;
         }
 

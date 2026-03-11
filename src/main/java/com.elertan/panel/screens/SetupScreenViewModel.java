@@ -94,7 +94,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
             return;
         }
 
-        step.set(Step.REMOTE);
+        step.set(Step.ONLINE_CONFIG);
     }
 
     public CompletableFuture<Void> onRemoteStepFinished(FirebaseRealtimeDatabaseURL url) {
@@ -140,7 +140,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
             chosenStorageMode = null;
             isLocalMode.set(false);
         } else {
-            step.set(Step.REMOTE);
+            step.set(Step.ONLINE_CONFIG);
         }
         gameRulesAreViewOnly.set(null);
         gameRules.set(null);
@@ -150,8 +150,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         if (chosenStorageMode == StorageMode.LOCAL) {
-            finishLocalMode(future);
-            return future;
+            return finishLocalMode();
         }
 
         if (gameRulesStoragePort == null) {
@@ -168,12 +167,6 @@ public final class SetupScreenViewModel implements AutoCloseable {
         }
 
         Runnable finalize = () -> {
-            step.set(Step.STORAGE_MODE_CHOICE);
-            isLocalMode.set(false);
-            gameRulesAreViewOnly.set(null);
-            gameRules.set(null);
-            chosenStorageMode = null;
-
             long accountHash = client.getAccountHash();
             AccountConfiguration accountConfiguration = AccountConfiguration.forFirebase(
                 firebaseRealtimeDatabase.getDatabaseURL()
@@ -196,6 +189,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 return;
             }
 
+            resetSetupState();
             future.complete(null);
         };
 
@@ -223,11 +217,13 @@ public final class SetupScreenViewModel implements AutoCloseable {
         return future;
     }
 
-    private void finishLocalMode(CompletableFuture<Void> future) {
+    private CompletableFuture<Void> finishLocalMode() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+
         GameRules gameRulesValue = gameRules.get();
         if (gameRulesValue == null) {
             future.completeExceptionally(new IllegalStateException("Game rules are not set"));
-            return;
+            return future;
         }
 
         long accountHash = client.getAccountHash();
@@ -236,7 +232,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 LocalStorageSession.deleteExistingProgress(accountHash);
             } catch (IOException e) {
                 future.completeExceptionally(e);
-                return;
+                return future;
             }
         }
         LocalStorageSession localStorageSession = localStorageSessionFactory.create(accountHash);
@@ -264,6 +260,8 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 resetSetupState();
                 future.complete(null);
             });
+
+        return future;
     }
 
     private void handleLocalStorageChoice() {
@@ -332,6 +330,8 @@ public final class SetupScreenViewModel implements AutoCloseable {
     }
 
     private void resetSetupState() {
+        // Setup is only shown while the account is unconfigured. After finishing setup, or after
+        // leaving Bronzeman later, reopening this flow should start from the first card again.
         step.set(Step.STORAGE_MODE_CHOICE);
         isLocalMode.set(false);
         gameRulesAreViewOnly.set(null);
@@ -379,7 +379,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
 
     public enum Step {
         STORAGE_MODE_CHOICE,
-        REMOTE,
+        ONLINE_CONFIG,
         GAME_RULES,
     }
 

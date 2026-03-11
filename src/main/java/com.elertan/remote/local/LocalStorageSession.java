@@ -16,6 +16,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.client.RuneLite;
@@ -70,21 +72,16 @@ public class LocalStorageSession implements StorageSession {
             return;
         }
 
+        List<Path> pathsToDelete;
         try (java.util.stream.Stream<Path> stream = Files.walk(accountStorageDirectory)) {
-            stream
+            // Delete children before parents so directory removal does not fail while still populated.
+            pathsToDelete = stream
                 .sorted(Comparator.reverseOrder())
-                .forEach(path -> {
-                    try {
-                        Files.deleteIfExists(path);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
-        } catch (RuntimeException e) {
-            if (e.getCause() instanceof IOException) {
-                throw (IOException) e.getCause();
-            }
-            throw e;
+                .collect(Collectors.toList());
+        }
+
+        for (Path path : pathsToDelete) {
+            Files.deleteIfExists(path);
         }
     }
 
