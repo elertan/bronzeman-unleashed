@@ -51,13 +51,8 @@ public class UnlockedItemsScreenViewModel extends BaseViewModel {
         };
         unlockedItemsDataProvider.addUnlockedItemsMapListener(unlockedItemsMapListener);
         unlockedItemsStateSubscription = unlockedItemsDataProvider.getState().subscribeImmediate(
-            (state, oldState) -> {
-                if (state == State.Ready) {
-                    allUnlockedItems.set(allUnlockedItemsSupplier.get());
-                } else {
-                    allUnlockedItems.set(null);
-                }
-            }
+            (state, oldState) ->
+                allUnlockedItems.set(state == State.Ready ? allUnlockedItemsSupplier.get() : null)
         );
 
         unlockedItemsDataProvider.await(null).whenComplete((__, throwable) -> {

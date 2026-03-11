@@ -1,6 +1,7 @@
 package com.elertan;
 
 import com.elertan.models.AccountConfiguration;
+import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.utils.Observable;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -204,15 +205,15 @@ public class AccountConfigurationService implements BUPluginLifecycle {
                 continue;
             }
 
-            if (accountConfiguration.getFirebaseRealtimeDatabaseURL() == null) {
+            FirebaseRealtimeDatabaseURL fireBaseUrl =
+                accountConfiguration.getFirebaseRealtimeDatabaseURL();
+            if (fireBaseUrl == null) {
                 continue;
             }
 
             map.put(
                 entry.getKey(),
-                AccountConfiguration.forFirebase(
-                    accountConfiguration.getFirebaseRealtimeDatabaseURL()
-                )
+                AccountConfiguration.forFirebase(fireBaseUrl)
             );
             migratedLegacyConfig = true;
         }
