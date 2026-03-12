@@ -133,7 +133,9 @@ public class BUChatService implements BUPluginLifecycle {
             addIconToChatMessage(chatMessage);
         }
 
-        if (chatMessageType != ChatMessageType.GAMEMESSAGE) {
+        // Mirror the same check that PetDropService does to ensure we process all messages
+        if (chatMessageType != ChatMessageType.GAMEMESSAGE
+            && chatMessageType != ChatMessageType.SPAM) {
             return;
         }
 
