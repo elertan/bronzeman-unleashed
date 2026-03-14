@@ -131,6 +131,10 @@ public class EntryView extends JPanel implements AutoCloseable {
         buttonRow.setLayout(new BoxLayout(buttonRow, BoxLayout.X_AXIS));
         buttonRow.setOpaque(false);
 
+        JButton backButton = new JButton("Go back");
+        backButton.addActionListener(e -> viewModel.onBackClick());
+        buttonRow.add(backButton);
+        buttonRow.add(Box.createHorizontalStrut(8));
         buttonRow.add(Box.createHorizontalGlue());
 
         JButton continueButton = new JButton("Continue");

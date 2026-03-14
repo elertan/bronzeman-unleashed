@@ -2,7 +2,7 @@ package com.elertan.data;
 
 import com.elertan.event.BUEvent;
 import com.elertan.remote.ObjectListStoragePort;
-import com.elertan.remote.RemoteStorageService;
+import com.elertan.remote.StorageService;
 import com.elertan.utils.Observable;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -21,15 +21,15 @@ public class LastEventDataProvider extends AbstractDataProvider {
     private final Observable<BUEvent> events = Observable.empty();
 
     @Inject
-    private RemoteStorageService remoteStorageService;
+    private StorageService storageService;
 
     private ObjectListStoragePort<BUEvent> storagePort;
     private ObjectListStoragePort.Listener<BUEvent> storagePortListener;
 
 
     @Override
-    protected RemoteStorageService getRemoteStorageService() {
-        return remoteStorageService;
+    protected StorageService getStorageService() {
+        return storageService;
     }
 
     @Override
@@ -55,7 +55,7 @@ public class LastEventDataProvider extends AbstractDataProvider {
 
     @Override
     protected void onRemoteStorageReady() {
-        storagePort = remoteStorageService.getLastEventStoragePort();
+        storagePort = storageService.getLastEventStoragePort();
         storagePort.addListener(storagePortListener);
         setState(State.Ready);
     }

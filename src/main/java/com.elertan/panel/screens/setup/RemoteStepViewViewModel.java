@@ -93,6 +93,15 @@ public final class RemoteStepViewViewModel implements AutoCloseable {
         stateView.set(StateView.ENTRY);
     }
 
+    public void onBack() {
+        TrySubmitAttempt attempt = trySubmitAttempt.getAndSet(null);
+        if (attempt != null) {
+            attempt.cancel();
+        }
+        stateView.set(StateView.ENTRY);
+        listener.onBack();
+    }
+
     public enum StateView {
         ENTRY,
         CHECKING
@@ -107,6 +116,8 @@ public final class RemoteStepViewViewModel implements AutoCloseable {
     public interface Listener {
 
         CompletableFuture<Void> onRemoteStepFinished(FirebaseRealtimeDatabaseURL url);
+
+        void onBack();
     }
 
     @Singleton
