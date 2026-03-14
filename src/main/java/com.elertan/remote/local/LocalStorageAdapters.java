@@ -4,7 +4,6 @@ import com.elertan.remote.KeyListStoragePort;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.ObjectStoragePort;
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import java.io.IOException;
 import java.io.Reader;
@@ -31,7 +30,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class LocalStorageAdapters {
 
-    private static final Gson PRETTY_GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final AtomicInteger EXECUTOR_COUNTER = new AtomicInteger();
 
     private LocalStorageAdapters() {
@@ -180,9 +178,7 @@ public final class LocalStorageAdapters {
             for (Map.Entry<K, V> entry : cache.entrySet()) {
                 raw.put(keyToString.apply(entry.getKey()), entry.getValue());
             }
-            // Use the adapter gson for type-aware serialization, then pretty-print the resulting
-            // JSON tree so the on-disk files stay stable and readable.
-            writeJsonFile(filePath, PRETTY_GSON.toJson(gson.toJsonTree(raw)));
+            writeJsonFile(filePath, gson.toJson(raw));
         }
     }
 
@@ -279,9 +275,7 @@ public final class LocalStorageAdapters {
                 deleteFile(filePath);
                 return;
             }
-            // Use the adapter gson for type-aware serialization, then pretty-print the resulting
-            // JSON tree so the on-disk files stay stable and readable.
-            writeJsonFile(filePath, PRETTY_GSON.toJson(gson.toJsonTree(cache)));
+            writeJsonFile(filePath, gson.toJson(cache));
         }
     }
 

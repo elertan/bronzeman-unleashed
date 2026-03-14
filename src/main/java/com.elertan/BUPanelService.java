@@ -50,7 +50,11 @@ public class BUPanelService implements BUPluginLifecycle {
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
         localProgressOpenFailureSubscription = storageService.getLocalProgressOpenFailure()
-            .subscribe(this::onLocalProgressOpenFailure);
+            .subscribeImmediate((failure, __) -> {
+                if (failure != null) {
+                    onLocalProgressOpenFailure(failure);
+                }
+            });
     }
 
     @Override
@@ -93,6 +97,7 @@ public class BUPanelService implements BUPluginLifecycle {
     private void onLocalProgressOpenFailure(StorageService.LocalProgressOpenFailure failure) {
         // Drop back to setup before showing the error so the panel is not left bound to an
         // unusable local session.
+        log.error("Could not open local progress", failure.getCause());
         accountConfigurationService.setCurrentAccountConfiguration(null);
         SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
             null,
