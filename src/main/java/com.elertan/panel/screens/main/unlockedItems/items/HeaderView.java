@@ -34,6 +34,7 @@ public class HeaderView extends JPanel implements AutoCloseable {
     private final AutoCloseable searchFieldBinding;
     private final AutoCloseable sortedByComboBoxBinding;
     private final AutoCloseable unlockedByComboBoxBinding;
+    private final AutoCloseable unlockedByRowVisibleBinding;
 
     private HeaderView(HeaderViewViewModel viewModel, BUResourceService buResourceService) {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -111,12 +112,9 @@ public class HeaderView extends JPanel implements AutoCloseable {
                 "Player (desc)"
             )
             .build();
-        Property<List<UnlockedItemsScreenViewModel.SortedBy>> sortedByOptions = new Property<>(
-            new ArrayList<>(sortedByEnumToStringMap.keySet())
-        );
         sortedByComboBoxBinding = Bindings.bindComboBox(
             sortedByComboBox,
-            sortedByOptions,
+            viewModel.sortedByOptions,
             viewModel.sortedBy,
             new Property<>(sortedByEnumToStringMap)
         );
@@ -157,6 +155,10 @@ public class HeaderView extends JPanel implements AutoCloseable {
             viewModel.unlockedByAccountHash,
             unlockedByValueToStringMapProperty
         );
+        unlockedByRowVisibleBinding = Bindings.bindVisible(
+            unlockedByRow,
+            viewModel.showUnlockedByFilter
+        );
 
         unlockedByRow.add(unlockedByLabel, BorderLayout.WEST);
         unlockedByRow.add(unlockedByComboBox, BorderLayout.CENTER);
@@ -168,6 +170,7 @@ public class HeaderView extends JPanel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        unlockedByRowVisibleBinding.close();
         unlockedByComboBoxBinding.close();
         sortedByComboBoxBinding.close();
         searchFieldBinding.close();

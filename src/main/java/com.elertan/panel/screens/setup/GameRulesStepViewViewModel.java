@@ -11,12 +11,18 @@ import lombok.extern.slf4j.Slf4j;
 public class GameRulesStepViewViewModel {
 
     public final Property<GameRules> gameRules;
+    public final Property<Boolean> isLocalMode;
     public final Property<Boolean> isSubmitting = new Property<>(false);
     public final Property<String> errorMessage = new Property<>(null);
     private final Listener listener;
 
-    private GameRulesStepViewViewModel(Property<GameRules> gameRules, Listener listener) {
+    private GameRulesStepViewViewModel(
+        Property<GameRules> gameRules,
+        Property<Boolean> isLocalMode,
+        Listener listener
+    ) {
         this.gameRules = gameRules;
+        this.isLocalMode = isLocalMode;
         this.listener = listener;
     }
 
@@ -45,7 +51,11 @@ public class GameRulesStepViewViewModel {
     @ImplementedBy(FactoryImpl.class)
     public interface Factory {
 
-        GameRulesStepViewViewModel create(Property<GameRules> gameRules, Listener listener);
+        GameRulesStepViewViewModel create(
+            Property<GameRules> gameRules,
+            Property<Boolean> isLocalMode,
+            Listener listener
+        );
     }
 
     public interface Listener {
@@ -59,8 +69,12 @@ public class GameRulesStepViewViewModel {
     private static final class FactoryImpl implements Factory {
 
         @Override
-        public GameRulesStepViewViewModel create(Property<GameRules> gameRules, Listener listener) {
-            return new GameRulesStepViewViewModel(gameRules, listener);
+        public GameRulesStepViewViewModel create(
+            Property<GameRules> gameRules,
+            Property<Boolean> isLocalMode,
+            Listener listener
+        ) {
+            return new GameRulesStepViewViewModel(gameRules, isLocalMode, listener);
         }
     }
 }

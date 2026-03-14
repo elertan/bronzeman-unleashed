@@ -1,10 +1,14 @@
 package com.elertan.panel.screens;
 
+import com.elertan.BUResourceService;
 import com.elertan.panel.ViewportWidthTrackingPanel;
 import com.elertan.panel.screens.setup.GameRulesStepView;
 import com.elertan.panel.screens.setup.GameRulesStepViewViewModel;
 import com.elertan.panel.screens.setup.RemoteStepView;
 import com.elertan.panel.screens.setup.RemoteStepViewViewModel;
+import com.elertan.panel.screens.setup.StorageModeStepView;
+import com.elertan.panel.screens.setup.StorageModeStepViewModel;
+import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.ui.Bindings;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
@@ -27,20 +31,27 @@ import javax.swing.ScrollPaneConstants;
 public class SetupScreen extends JPanel implements AutoCloseable {
 
     private final SetupScreenViewModel viewModel;
+    private final StorageModeStepViewModel storageModeStepViewModel;
+    private final BUResourceService buResourceService;
     private final RemoteStepView.Factory remoteStepViewFactory;
     private final RemoteStepViewViewModel remoteStepViewViewModel;
     private final GameRulesStepView.Factory gameRulesStepViewFactory;
     private final GameRulesStepViewViewModel gameRulesStepViewViewModel;
     private final AutoCloseable contentCardLayoutBinding;
+    private final AutoCloseable skipSetupButtonVisibleBinding;
 
     private SetupScreen(
         SetupScreenViewModel viewModel,
+        StorageModeStepViewModel storageModeStepViewModel,
+        BUResourceService buResourceService,
         RemoteStepView.Factory remoteStepViewFactory,
         RemoteStepViewViewModel remoteStepViewViewModel,
         GameRulesStepView.Factory gameRulesStepViewFactory,
         GameRulesStepViewViewModel gameRulesStepViewViewModel
     ) {
         this.viewModel = viewModel;
+        this.storageModeStepViewModel = storageModeStepViewModel;
+        this.buResourceService = buResourceService;
         this.remoteStepViewFactory = remoteStepViewFactory;
         this.remoteStepViewViewModel = remoteStepViewViewModel;
         this.gameRulesStepViewFactory = gameRulesStepViewFactory;
@@ -92,7 +103,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
         scrollPane.getVerticalScrollBar().addAdjustmentListener(e -> {
             boolean visible = scrollPane.getVerticalScrollBar().isVisible();
             if (visible) {
-                viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 10));
+                viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
             } else {
                 viewportWrapper.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
             }
@@ -103,7 +114,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
 
         inner.add(Box.createVerticalStrut(15));
 
-        JButton dontAskMeAgainButton = new JButton("Don't ask me again for this account");
+        JButton dontAskMeAgainButton = new JButton("Skip setup for this account");
         dontAskMeAgainButton.setAlignmentX(Component.CENTER_ALIGNMENT);
         dontAskMeAgainButton.setBorder(BorderFactory.createEmptyBorder(15, 0, 15, 0));
         dontAskMeAgainButton.setMaximumSize(new Dimension(
@@ -111,6 +122,10 @@ public class SetupScreen extends JPanel implements AutoCloseable {
             dontAskMeAgainButton.getPreferredSize().height
         ));
         dontAskMeAgainButton.addActionListener(e -> viewModel.onDontAskMeAgainButtonClick());
+        skipSetupButtonVisibleBinding = Bindings.bindVisible(
+            dontAskMeAgainButton,
+            viewModel.step.derive(step -> step == SetupScreenViewModel.Step.STORAGE_MODE_CHOICE)
+        );
         inner.add(dontAskMeAgainButton);
 
         add(inner, BorderLayout.CENTER);
@@ -118,13 +133,16 @@ public class SetupScreen extends JPanel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        skipSetupButtonVisibleBinding.close();
         contentCardLayoutBinding.close();
         viewModel.close();
     }
 
     private JPanel buildStep(SetupScreenViewModel.Step step) {
         switch (step) {
-            case REMOTE:
+            case STORAGE_MODE_CHOICE:
+                return new StorageModeStepView(storageModeStepViewModel, buResourceService);
+            case ONLINE_CONFIG:
                 return remoteStepViewFactory.create(remoteStepViewViewModel);
             case GAME_RULES:
                 return gameRulesStepViewFactory.create(
@@ -147,6 +165,10 @@ public class SetupScreen extends JPanel implements AutoCloseable {
     static final class FactoryImpl implements Factory {
 
         @Inject
+        StorageModeStepViewModel.Factory storageModeStepViewModelFactory;
+        @Inject
+        BUResourceService buResourceService;
+        @Inject
         RemoteStepView.Factory remoteStepViewFactory;
         @Inject
         RemoteStepViewViewModel.Factory remoteStepViewViewModelFactory;
@@ -157,10 +179,25 @@ public class SetupScreen extends JPanel implements AutoCloseable {
 
         @Override
         public SetupScreen create(SetupScreenViewModel viewModel) {
+            StorageModeStepViewModel storageModeStepViewModel =
+                storageModeStepViewModelFactory.create(viewModel::onStorageModeChosen);
             RemoteStepViewViewModel remoteStepViewViewModel = remoteStepViewViewModelFactory.create(
-                viewModel::onRemoteStepFinished);
+                new RemoteStepViewViewModel.Listener() {
+                    @Override
+                    public CompletableFuture<Void> onRemoteStepFinished(FirebaseRealtimeDatabaseURL url) {
+                        return viewModel.onRemoteStepFinished(url);
+                    }
+
+                    @Override
+                    public void onBack() {
+                        viewModel.onRemoteStepBack();
+                    }
+                }
+            );
             GameRulesStepViewViewModel gameRulesStepViewViewModel = gameRulesStepViewViewModelFactory.create(
-                viewModel.gameRules, new GameRulesStepViewViewModel.Listener() {
+                viewModel.gameRules,
+                viewModel.isLocalMode,
+                new GameRulesStepViewViewModel.Listener() {
                     @Override
                     public void onBack() {
                         viewModel.onGameRulesStepBack();
@@ -174,6 +211,8 @@ public class SetupScreen extends JPanel implements AutoCloseable {
             );
             return new SetupScreen(
                 viewModel,
+                storageModeStepViewModel,
+                buResourceService,
                 remoteStepViewFactory,
                 remoteStepViewViewModel,
                 gameRulesStepViewFactory,

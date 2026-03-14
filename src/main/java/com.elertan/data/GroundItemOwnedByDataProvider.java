@@ -3,7 +3,7 @@ package com.elertan.data;
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.remote.KeyListStoragePort;
-import com.elertan.remote.RemoteStorageService;
+import com.elertan.remote.StorageService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.Map;
@@ -20,7 +20,7 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
     private final ConcurrentLinkedQueue<Listener> mapListeners = new ConcurrentLinkedQueue<>();
 
     @Inject
-    private RemoteStorageService remoteStorageService;
+    private StorageService storageService;
 
     private KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> storagePort;
     private KeyListStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData> storagePortListener;
@@ -29,8 +29,8 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
     private ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap;
 
     @Override
-    protected RemoteStorageService getRemoteStorageService() {
-        return remoteStorageService;
+    protected StorageService getStorageService() {
+        return storageService;
     }
 
     @Override
@@ -99,7 +99,7 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
 
     @Override
     protected void onRemoteStorageReady() {
-        storagePort = remoteStorageService.getGroundItemOwnedByStoragePort();
+        storagePort = storageService.getGroundItemOwnedByStoragePort();
         storagePort.addListener(storagePortListener);
 
         storagePort.readAll().whenComplete((map, throwable) -> {

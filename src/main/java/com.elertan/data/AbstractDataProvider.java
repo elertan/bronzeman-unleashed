@@ -1,7 +1,7 @@
 package com.elertan.data;
 
 import com.elertan.BUPluginLifecycle;
-import com.elertan.remote.RemoteStorageService;
+import com.elertan.remote.StorageService;
 import com.elertan.utils.Observable;
 import com.elertan.utils.Subscription;
 import java.time.Duration;
@@ -14,7 +14,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Base class for data providers that depend on RemoteStorageService.
+ * Base class for data providers that depend on StorageService.
  * Handles common state management, listener lifecycle, and await pattern.
  */
 @Slf4j
@@ -22,37 +22,37 @@ public abstract class AbstractDataProvider implements BUPluginLifecycle {
 
     @Getter
     private final Observable<State> state = Observable.of(State.NotReady);
-    private Subscription remoteStorageSubscription;
+    private Subscription storageSubscription;
 
     /**
-     * Subclasses must provide the RemoteStorageService instance.
+     * Subclasses must provide the StorageService instance.
      */
-    protected abstract RemoteStorageService getRemoteStorageService();
+    protected abstract StorageService getStorageService();
 
     /**
-     * Called when RemoteStorageService becomes ready.
+     * Called when StorageService becomes ready.
      * Subclasses should initialize their storage ports and data here.
      */
     protected abstract void onRemoteStorageReady();
 
     /**
-     * Called when RemoteStorageService becomes not ready or during shutdown.
+     * Called when StorageService becomes not ready or during shutdown.
      * Subclasses should clear their data and storage ports here.
      */
     protected abstract void onRemoteStorageNotReady();
 
     @Override
     public void startUp() throws Exception {
-        remoteStorageSubscription = getRemoteStorageService().getState().subscribeImmediate(
-            (remoteState, old) -> onRemoteStorageStateChanged(remoteState)
+        storageSubscription = getStorageService().getState().subscribeImmediate(
+            (storageState, old) -> onStorageStateChanged(storageState)
         );
     }
 
     @Override
     public void shutDown() throws Exception {
-        if (remoteStorageSubscription != null) {
-            remoteStorageSubscription.dispose();
-            remoteStorageSubscription = null;
+        if (storageSubscription != null) {
+            storageSubscription.dispose();
+            storageSubscription = null;
         }
         onRemoteStorageNotReady();
         state.set(State.NotReady);
@@ -114,11 +114,11 @@ public abstract class AbstractDataProvider implements BUPluginLifecycle {
         state.set(newState);
     }
 
-    private void onRemoteStorageStateChanged(RemoteStorageService.State remoteState) {
-        if (remoteState == RemoteStorageService.State.NotReady) {
+    private void onStorageStateChanged(StorageService.State storageState) {
+        if (storageState == StorageService.State.NotReady) {
             onRemoteStorageNotReady();
             setState(State.NotReady);
-        } else if (remoteState == RemoteStorageService.State.Ready) {
+        } else if (storageState == StorageService.State.Ready) {
             onRemoteStorageReady();
         }
     }

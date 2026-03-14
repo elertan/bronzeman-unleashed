@@ -3,9 +3,11 @@ package com.elertan;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.panel.BUPanel;
 import com.elertan.panel.BUPanelViewModel;
+import com.elertan.remote.StorageService;
 import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ClientToolbar;
@@ -21,6 +23,8 @@ public class BUPanelService implements BUPluginLifecycle {
     private BUResourceService buResourceService;
     @Inject
     private AccountConfigurationService accountConfigurationService;
+    @Inject
+    private StorageService storageService;
 
     @Inject
     private BUPanelViewModel.Factory buPanelViewModelFactory;
@@ -30,6 +34,7 @@ public class BUPanelService implements BUPluginLifecycle {
     private BUPanel buPanel;
     private NavigationButton panelNavigationButton;
     private Subscription accountConfigSubscription;
+    private Subscription localProgressOpenFailureSubscription;
 
     @Override
     public void startUp() {
@@ -44,6 +49,8 @@ public class BUPanelService implements BUPluginLifecycle {
 
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
+        localProgressOpenFailureSubscription = storageService.getLocalProgressOpenFailure()
+            .subscribe(this::onLocalProgressOpenFailure);
     }
 
     @Override
@@ -51,6 +58,10 @@ public class BUPanelService implements BUPluginLifecycle {
         if (accountConfigSubscription != null) {
             accountConfigSubscription.dispose();
             accountConfigSubscription = null;
+        }
+        if (localProgressOpenFailureSubscription != null) {
+            localProgressOpenFailureSubscription.dispose();
+            localProgressOpenFailureSubscription = null;
         }
 
         clientToolbar.removeNavigation(panelNavigationButton);
@@ -77,5 +88,19 @@ public class BUPanelService implements BUPluginLifecycle {
         if (accountConfiguration == null && shouldOpenPanel) {
             openPanel();
         }
+    }
+
+    private void onLocalProgressOpenFailure(StorageService.LocalProgressOpenFailure failure) {
+        // Drop back to setup before showing the error so the panel is not left bound to an
+        // unusable local session.
+        accountConfigurationService.setCurrentAccountConfiguration(null);
+        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+            null,
+            "Your local progress could not be read.\n"
+                + "This can happen if the files are invalid or from an unsupported format.\n"
+                + "Please start setup again from this panel.",
+            "Could not open local progress",
+            JOptionPane.ERROR_MESSAGE
+        ));
     }
 }

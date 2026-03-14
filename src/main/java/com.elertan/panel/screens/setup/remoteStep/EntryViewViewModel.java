@@ -57,6 +57,10 @@ public final class EntryViewViewModel implements AutoCloseable {
             });
     }
 
+    public void onBackClick() {
+        listener.onBack();
+    }
+
     private boolean isValidFirebaseRealtimeDatabaseURL(String value) {
         try {
             new FirebaseRealtimeDatabaseURL(value);
@@ -75,6 +79,8 @@ public final class EntryViewViewModel implements AutoCloseable {
     public interface Listener {
 
         CompletableFuture<String> trySubmit(FirebaseRealtimeDatabaseURL url);
+
+        void onBack();
     }
 
     @Singleton

@@ -26,9 +26,11 @@ public class GameRulesStepView extends JPanel implements AutoCloseable {
     private final AutoCloseable finishButtonEnabledBinding;
     private final AutoCloseable errorMessageContainerVisibleBinding;
     private final AutoCloseable errorMessageLabelTextBinding;
+    private final GameRulesEditor gameRulesEditor;
 
     private GameRulesStepView(GameRulesStepViewViewModel viewModel,
         GameRulesEditor gameRulesEditor) {
+        this.gameRulesEditor = gameRulesEditor;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
 
@@ -104,6 +106,7 @@ public class GameRulesStepView extends JPanel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        gameRulesEditor.close();
         errorMessageLabelTextBinding.close();
         errorMessageContainerVisibleBinding.close();
         finishButtonEnabledBinding.close();
@@ -137,7 +140,8 @@ public class GameRulesStepView extends JPanel implements AutoCloseable {
                     client.getAccountHash(),
                     viewModel.gameRules.get(),
                     viewModel.gameRules::set,
-                    gameRulesAreViewOnlyValue != null && gameRulesAreViewOnlyValue
+                    gameRulesAreViewOnlyValue != null && gameRulesAreViewOnlyValue,
+                    Boolean.TRUE.equals(viewModel.isLocalMode.get())
                 );
             };
             GameRulesEditorViewModel gameRulesEditorViewModel = gameRulesEditorViewModelFactory.create(
@@ -145,6 +149,7 @@ public class GameRulesStepView extends JPanel implements AutoCloseable {
 
             viewModel.gameRules.addListener((event) -> gameRulesEditorViewModel.setProps(makeProps.get()));
             gameRulesAreViewOnly.addListener((event) -> gameRulesEditorViewModel.setProps(makeProps.get()));
+            viewModel.isLocalMode.addListener((event) -> gameRulesEditorViewModel.setProps(makeProps.get()));
 
             GameRulesEditor gameRulesEditor = gameRulesEditorFactory.create(gameRulesEditorViewModel);
             return new GameRulesStepView(viewModel, gameRulesEditor);

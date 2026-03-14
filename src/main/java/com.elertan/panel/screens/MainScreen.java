@@ -45,6 +45,8 @@ public class MainScreen extends JPanel implements AutoCloseable {
     @Override
     public void close() throws Exception {
         cardLayoutBinding.close();
+        configScreenViewModel.close();
+        unlockedItemsScreenViewModel.close();
     }
 
     private JPanel buildScreen(MainScreenViewModel.MainScreen screen) {

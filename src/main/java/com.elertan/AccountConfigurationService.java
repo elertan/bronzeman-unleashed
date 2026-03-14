@@ -1,6 +1,7 @@
 package com.elertan;
 
 import com.elertan.models.AccountConfiguration;
+import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.utils.Observable;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -189,7 +190,37 @@ public class AccountConfigurationService implements BUPluginLifecycle {
             // Defensive: gson can return null for malformed or "null" input
             parsed = new ConcurrentHashMap<>();
         }
-        setAccountConfigurationMap(new ConcurrentHashMap<>(parsed));
+
+        ConcurrentHashMap<Long, AccountConfiguration> map = new ConcurrentHashMap<>(parsed);
+        // Older persisted configs only stored a Firebase URL. If we detect one of those legacy
+        // entries, we upgrade it in memory to the new explicit FIREBASE mode and write it back once.
+        boolean migratedLegacyConfig = false;
+        for (Map.Entry<Long, AccountConfiguration> entry : map.entrySet()) {
+            AccountConfiguration accountConfiguration = entry.getValue();
+            if (accountConfiguration == null) {
+                continue;
+            }
+
+            if (accountConfiguration.getStorageMode() != null) {
+                continue;
+            }
+
+            FirebaseRealtimeDatabaseURL fireBaseUrl =
+                accountConfiguration.getFirebaseRealtimeDatabaseURL();
+            if (fireBaseUrl == null) {
+                continue;
+            }
+
+            entry.setValue(AccountConfiguration.forFirebase(fireBaseUrl));
+            migratedLegacyConfig = true;
+        }
+
+        setAccountConfigurationMap(map);
+        if (migratedLegacyConfig) {
+            storeAccountConfigurationMap();
+            return;
+        }
+
         lastStoredAccountConfigurationMapJson = json;
     }
 

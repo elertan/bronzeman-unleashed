@@ -27,6 +27,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
     public final Property<Integer> valuableLootNotificationThresholdProperty;
     public final Property<String> partyPasswordProperty;
     public final Property<Boolean> isViewOnlyModeProperty;
+    public final Property<Boolean> isLocalModeProperty;
     private Props props;
     private final PropertyChangeListener updateListener = evt -> {
         log.debug("{} changed to: {}", evt.getPropertyName(), evt.getNewValue());
@@ -57,6 +58,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         partyPasswordProperty = new Property<>(gameRules.getPartyPassword());
 
         isViewOnlyModeProperty = new Property<>(initialProps.isViewOnlyMode());
+        isLocalModeProperty = new Property<>(initialProps.isLocalMode());
 //        isValid = Property.deriveMany(
 //                Arrays.asList(
 //                        preventTradeOutsideGroup,
@@ -115,6 +117,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         valuableLootNotificationThresholdProperty.set(gameRules.getValuableLootNotificationThreshold());
 
         isViewOnlyModeProperty.set(props.isViewOnlyMode());
+        isLocalModeProperty.set(props.isLocalMode());
     }
 
     private boolean isValid() {
@@ -165,6 +168,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         GameRules gameRules;
         Consumer<GameRules> onGameRulesChanged;
         boolean isViewOnlyMode;
+        boolean isLocalMode;
     }
 
     @Singleton

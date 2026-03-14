@@ -4,6 +4,7 @@ import com.elertan.panel.screens.setup.remoteStep.CheckingView;
 import com.elertan.panel.screens.setup.remoteStep.CheckingViewViewModel;
 import com.elertan.panel.screens.setup.remoteStep.EntryView;
 import com.elertan.panel.screens.setup.remoteStep.EntryViewViewModel;
+import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.ui.Bindings;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
@@ -12,6 +13,7 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Component;
 import java.awt.Font;
+import java.util.concurrent.CompletableFuture;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -102,7 +104,17 @@ public class RemoteStepView extends JPanel implements AutoCloseable {
 
         @Override
         public RemoteStepView create(RemoteStepViewViewModel viewModel) {
-            EntryViewViewModel entryViewViewModel = entryViewViewModelFactory.create(viewModel::onEntryViewTrySubmit);
+            EntryViewViewModel entryViewViewModel = entryViewViewModelFactory.create(new EntryViewViewModel.Listener() {
+                @Override
+                public CompletableFuture<String> trySubmit(FirebaseRealtimeDatabaseURL url) {
+                    return viewModel.onEntryViewTrySubmit(url);
+                }
+
+                @Override
+                public void onBack() {
+                    viewModel.onBack();
+                }
+            });
             CheckingViewViewModel checkingViewViewModel = checkingViewViewModelFactory.create(
                 viewModel::onCancelChecking);
 
