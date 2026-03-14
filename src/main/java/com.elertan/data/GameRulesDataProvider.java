@@ -2,7 +2,7 @@ package com.elertan.data;
 
 import com.elertan.models.GameRules;
 import com.elertan.remote.ObjectStoragePort;
-import com.elertan.remote.RemoteStorageService;
+import com.elertan.remote.StorageService;
 import com.elertan.utils.Observable;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -18,15 +18,15 @@ public class GameRulesDataProvider extends AbstractDataProvider {
     private final Observable<GameRules> gameRules = Observable.empty();
 
     @Inject
-    private RemoteStorageService remoteStorageService;
+    private StorageService storageService;
 
     private ObjectStoragePort<GameRules> storagePort;
     private ObjectStoragePort.Listener<GameRules> storagePortListener;
 
 
     @Override
-    protected RemoteStorageService getRemoteStorageService() {
-        return remoteStorageService;
+    protected StorageService getStorageService() {
+        return storageService;
     }
 
     @Override
@@ -47,7 +47,7 @@ public class GameRulesDataProvider extends AbstractDataProvider {
 
     @Override
     protected void onRemoteStorageReady() {
-        storagePort = remoteStorageService.getGameRulesStoragePort();
+        storagePort = storageService.getGameRulesStoragePort();
         storagePort.addListener(storagePortListener);
 
         storagePort.read().whenComplete((gameRules, throwable) -> {

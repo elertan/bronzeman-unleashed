@@ -31,9 +31,10 @@ import javax.swing.SwingConstants;
 import javax.swing.text.NumberFormatter;
 import net.runelite.client.ui.ColorScheme;
 
-public class GameRulesEditor extends JPanel {
+public class GameRulesEditor extends JPanel implements AutoCloseable {
 
     private final GameRulesEditorViewModel viewModel;
+    private final AutoCloseable notificationsSectionVisibleBinding;
 
     private GameRulesEditor(GameRulesEditorViewModel viewModel) {
         this.viewModel = viewModel;
@@ -110,15 +111,17 @@ public class GameRulesEditor extends JPanel {
         );
         gbc.gridy++;
 
-        add(
-            createSection(
-                "Notifications",
-                "Notification settings",
-                createNotificationsPanel(),
-                true
-            ),
-            gbc
+        JPanel notificationsSection = createSection(
+            "Notifications",
+            "Notification settings",
+            createNotificationsPanel(),
+            true
         );
+        notificationsSectionVisibleBinding = Bindings.bindVisible(
+            notificationsSection,
+            viewModel.isLocalModeProperty.derive(isLocalMode -> !Boolean.TRUE.equals(isLocalMode))
+        );
+        add(notificationsSection, gbc);
         gbc.gridy++;
 
         add(createSection("Party", "Controls the party settings", createPartyPanel(), true), gbc);
@@ -126,6 +129,11 @@ public class GameRulesEditor extends JPanel {
 
         add(Box.createVerticalStrut(20), gbc);
         gbc.gridy++;
+    }
+
+    @Override
+    public void close() throws Exception {
+        notificationsSectionVisibleBinding.close();
     }
 
     private JPanel createSection(String title, String description, JComponent content,

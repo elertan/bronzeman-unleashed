@@ -1,0 +1,199 @@
+package com.elertan.panel.screens.setup;
+
+import com.elertan.BUResourceService;
+import com.elertan.resource.BUImageUtil;
+import com.elertan.panel.BUPanel;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.image.BufferedImage;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextPane;
+import javax.swing.border.Border;
+import javax.swing.SwingConstants;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
+
+public class StorageModeStepView extends JPanel implements AutoCloseable {
+
+    private static final int CONTENT_WIDTH = BUPanel.PANEL_WIDTH - 12;
+    private static final int CARD_WIDTH = CONTENT_WIDTH - 2;
+    private static final int CARD_TEXT_WIDTH = CARD_WIDTH - 36;
+    private static final Color CARD_BACKGROUND = new Color(39, 39, 39);
+    private static final Color CARD_BORDER = new Color(58, 58, 58);
+    private static final Color MUTED_TEXT = new Color(145, 145, 145);
+    private final StorageModeStepViewModel viewModel;
+
+    public StorageModeStepView(StorageModeStepViewModel viewModel, BUResourceService buResourceService) {
+        this.viewModel = viewModel;
+
+        setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+        setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
+        setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel titleLabel = new JLabel("Choose your storage");
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 15f));
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        titleLabel.setMaximumSize(new Dimension(CONTENT_WIDTH, titleLabel.getPreferredSize().height));
+        add(titleLabel);
+        add(Box.createVerticalStrut(4));
+
+        add(createWrappedTextPane(
+            "Pick where your progress lives.",
+            MUTED_TEXT,
+            CONTENT_WIDTH,
+            SwingConstants.CENTER
+        ));
+        add(Box.createVerticalStrut(12));
+
+        JPanel localCard = createOptionCard(
+            buResourceService.getLoginIconBufferedImage(),
+            "Local",
+            "Keep your unlocks and rules on this computer.",
+            "No group play or device syncing.",
+            "Use Local Storage",
+            viewModel::onPlaySoloClicked
+        );
+        JPanel onlineCard = createOptionCard(
+            buResourceService.getCloudSyncIconBufferedImage(),
+            "Online",
+            "Use Firebase to keep your unlocks and rules online.",
+            "Required for groups and best for solo play across multiple devices.",
+            "Use Online Storage",
+            viewModel::onPlayWithGroupClicked
+        );
+
+        equalizeCardHeights(localCard, onlineCard);
+
+        add(localCard);
+        add(Box.createVerticalStrut(16));
+        add(onlineCard);
+        add(Box.createVerticalStrut(12));
+        add(createWrappedTextPane(
+            "Moving from Local to Online is not available yet. Migration support will come in a future update.",
+            MUTED_TEXT,
+            CONTENT_WIDTH - 10,
+            SwingConstants.CENTER
+        ));
+        add(Box.createVerticalGlue());
+    }
+
+    @Override
+    public void close() {
+    }
+
+    private JPanel createOptionCard(
+        BufferedImage iconImage,
+        String title,
+        String description,
+        String detail,
+        String buttonText,
+        Runnable onClick
+    ) {
+        JPanel card = new JPanel();
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setAlignmentX(Component.CENTER_ALIGNMENT);
+        card.setOpaque(true);
+        card.setBackground(CARD_BACKGROUND);
+        card.setMaximumSize(new Dimension(CARD_WIDTH, Integer.MAX_VALUE));
+
+        Border outerBorder = BorderFactory.createLineBorder(CARD_BORDER);
+        Border innerBorder = BorderFactory.createEmptyBorder(14, 14, 14, 14);
+        card.setBorder(BorderFactory.createCompoundBorder(outerBorder, innerBorder));
+
+        JLabel iconLabel = new JLabel(new ImageIcon(resizeCardIcon(iconImage)));
+        iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        card.add(iconLabel);
+        card.add(Box.createVerticalStrut(8));
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 20f));
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        titleLabel.setMaximumSize(new Dimension(CARD_WIDTH - 24, titleLabel.getPreferredSize().height));
+        card.add(titleLabel);
+        card.add(Box.createVerticalStrut(8));
+
+        JTextPane descriptionLabel = createWrappedTextPane(
+            description,
+            null,
+            CARD_TEXT_WIDTH,
+            SwingConstants.CENTER
+        );
+        card.add(descriptionLabel);
+        card.add(Box.createVerticalStrut(8));
+
+        JTextPane detailLabel = createWrappedTextPane(
+            detail,
+            MUTED_TEXT,
+            CARD_TEXT_WIDTH,
+            SwingConstants.CENTER
+        );
+        card.add(detailLabel);
+        card.add(Box.createVerticalStrut(14));
+
+        JButton button = new JButton(buttonText);
+        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+        button.setMaximumSize(new Dimension(CARD_WIDTH - 28, button.getPreferredSize().height));
+        button.addActionListener(e -> onClick.run());
+        card.add(button);
+
+        Dimension preferredSize = card.getPreferredSize();
+        card.setPreferredSize(new Dimension(CARD_WIDTH, preferredSize.height));
+        card.setMaximumSize(new Dimension(CARD_WIDTH, preferredSize.height));
+        return card;
+    }
+
+    private static BufferedImage resizeCardIcon(BufferedImage image) {
+        return BUImageUtil.resizeNearest(image, 20, 20, 0, 0);
+    }
+
+    private static void equalizeCardHeights(JPanel... cards) {
+        int maxHeight = 0;
+        for (JPanel card : cards) {
+            maxHeight = Math.max(maxHeight, card.getPreferredSize().height);
+        }
+
+        for (JPanel card : cards) {
+            card.setPreferredSize(new Dimension(CARD_WIDTH, maxHeight));
+            card.setMaximumSize(new Dimension(CARD_WIDTH, maxHeight));
+        }
+    }
+
+    private static JTextPane createWrappedTextPane(String text, Color color, int width, int horizontalAlignment) {
+        JTextPane textPane = new JTextPane();
+        textPane.setText(text);
+        textPane.setEditable(false);
+        textPane.setFocusable(false);
+        textPane.setOpaque(false);
+        textPane.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        textPane.setAlignmentX(Component.CENTER_ALIGNMENT);
+        textPane.setFont(new JLabel().getFont());
+
+        StyledDocument document = textPane.getStyledDocument();
+        SimpleAttributeSet attributes = new SimpleAttributeSet();
+        StyleConstants.setAlignment(
+            attributes,
+            horizontalAlignment == SwingConstants.LEFT ? StyleConstants.ALIGN_LEFT : StyleConstants.ALIGN_CENTER
+        );
+        if (color != null) {
+            StyleConstants.setForeground(attributes, color);
+        }
+        document.setParagraphAttributes(0, document.getLength(), attributes, false);
+
+        textPane.setSize(new Dimension(width, Short.MAX_VALUE));
+        Dimension preferredSize = textPane.getPreferredSize();
+        textPane.setPreferredSize(new Dimension(width, preferredSize.height));
+        textPane.setMaximumSize(new Dimension(width, preferredSize.height));
+        return textPane;
+    }
+}
