@@ -139,6 +139,9 @@ public class StorageService implements BUPluginLifecycle {
         // Opening a storage session can now finish asynchronously. Track which open attempt is the
         // latest so an older callback cannot overwrite a newer account configuration.
         int generation = sessionGeneration.incrementAndGet();
+        // Clear any previously reported local-progress open failure before we process the current
+        // account configuration so late subscribers only replay failures that still apply.
+        localProgressOpenFailure.set(null);
         try {
             clearCurrentSession();
         } catch (Exception e) {
