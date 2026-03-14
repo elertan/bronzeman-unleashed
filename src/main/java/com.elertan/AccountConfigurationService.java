@@ -211,10 +211,7 @@ public class AccountConfigurationService implements BUPluginLifecycle {
                 continue;
             }
 
-            map.put(
-                entry.getKey(),
-                AccountConfiguration.forFirebase(fireBaseUrl)
-            );
+            entry.setValue(AccountConfiguration.forFirebase(fireBaseUrl));
             migratedLegacyConfig = true;
         }
 
