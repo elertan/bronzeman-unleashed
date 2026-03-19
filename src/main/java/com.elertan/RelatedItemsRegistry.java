@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import net.runelite.api.ItemID;
+import net.runelite.api.gameval.ItemID;
 
 /**
  * Resolves relationships between items for unlocking.
@@ -41,10 +41,8 @@ public final class RelatedItemsRegistry {
     }
 
     private static void registerRecipes(Set<RecipeRule> recipes) {
-        // Note: RuneLite does not expose a stable ItemID constant for amulet of torture in this
-        // API version, so we use the known game item ID directly.
         recipes.add(new RecipeRule(
-            IntStream.of(ItemID.ARAXYTE_FANG, 19553)
+            IntStream.of(ItemID.ARAXYTE_FANG, ItemID.ZENYTE_AMULET_ENCHANTED)
                 .boxed()
                 .collect(Collectors.toUnmodifiableSet()),
             Collections.singleton(ItemID.AMULET_OF_RANCOUR)
