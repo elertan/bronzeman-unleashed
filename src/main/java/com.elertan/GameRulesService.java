@@ -163,6 +163,13 @@ public class GameRulesService implements BUPluginLifecycle {
                 booleanFormatter.apply(newGameRules.isRestrictFaladorPartyRoomBalloons())
             );
         }
+        if (oldGameRules.isEnableRecipeDerivedUnlocks()
+            != newGameRules.isEnableRecipeDerivedUnlocks()) {
+            differences.put(
+                "Recipe-derived unlocks",
+                booleanFormatter.apply(newGameRules.isEnableRecipeDerivedUnlocks())
+            );
+        }
         if (!Objects.equals(
             oldGameRules.getValuableLootNotificationThreshold(),
             newGameRules.getValuableLootNotificationThreshold()

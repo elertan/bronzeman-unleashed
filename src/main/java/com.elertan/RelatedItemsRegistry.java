@@ -41,9 +41,10 @@ public final class RelatedItemsRegistry {
     }
 
     private static void registerRecipes(Set<RecipeRule> recipes) {
-        // Note: In RuneLite gameval IDs, "Amulet of torture" is exposed as ZENYTE_AMULET_ENCHANTED.
+        // Note: RuneLite does not expose a stable ItemID constant for amulet of torture in this
+        // API version, so we use the known game item ID directly.
         recipes.add(new RecipeRule(
-            IntStream.of(ItemID.ARAXYTE_FANG, ItemID.ZENYTE_AMULET_ENCHANTED)
+            IntStream.of(ItemID.ARAXYTE_FANG, 19553)
                 .boxed()
                 .collect(Collectors.toUnmodifiableSet()),
             Collections.singleton(ItemID.AMULET_OF_RANCOUR)

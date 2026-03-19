@@ -541,8 +541,9 @@ public class ItemUnlockService implements BUPluginLifecycle {
                 Set<Integer> ownedIdsForRecipes = new HashSet<>(currentUnlockedItems.keySet());
                 ownedIdsForRecipes.addAll(equivalentItemIds);
 
-                Set<Integer> recipeResultIds =
-                    relatedItemsRegistry.getRecipeResultItemIds(ownedIdsForRecipes);
+                Set<Integer> recipeResultIds = gameRules.isEnableRecipeDerivedUnlocks()
+                    ? relatedItemsRegistry.getRecipeResultItemIds(ownedIdsForRecipes)
+                    : Collections.emptySet();
 
                 // Create additional unlocks for equivalent and recipe result IDs that are not yet
                 // unlocked. Keep the same acquiredAt/acquiredBy metadata so they look like a single
@@ -575,6 +576,13 @@ public class ItemUnlockService implements BUPluginLifecycle {
                         continue;
                     }
                     if (currentUnlockedItems.containsKey(resultId)) {
+                        continue;
+                    }
+
+                    // Interaction with "Only for tradeable items":
+                    // when enabled, derived recipe unlocks should only apply to tradeable results.
+                    if (gameRules.isOnlyForTradeableItems()
+                        && !client.getItemDefinition(resultId).isTradeable()) {
                         continue;
                     }
 
