@@ -69,6 +69,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     private GroundItemOwnedByDataProvider.Listener groundItemOwnedByDataProviderListener;
     private ScheduledExecutorService scheduler;
+    private final ConcurrentHashMap<GroundItemOwnedByKey, OffsetDateTime> knownOwnedKeyExpiresAt
+        = new ConcurrentHashMap<>();
 
     @Inject
     public GroundItemsPolicy(AccountConfigurationService accountConfigurationService,
@@ -82,10 +84,32 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         groundItemOwnedByDataProviderListener = new GroundItemOwnedByDataProvider.Listener() {
             @Override
             public void onReadAll(ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map) {
+                knownOwnedKeyExpiresAt.clear();
+                if (map == null) {
+                    return;
+                }
+                for (Map.Entry<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> keyEntry : map.entrySet()) {
+                    GroundItemOwnedByKey key = keyEntry.getKey();
+                    ConcurrentHashMap<String, GroundItemOwnedByData> entries = keyEntry.getValue();
+                    if (entries == null) {
+                        continue;
+                    }
+
+                    for (GroundItemOwnedByData data : entries.values()) {
+                        if (data == null || data.getDespawnsAt() == null) {
+                            continue;
+                        }
+                        markKnownOwnedKey(key, data.getDespawnsAt().getValue());
+                    }
+                }
             }
 
             @Override
             public void onAdd(GroundItemOwnedByKey key, String entryKey, GroundItemOwnedByData value) {
+                if (value == null || value.getDespawnsAt() == null) {
+                    return;
+                }
+                markKnownOwnedKey(key, value.getDespawnsAt().getValue());
             }
 
             @Override
@@ -110,6 +134,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     @Override
     public void shutDown() throws Exception {
         groundItemOwnedByDataProvider.removeMapListener(groundItemOwnedByDataProviderListener);
+        knownOwnedKeyExpiresAt.clear();
 
         scheduler.shutdownNow();
     }
@@ -125,16 +150,19 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         TileItem tileItem = event.getItem();
-        if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF
-            && tileItem.getOwnership() != TileItem.OWNERSHIP_GROUP) {
-            // item does not belong to me, ignore it
-            return;
-        }
         Tile tile = event.getTile();
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
         int itemId = tileItem.getId();
         GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
+
+        boolean isSelfOrGroupOwnership = tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
+            || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
+        if (!isSelfOrGroupOwnership) {
+            // Ownership may be missing when re-entering the area. We keep any existing tracked
+            // ownership for reconstruction, but do not create new ownership entries.
+            return;
+        }
 
         ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
@@ -151,6 +179,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             tileItem.getQuantity(),
             null
         );
+        markKnownOwnedKey(key, despawnsAt);
 
         groundItemOwnedByDataProvider.addEntry(key, newGroundItemOwnedByData)
             .whenComplete((result, throwable) -> {
@@ -166,18 +195,21 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         TileItem tileItem = event.getItem();
-        if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF
-            && tileItem.getOwnership() != TileItem.OWNERSHIP_GROUP) {
-            // item does not belong to me, ignore it
-            return;
-        }
         Tile tile = event.getTile();
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
         int itemId = tileItem.getId();
         GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
 
-        if (!groundItemOwnedByDataProvider.hasEntries(key)) {
+        boolean isSelfOrGroupOwnership = tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
+            || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
+        boolean hasTrackedOwnership = groundItemOwnedByDataProvider.hasEntries(key);
+        if (!isSelfOrGroupOwnership && !hasTrackedOwnership) {
+            // Unknown ownership and no tracked ownership to reconcile.
+            return;
+        }
+
+        if (!hasTrackedOwnership) {
             log.debug("gi {} has no entries, ignore", key);
             return;
         }
@@ -202,18 +234,19 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         TileItem tileItem = event.getItem();
-        if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF
-            && tileItem.getOwnership() != TileItem.OWNERSHIP_GROUP) {
-            return;
-        }
-
         Tile tile = event.getTile();
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
         int itemId = tileItem.getId();
         GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
+        boolean isSelfOrGroupOwnership = tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
+            || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
+        boolean hasTrackedOwnership = groundItemOwnedByDataProvider.hasEntries(key);
 
         if (delta > 0) {
+            if (!isSelfOrGroupOwnership) {
+                return;
+            }
             // Track increases as additional owned quantity for this pile.
             long despawnTimeTicks = tileItem.getDespawnTime() - client.getTickCount();
             Duration despawnDuration = TickUtils.ticksToDuration(despawnTimeTicks);
@@ -224,6 +257,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 delta,
                 null
             );
+            markKnownOwnedKey(key, despawnsAt);
             groundItemOwnedByDataProvider.addEntry(key, data).whenComplete((result, throwable) -> {
                 if (throwable != null) {
                     log.error("GroundItemOwnedByDataProvider addEntry failed", throwable);
@@ -232,6 +266,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
 
+        if (!isSelfOrGroupOwnership && !hasTrackedOwnership) {
+            return;
+        }
         groundItemOwnedByDataProvider.consumeQuantity(key, Math.abs(delta))
             .whenComplete((result, throwable) -> {
                 if (throwable != null) {
@@ -354,7 +391,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
         GameRules rules = context.getGameRules();
         return rules != null && rules.isRestrictGroundItems()
-            && rules.isDeprioritizeUnlootableGroundItems();
+            && rules.isDeprioritizeUnlootableGroundItemsEnabled();
     }
 
     private boolean isGroundItemAction(MenuAction menuAction) {
@@ -372,10 +409,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         ItemComposition itemComposition = client.getItemDefinition(itemId);
         int ownership = tileItem.getOwnership();
-        if (ownership == TileItem.OWNERSHIP_NONE) {
-            log.debug("Item '{}' is not owned by anyone, allow take", itemComposition.getName());
-            return EligibilityDecision.allow();
-        }
 
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
@@ -429,8 +462,26 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return EligibilityDecision.allow();
         }
 
+        // Ownership metadata can be missing when loading/reloading an area. If we have no tracked
+        // quantity left for a key that we previously knew was owned by the group, treat remaining
+        // entries as unlootable until despawn.
+        if (ownership == TileItem.OWNERSHIP_NONE && isKnownOwnedKeyStillRelevant(key)) {
+            boolean mustPerformGroundItemsCheck =
+                context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
+                    && context.getGameRules().isRestrictGroundItems());
+            if (mustPerformGroundItemsCheck) {
+                return EligibilityDecision.deny(MessageKey.GROUND_ITEM_TAKE_RESTRICTION);
+            }
+        }
+
         if (ownership == TileItem.OWNERSHIP_SELF) {
             log.debug("Item '{}' is owned by me, allow take", itemComposition.getName());
+            return EligibilityDecision.allow();
+        }
+
+        if (ownership == TileItem.OWNERSHIP_NONE) {
+            log.debug("Item '{}' has no ownership metadata and no tracked ownership, allow take",
+                itemComposition.getName());
             return EligibilityDecision.allow();
         }
 
@@ -478,6 +529,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     // Called from scheduler thread - must use clientThread.invoke() for client access
     private void cleanupExpiredGroundItems() {
         clientThread.invoke(() -> {
+            cleanupKnownOwnedKeys();
             ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
             if (map == null || map.isEmpty()) {
                 return;
@@ -517,6 +569,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     private void cleanupExpiredGroundItemsForEveryone() {
         log.debug("Cleaning up expired ground items for everyone");
+        cleanupKnownOwnedKeys();
 
         ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (map == null || map.isEmpty()) {
@@ -554,6 +607,32 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 });
             }
         }
+    }
+
+    private void markKnownOwnedKey(GroundItemOwnedByKey key, OffsetDateTime expiresAt) {
+        if (key == null || expiresAt == null) {
+            return;
+        }
+        knownOwnedKeyExpiresAt.merge(
+            key,
+            expiresAt,
+            (current, incoming) -> current.isAfter(incoming) ? current : incoming
+        );
+    }
+
+    private boolean isKnownOwnedKeyStillRelevant(GroundItemOwnedByKey key) {
+        OffsetDateTime expiresAt = knownOwnedKeyExpiresAt.get(key);
+        if (expiresAt == null) {
+            return false;
+        }
+        return !expiresAt.isBefore(OffsetDateTime.now());
+    }
+
+    private void cleanupKnownOwnedKeys() {
+        OffsetDateTime now = OffsetDateTime.now();
+        knownOwnedKeyExpiresAt.entrySet().removeIf(
+            entry -> entry.getValue() == null || entry.getValue().isBefore(now)
+        );
     }
 
     private enum EligibilityAction {
