@@ -7,6 +7,7 @@ import com.elertan.remote.StorageService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -181,6 +182,78 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             return null;
         }
         return groundItemOwnedByMap.get(key);
+    }
+
+    public int getTotalOwnedQuantity(GroundItemOwnedByKey key) {
+        ConcurrentHashMap<String, GroundItemOwnedByData> entries = getEntries(key);
+        if (entries == null || entries.isEmpty()) {
+            return 0;
+        }
+
+        int total = 0;
+        for (GroundItemOwnedByData data : entries.values()) {
+            if (data == null) {
+                continue;
+            }
+            total += data.getQuantityOrDefaultOne();
+        }
+        return total;
+    }
+
+    public CompletableFuture<Void> consumeQuantity(GroundItemOwnedByKey key, int quantity) {
+        if (quantity <= 0) {
+            return CompletableFuture.completedFuture(null);
+        }
+        if (storagePort == null) {
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            future.completeExceptionally(new IllegalStateException("storagePort is null"));
+            return future;
+        }
+
+        ConcurrentHashMap<String, GroundItemOwnedByData> entries = getEntries(key);
+        if (entries == null || entries.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        int remaining = quantity;
+        CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
+        for (Entry<String, GroundItemOwnedByData> entry : entries.entrySet()) {
+            if (remaining <= 0) {
+                break;
+            }
+
+            String entryKey = entry.getKey();
+            GroundItemOwnedByData data = entry.getValue();
+            if (data == null) {
+                continue;
+            }
+
+            int entryQty = data.getQuantityOrDefaultOne();
+            if (entryQty <= 0) {
+                continue;
+            }
+
+            if (entryQty <= remaining) {
+                remaining -= entryQty;
+                chain = chain.thenCompose(__ -> removeEntry(key, entryKey));
+                continue;
+            }
+
+            int leftoverQty = entryQty - remaining;
+            remaining = 0;
+            GroundItemOwnedByData replacement = new GroundItemOwnedByData(
+                data.getAccountHash(),
+                data.getDespawnsAt(),
+                leftoverQty,
+                data.getDroppedByPlayerName()
+            );
+
+            chain = chain
+                .thenCompose(__ -> removeEntry(key, entryKey))
+                .thenCompose(__ -> addEntry(key, replacement).thenApply(___ -> null));
+        }
+
+        return chain;
     }
 
     public interface Listener {
