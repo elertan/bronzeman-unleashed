@@ -1,5 +1,6 @@
 package com.elertan;
 
+import com.elertan.policies.GroundItemsPolicy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.ArrayList;
@@ -23,6 +24,8 @@ public class BUCommandService implements BUPluginLifecycle {
     private PetDropService petDropService;
     @Inject
     private BUChatService buChatService;
+    @Inject
+    private GroundItemsPolicy groundItemsPolicy;
 
     private final List<CommandInfo> commands = new ArrayList<>();
     private final List<CommandInfo> debugCommands = new ArrayList<>();
@@ -62,6 +65,12 @@ public class BUCommandService implements BUPluginLifecycle {
             "<name>",
             this::handlePetCollection
         ));
+        debugCommands.add(new CommandInfo(
+            "droptest",
+            "Force ownership-loss simulation for known ground-item keys (also supports ::droptest)",
+            "[on|off|status]",
+            this::handleDropTest
+        ));
     }
 
     @Override
@@ -76,7 +85,15 @@ public class BUCommandService implements BUPluginLifecycle {
      * @param event the command executed event
      */
     public void onCommandExecuted(CommandExecuted event) {
-        if (!event.getCommand().equalsIgnoreCase("bu")) {
+        String command = event.getCommand();
+        if (command.equalsIgnoreCase("droptest")) {
+            String[] args = event.getArguments();
+            String argument = args.length > 0 ? args[0] : null;
+            handleDropTest(argument);
+            return;
+        }
+
+        if (!command.equalsIgnoreCase("bu")) {
             return;
         }
 
@@ -151,6 +168,38 @@ public class BUCommandService implements BUPluginLifecycle {
     private void simulatePetMessage(String message) {
         petDropService.handleGameMessage(message);
         buChatService.sendMessage("[Debug] Pet drop simulated");
+    }
+
+    private void handleDropTest(String arg) {
+        String mode = arg == null ? "" : arg.trim().toLowerCase();
+        if (mode.isEmpty()) {
+            boolean toggled = !groundItemsPolicy.isDebugForceOwnershipLossForKnownKeysEnabled();
+            groundItemsPolicy.setDebugForceOwnershipLossForKnownKeysEnabled(toggled);
+            buChatService.sendMessage("[Debug] droptest ownership-loss mode: "
+                + (toggled ? "enabled" : "disabled"));
+            return;
+        }
+
+        if ("status".equals(mode)) {
+            boolean enabled = groundItemsPolicy.isDebugForceOwnershipLossForKnownKeysEnabled();
+            buChatService.sendMessage("[Debug] droptest ownership-loss mode is "
+                + (enabled ? "enabled" : "disabled"));
+            return;
+        }
+
+        if ("on".equals(mode) || "true".equals(mode)) {
+            groundItemsPolicy.setDebugForceOwnershipLossForKnownKeysEnabled(true);
+            buChatService.sendMessage("[Debug] droptest ownership-loss mode: enabled");
+            return;
+        }
+
+        if ("off".equals(mode) || "false".equals(mode)) {
+            groundItemsPolicy.setDebugForceOwnershipLossForKnownKeysEnabled(false);
+            buChatService.sendMessage("[Debug] droptest ownership-loss mode: disabled");
+            return;
+        }
+
+        buChatService.sendErrorMessage("Usage: ::bu droptest [on|off|status]");
     }
 
     @Value

@@ -19,9 +19,13 @@ import com.elertan.models.ISOOffsetDateTime;
 import com.elertan.models.Member;
 import com.elertan.utils.TickUtils;
 import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -46,6 +50,7 @@ import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.callback.ClientThread;
 
 @Slf4j
+@Singleton
 public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     @Inject
@@ -71,6 +76,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private ScheduledExecutorService scheduler;
     private final ConcurrentHashMap<GroundItemOwnedByKey, OffsetDateTime> knownOwnedKeyExpiresAt
         = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> lastOwnershipInfoLogAtMillis = new ConcurrentHashMap<>();
+    private static final long OWNERSHIP_INFO_LOG_THROTTLE_MILLIS = 5000L;
+    private volatile boolean debugForceOwnershipLossForKnownKeys;
 
     @Inject
     public GroundItemsPolicy(AccountConfigurationService accountConfigurationService,
@@ -135,8 +143,17 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     public void shutDown() throws Exception {
         groundItemOwnedByDataProvider.removeMapListener(groundItemOwnedByDataProviderListener);
         knownOwnedKeyExpiresAt.clear();
+        debugForceOwnershipLossForKnownKeys = false;
 
         scheduler.shutdownNow();
+    }
+
+    public boolean isDebugForceOwnershipLossForKnownKeysEnabled() {
+        return debugForceOwnershipLossForKnownKeys;
+    }
+
+    public void setDebugForceOwnershipLossForKnownKeysEnabled(boolean enabled) {
+        debugForceOwnershipLossForKnownKeys = enabled;
     }
 
     public void onItemSpawned(ItemSpawned event) {
@@ -203,7 +220,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         boolean isSelfOrGroupOwnership = tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
             || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
-        boolean hasTrackedOwnership = groundItemOwnedByDataProvider.hasEntries(key);
+        boolean allowCrossViewFallback = !isSelfOrGroupOwnership;
+        int trackedOwnedQuantity = getTrackedOwnedQuantityForKeyOrFallback(key, allowCrossViewFallback);
+        boolean hasTrackedOwnership = trackedOwnedQuantity > 0;
         if (!isSelfOrGroupOwnership && !hasTrackedOwnership) {
             // Unknown ownership and no tracked ownership to reconcile.
             return;
@@ -214,7 +233,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
 
-        groundItemOwnedByDataProvider.consumeQuantity(key, tileItem.getQuantity()).whenComplete((result, throwable) -> {
+        consumeTrackedQuantityForKeyOrFallback(key, tileItem.getQuantity(), allowCrossViewFallback)
+            .whenComplete((result, throwable) -> {
             if (throwable != null) {
                 log.error("GroundItemOwnedByDataProvider consumeQuantity failed", throwable);
             }
@@ -241,7 +261,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
         boolean isSelfOrGroupOwnership = tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
             || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
-        boolean hasTrackedOwnership = groundItemOwnedByDataProvider.hasEntries(key);
+        boolean allowCrossViewFallback = !isSelfOrGroupOwnership;
+        int trackedOwnedQuantity = getTrackedOwnedQuantityForKeyOrFallback(key, allowCrossViewFallback);
+        boolean hasTrackedOwnership = trackedOwnedQuantity > 0;
 
         if (delta > 0) {
             if (!isSelfOrGroupOwnership) {
@@ -269,7 +291,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         if (!isSelfOrGroupOwnership && !hasTrackedOwnership) {
             return;
         }
-        groundItemOwnedByDataProvider.consumeQuantity(key, Math.abs(delta))
+        consumeTrackedQuantityForKeyOrFallback(key, Math.abs(delta), allowCrossViewFallback)
             .whenComplete((result, throwable) -> {
                 if (throwable != null) {
                     log.error("GroundItemOwnedByDataProvider consumeQuantity failed", throwable);
@@ -305,7 +327,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         String option = menuEntry.getOption();
-        if (!"Take".equals(option) && !"Cast".equals(option)) {
+        if ("Examine".equals(option)) {
             return;
         }
 
@@ -337,7 +359,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         String menuOption = event.getMenuOption();
-        if (!menuOption.equals("Take") && !menuOption.equals("Cast")) {
+        if ("Examine".equals(menuOption)) {
             return;
         }
         int itemId = event.getId();
@@ -361,6 +383,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             output.getTile(),
             output.getTileItem()
         );
+        logOwnershipClickDecision(itemId, output.getTile(), output.getTileItem(), decision);
         if (decision.getAction() == EligibilityAction.ALLOW) {
             return;
         }
@@ -431,7 +454,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 : EligibilityDecision.allow();
         }
 
-        int trackedOwnedQuantity = groundItemOwnedByDataProvider.getTotalOwnedQuantity(key);
+        boolean allowCrossViewFallback = debugForceOwnershipLossForKnownKeys
+            || ownership == TileItem.OWNERSHIP_NONE;
+        int trackedOwnedQuantity = getTrackedOwnedQuantityForKeyOrFallback(key, allowCrossViewFallback);
+        boolean knownOwned = isKnownOwnedKeyStillRelevant(key, allowCrossViewFallback);
+        int effectiveOwnership = getEffectiveOwnershipForEligibility(ownership, knownOwned);
         if (trackedOwnedQuantity > 0) {
             boolean mustPerformPlayerVersusPlayerCheck =
                 context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
@@ -461,26 +488,35 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return EligibilityDecision.allow();
         }
 
-        // Ownership metadata can be missing when loading/reloading an area. If we have no tracked
-        // quantity left for a key that we previously knew was owned by the group, treat remaining
-        // entries as unlootable until despawn.
-        if (ownership == TileItem.OWNERSHIP_NONE && isKnownOwnedKeyStillRelevant(key)) {
+        // Reconstruction rule: if this key is known-owned (we tracked ownership for its lifetime)
+        // but tracked owned quantity is now exhausted, any remaining ground items for this key are
+        // treated as unlootable until despawn, regardless of ownership metadata.
+        if (knownOwned) {
             boolean mustPerformGroundItemsCheck =
                 context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
                     && context.getGameRules().isRestrictGroundItems());
             if (mustPerformGroundItemsCheck) {
+                long now = System.currentTimeMillis();
+                String logKey = "deny:" + key.toKey();
+                if (now - lastOwnershipInfoLogAtMillis.getOrDefault(logKey, 0L) >= OWNERSHIP_INFO_LOG_THROTTLE_MILLIS) {
+                    lastOwnershipInfoLogAtMillis.put(logKey, now);
+                    log.info(
+                        "[ownership-rebuild] deny-known-key-exhausted key={} itemId={} tileQty={} trackedQty=0",
+                        key.toKey(),
+                        itemId,
+                        tileItem.getQuantity()
+                    );
+                }
                 return EligibilityDecision.deny(MessageKey.GROUND_ITEM_TAKE_RESTRICTION);
             }
         }
 
-        if (ownership == TileItem.OWNERSHIP_SELF) {
+        if (effectiveOwnership == TileItem.OWNERSHIP_SELF) {
             log.debug("Item '{}' is owned by me, allow take", itemComposition.getName());
             return EligibilityDecision.allow();
         }
 
-        if (ownership == TileItem.OWNERSHIP_NONE) {
-            log.debug("Item '{}' has no ownership metadata and no tracked ownership, allow take",
-                itemComposition.getName());
+        if (effectiveOwnership == TileItem.OWNERSHIP_NONE) {
             return EligibilityDecision.allow();
         }
 
@@ -617,14 +653,43 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             expiresAt,
             (current, incoming) -> current.isAfter(incoming) ? current : incoming
         );
+        long now = System.currentTimeMillis();
+        String logKey = "mark:" + key.toKey();
+        // Throttle to avoid spamming on fast stacks.
+        if (now - lastOwnershipInfoLogAtMillis.getOrDefault(logKey, 0L) >= OWNERSHIP_INFO_LOG_THROTTLE_MILLIS) {
+            lastOwnershipInfoLogAtMillis.put(logKey, now);
+            log.info(
+                "[ownership-rebuild] mark-known-key key={} expiresAt={}",
+                key.toKey(),
+                expiresAt
+            );
+        }
     }
 
-    private boolean isKnownOwnedKeyStillRelevant(GroundItemOwnedByKey key) {
+    private boolean isKnownOwnedKeyStillRelevant(GroundItemOwnedByKey key,
+        boolean allowCrossViewFallback) {
+        OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime expiresAt = knownOwnedKeyExpiresAt.get(key);
-        if (expiresAt == null) {
+        if (expiresAt != null && !expiresAt.isBefore(now)) {
+            return true;
+        }
+
+        if (!allowCrossViewFallback) {
             return false;
         }
-        return !expiresAt.isBefore(OffsetDateTime.now());
+
+        // Fallback for quest/instance transitions where worldViewId or plane may differ.
+        for (Map.Entry<GroundItemOwnedByKey, OffsetDateTime> entry : knownOwnedKeyExpiresAt.entrySet()) {
+            GroundItemOwnedByKey candidate = entry.getKey();
+            OffsetDateTime candidateExpiresAt = entry.getValue();
+            if (candidate == null || candidateExpiresAt == null || candidateExpiresAt.isBefore(now)) {
+                continue;
+            }
+            if (keysMatchStableLocation(candidate, key)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void cleanupKnownOwnedKeys() {
@@ -632,6 +697,159 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         knownOwnedKeyExpiresAt.entrySet().removeIf(
             entry -> entry.getValue() == null || entry.getValue().isBefore(now)
         );
+    }
+
+    private int getEffectiveOwnershipForEligibility(int rawOwnership, boolean knownOwned) {
+        if (debugForceOwnershipLossForKnownKeys && knownOwned) {
+            return TileItem.OWNERSHIP_NONE;
+        }
+        return rawOwnership;
+    }
+
+    private int getTrackedOwnedQuantityForKeyOrFallback(GroundItemOwnedByKey key,
+        boolean allowCrossViewFallback) {
+        int total = 0;
+        for (GroundItemOwnedByKey candidate : getTrackedKeysForKeyOrFallback(
+            key,
+            allowCrossViewFallback
+        )) {
+            total += groundItemOwnedByDataProvider.getTotalOwnedQuantity(candidate);
+        }
+        return total;
+    }
+
+    private CompletableFuture<Void> consumeTrackedQuantityForKeyOrFallback(GroundItemOwnedByKey key,
+        int quantity, boolean allowCrossViewFallback) {
+        if (quantity <= 0) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        List<GroundItemOwnedByKey> candidates = getTrackedKeysForKeyOrFallback(
+            key,
+            allowCrossViewFallback
+        );
+        int remaining = quantity;
+        CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
+        for (GroundItemOwnedByKey candidate : candidates) {
+            if (remaining <= 0) {
+                break;
+            }
+            int candidateQty = groundItemOwnedByDataProvider.getTotalOwnedQuantity(candidate);
+            if (candidateQty <= 0) {
+                continue;
+            }
+            int consumeQty = Math.min(remaining, candidateQty);
+            remaining -= consumeQty;
+            chain = chain.thenCompose(__ -> groundItemOwnedByDataProvider.consumeQuantity(candidate, consumeQty));
+        }
+        return chain;
+    }
+
+    private List<GroundItemOwnedByKey> getTrackedKeysForKeyOrFallback(GroundItemOwnedByKey key,
+        boolean allowCrossViewFallback) {
+        List<GroundItemOwnedByKey> candidates = new ArrayList<>();
+        ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map
+            = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
+        if (map == null || map.isEmpty()) {
+            return candidates;
+        }
+
+        if (map.containsKey(key)) {
+            candidates.add(key);
+        }
+
+        if (allowCrossViewFallback) {
+            for (GroundItemOwnedByKey candidate : map.keySet()) {
+                if (candidate == null || candidate.equals(key)) {
+                    continue;
+                }
+                if (keysMatchStableLocation(candidate, key)) {
+                    candidates.add(candidate);
+                }
+            }
+        }
+        return candidates;
+    }
+
+    private boolean keysMatchStableLocation(GroundItemOwnedByKey left, GroundItemOwnedByKey right) {
+        return matchesForRecovery(left, right);
+    }
+
+    // Package-private for unit tests.
+    static boolean matchesForRecovery(GroundItemOwnedByKey tracked, GroundItemOwnedByKey current) {
+        final int missing = -1;
+        if (tracked == null || current == null) {
+            return false;
+        }
+
+        // These fields define stable identity and must always be present/equal.
+        if (tracked.getItemId() == missing || current.getItemId() == missing
+            || tracked.getItemId() != current.getItemId()) {
+            return false;
+        }
+        if (tracked.getWorld() == missing || current.getWorld() == missing
+            || tracked.getWorld() != current.getWorld()) {
+            return false;
+        }
+        if (tracked.getWorldX() == missing || current.getWorldX() == missing
+            || tracked.getWorldX() != current.getWorldX()) {
+            return false;
+        }
+        if (tracked.getWorldY() == missing || current.getWorldY() == missing
+            || tracked.getWorldY() != current.getWorldY()) {
+            return false;
+        }
+
+        // These can be missing depending on client/server context transitions.
+        if (!(tracked.getWorldViewId() == current.getWorldViewId()
+            || tracked.getWorldViewId() == missing
+            || current.getWorldViewId() == missing)) {
+            return false;
+        }
+        if (!(tracked.getPlane() == current.getPlane()
+            || tracked.getPlane() == missing
+            || current.getPlane() == missing)) {
+            return false;
+        }
+        return true;
+    }
+
+    private void logOwnershipClickDecision(int itemId, Tile tile, TileItem tileItem,
+        EligibilityDecision decision) {
+        try {
+            WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
+            WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
+            GroundItemOwnedByKey key = GroundItemOwnedByKey.of(
+                itemId,
+                client.getWorld(),
+                worldView.getId(),
+                worldPoint
+            );
+            int rawOwnership = tileItem.getOwnership();
+            boolean allowCrossViewFallback = debugForceOwnershipLossForKnownKeys
+                || rawOwnership == TileItem.OWNERSHIP_NONE;
+            int trackedOwnedQuantity = getTrackedOwnedQuantityForKeyOrFallback(
+                key,
+                allowCrossViewFallback
+            );
+            boolean knownOwned = isKnownOwnedKeyStillRelevant(key, allowCrossViewFallback);
+            int effectiveOwnership = getEffectiveOwnershipForEligibility(rawOwnership, knownOwned);
+            log.info(
+                "[ownership-rebuild] click-decision key={} itemId={} ownershipRaw={} ownershipEffective={} debugForceLoss={} fallbackCrossView={} tileQty={} trackedQty={} knownOwned={} action={}",
+                key.toKey(),
+                itemId,
+                rawOwnership,
+                effectiveOwnership,
+                debugForceOwnershipLossForKnownKeys,
+                allowCrossViewFallback,
+                tileItem.getQuantity(),
+                trackedOwnedQuantity,
+                knownOwned,
+                decision.getAction()
+            );
+        } catch (Exception e) {
+            log.debug("Failed to log ownership click decision", e);
+        }
     }
 
     private enum EligibilityAction {
