@@ -17,7 +17,7 @@ public class GameRules {
     ISOOffsetDateTime lastUpdatedAt;
     boolean onlyForTradeableItems;
     boolean restrictGroundItems;
-    boolean deprioritizeUnlootableGroundItems;
+    Boolean deprioritizeUnlootableGroundItems;
     boolean preventTradeOutsideGroup;
     boolean preventTradeLockedItems;
     boolean preventGrandExchangeBuyOffers;
@@ -46,5 +46,10 @@ public class GameRules {
             .valuableLootNotificationThreshold(100_000)
             .partyPassword(null)
             .build();
+    }
+
+    public boolean isDeprioritizeUnlootableGroundItemsEnabled() {
+        // Legacy saved rules may not include this field. Default to enabled.
+        return deprioritizeUnlootableGroundItems == null || deprioritizeUnlootableGroundItems;
     }
 }

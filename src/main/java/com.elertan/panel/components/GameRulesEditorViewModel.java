@@ -49,7 +49,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         onlyForTradeableItemsProperty = new Property<>(gameRules.isOnlyForTradeableItems());
         restrictGroundItemsProperty = new Property<>(gameRules.isRestrictGroundItems());
         deprioritizeUnlootableGroundItemsProperty = new Property<>(
-            gameRules.isDeprioritizeUnlootableGroundItems());
+            gameRules.isDeprioritizeUnlootableGroundItemsEnabled());
         preventTradeOutsideGroupProperty = new Property<>(gameRules.isPreventTradeOutsideGroup());
         preventTradeLockedItemsProperty = new Property<>(gameRules.isPreventTradeLockedItems());
         preventGrandExchangeBuyOffersProperty = new Property<>(gameRules.isPreventGrandExchangeBuyOffers());
@@ -111,7 +111,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         onlyForTradeableItemsProperty.set(gameRules.isOnlyForTradeableItems());
         restrictGroundItemsProperty.set(gameRules.isRestrictGroundItems());
         deprioritizeUnlootableGroundItemsProperty.set(
-            gameRules.isDeprioritizeUnlootableGroundItems());
+            gameRules.isDeprioritizeUnlootableGroundItemsEnabled());
         preventTradeOutsideGroupProperty.set(gameRules.isPreventTradeOutsideGroup());
         preventTradeLockedItemsProperty.set(gameRules.isPreventTradeLockedItems());
         preventGrandExchangeBuyOffersProperty.set(gameRules.isPreventGrandExchangeBuyOffers());
