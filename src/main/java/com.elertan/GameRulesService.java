@@ -123,6 +123,13 @@ public class GameRulesService implements BUPluginLifecycle {
                 booleanFormatter.apply(newGameRules.isRestrictGroundItems())
             );
         }
+        if (oldGameRules.isDeprioritizeUnlootableGroundItems()
+            != newGameRules.isDeprioritizeUnlootableGroundItems()) {
+            differences.put(
+                "Deprioritize unlootable ground items",
+                booleanFormatter.apply(newGameRules.isDeprioritizeUnlootableGroundItems())
+            );
+        }
         if (oldGameRules.isPreventGrandExchangeBuyOffers()
             != newGameRules.isPreventGrandExchangeBuyOffers()) {
             differences.put(

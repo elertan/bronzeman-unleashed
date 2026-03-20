@@ -17,6 +17,7 @@ public class GameRules {
     ISOOffsetDateTime lastUpdatedAt;
     boolean onlyForTradeableItems;
     boolean restrictGroundItems;
+    boolean deprioritizeUnlootableGroundItems;
     boolean preventTradeOutsideGroup;
     boolean preventTradeLockedItems;
     boolean preventGrandExchangeBuyOffers;
@@ -34,6 +35,7 @@ public class GameRules {
             .lastUpdatedAt(lastUpdatedAt)
             .onlyForTradeableItems(true)
             .restrictGroundItems(true)
+            .deprioritizeUnlootableGroundItems(true)
             .preventTradeOutsideGroup(true)
             .preventTradeLockedItems(true)
             .preventGrandExchangeBuyOffers(true)
