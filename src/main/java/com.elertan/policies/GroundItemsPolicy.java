@@ -390,8 +390,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return true;
         }
         GameRules rules = context.getGameRules();
-        return rules != null && rules.isRestrictGroundItems()
-            && rules.isDeprioritizeUnlootableGroundItemsEnabled();
+        return rules != null && rules.isRestrictGroundItems();
     }
 
     private boolean isGroundItemAction(MenuAction menuAction) {

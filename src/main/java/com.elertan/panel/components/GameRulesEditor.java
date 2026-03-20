@@ -255,24 +255,6 @@ public class GameRulesEditor extends JPanel implements AutoCloseable {
         );
         gbc.gridy++;
 
-        JCheckBox deprioritizeUnlootableGroundItemsCheckBox = new JCheckBox();
-        Bindings.bindSelected(
-            deprioritizeUnlootableGroundItemsCheckBox,
-            viewModel.deprioritizeUnlootableGroundItemsProperty
-        );
-        Bindings.bindEnabled(
-            deprioritizeUnlootableGroundItemsCheckBox,
-            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
-        );
-        panel.add(
-            createCheckboxInput(
-                "Deprioritize unlootable menu entries",
-                "When enabled, left-click favors walk/interactions instead of Take for items your group cannot loot.",
-                deprioritizeUnlootableGroundItemsCheckBox
-            ), gbc
-        );
-        gbc.gridy++;
-
         return panel;
     }
 
