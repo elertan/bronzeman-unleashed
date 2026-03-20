@@ -16,5 +16,12 @@ public class GroundItemOwnedByData {
     @NonNull
     private ISOOffsetDateTime despawnsAt;
 
+    private Integer quantity;
+
     private String droppedByPlayerName;
+
+    public int getQuantityOrDefaultOne() {
+        Integer q = quantity;
+        return q == null || q < 1 ? 1 : q;
+    }
 }

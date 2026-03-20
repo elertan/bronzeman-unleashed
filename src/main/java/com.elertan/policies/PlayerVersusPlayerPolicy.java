@@ -220,7 +220,12 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
         // PvP loot despawns after 3 minutes (300 ticks)
         ISOOffsetDateTime despawnsAt = new ISOOffsetDateTime(OffsetDateTime.now()
             .plus(Duration.ofMinutes(3)));
-        GroundItemOwnedByData data = new GroundItemOwnedByData(client.getAccountHash(), despawnsAt, playerName);
+        GroundItemOwnedByData data = new GroundItemOwnedByData(
+            client.getAccountHash(),
+            despawnsAt,
+            1,
+            playerName
+        );
 
         return groundItemOwnedByDataProvider.addEntry(key, data)
             .thenApply(__ -> null);
