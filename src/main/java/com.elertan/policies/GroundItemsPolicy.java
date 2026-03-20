@@ -500,7 +500,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 String logKey = "deny:" + key.toKey();
                 if (now - lastOwnershipInfoLogAtMillis.getOrDefault(logKey, 0L) >= OWNERSHIP_INFO_LOG_THROTTLE_MILLIS) {
                     lastOwnershipInfoLogAtMillis.put(logKey, now);
-                    log.info(
+                    log.debug(
                         "[ownership-rebuild] deny-known-key-exhausted key={} itemId={} tileQty={} trackedQty=0",
                         key.toKey(),
                         itemId,
@@ -658,7 +658,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         // Throttle to avoid spamming on fast stacks.
         if (now - lastOwnershipInfoLogAtMillis.getOrDefault(logKey, 0L) >= OWNERSHIP_INFO_LOG_THROTTLE_MILLIS) {
             lastOwnershipInfoLogAtMillis.put(logKey, now);
-            log.info(
+            log.debug(
                 "[ownership-rebuild] mark-known-key key={} expiresAt={}",
                 key.toKey(),
                 expiresAt
@@ -834,7 +834,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             );
             boolean knownOwned = isKnownOwnedKeyStillRelevant(key, allowCrossViewFallback);
             int effectiveOwnership = getEffectiveOwnershipForEligibility(rawOwnership, knownOwned);
-            log.info(
+            log.debug(
                 "[ownership-rebuild] click-decision key={} itemId={} ownershipRaw={} ownershipEffective={} debugForceLoss={} fallbackCrossView={} tileQty={} trackedQty={} knownOwned={} action={}",
                 key.toKey(),
                 itemId,
