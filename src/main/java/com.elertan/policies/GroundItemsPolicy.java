@@ -32,13 +32,16 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.MenuAction;
+import net.runelite.api.MenuEntry;
 import net.runelite.api.Scene;
 import net.runelite.api.Tile;
 import net.runelite.api.TileItem;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ItemDespawned;
+import net.runelite.api.events.ItemQuantityChanged;
 import net.runelite.api.events.ItemSpawned;
+import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.callback.ClientThread;
 
@@ -145,6 +148,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         GroundItemOwnedByData newGroundItemOwnedByData = new GroundItemOwnedByData(
             client.getAccountHash(),
             new ISOOffsetDateTime(despawnsAt),
+            tileItem.getQuantity(),
             null
         );
 
@@ -178,11 +182,62 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
 
-        groundItemOwnedByDataProvider.removeOneEntry(key).whenComplete((result, throwable) -> {
+        groundItemOwnedByDataProvider.consumeQuantity(key, tileItem.getQuantity()).whenComplete((result, throwable) -> {
             if (throwable != null) {
-                log.error("GroundItemOwnedByDataProvider removeOneEntry failed", throwable);
+                log.error("GroundItemOwnedByDataProvider consumeQuantity failed", throwable);
             }
         });
+    }
+
+    public void onItemQuantityChanged(ItemQuantityChanged event) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
+            return;
+        }
+
+        int oldQuantity = event.getOldQuantity();
+        int newQuantity = event.getNewQuantity();
+        int delta = newQuantity - oldQuantity;
+        if (delta == 0) {
+            return;
+        }
+
+        TileItem tileItem = event.getItem();
+        if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF
+            && tileItem.getOwnership() != TileItem.OWNERSHIP_GROUP) {
+            return;
+        }
+
+        Tile tile = event.getTile();
+        WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
+        WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
+        int itemId = tileItem.getId();
+        GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
+
+        if (delta > 0) {
+            // Track increases as additional owned quantity for this pile.
+            long despawnTimeTicks = tileItem.getDespawnTime() - client.getTickCount();
+            Duration despawnDuration = TickUtils.ticksToDuration(despawnTimeTicks);
+            OffsetDateTime despawnsAt = OffsetDateTime.now().plus(despawnDuration);
+            GroundItemOwnedByData data = new GroundItemOwnedByData(
+                client.getAccountHash(),
+                new ISOOffsetDateTime(despawnsAt),
+                delta,
+                null
+            );
+            groundItemOwnedByDataProvider.addEntry(key, data).whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    log.error("GroundItemOwnedByDataProvider addEntry failed", throwable);
+                }
+            });
+            return;
+        }
+
+        groundItemOwnedByDataProvider.consumeQuantity(key, Math.abs(delta))
+            .whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    log.error("GroundItemOwnedByDataProvider consumeQuantity failed", throwable);
+                }
+            });
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
@@ -194,19 +249,57 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         enforceItemTakePolicyWhereNecessary(event, context);
     }
 
-    private void enforceItemTakePolicyWhereNecessary(MenuOptionClicked event,
-        PolicyContext context) {
-        MenuAction menuAction = event.getMenuAction();
-        String menuOption = event.getMenuOption();
-        boolean isGroundItemMenuAction =
-            menuAction.ordinal() >= MenuAction.GROUND_ITEM_FIRST_OPTION.ordinal()
-                && menuAction.ordinal() <= MenuAction.GROUND_ITEM_FIFTH_OPTION.ordinal();
-        boolean isWidgetTargetOnGroundItemAction =
-            menuAction.ordinal() == MenuAction.WIDGET_TARGET_ON_GROUND_ITEM.ordinal();
-        if (!isGroundItemMenuAction && !isWidgetTargetOnGroundItemAction) {
+    public void onMenuEntryAdded(MenuEntryAdded event) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
 
+        PolicyContext context = createContext();
+        if (!shouldDeprioritizeUnlootableMenuEntries(context)) {
+            return;
+        }
+
+        MenuEntry menuEntry = event.getMenuEntry();
+        if (menuEntry == null) {
+            return;
+        }
+        if (!isGroundItemAction(menuEntry.getType())) {
+            return;
+        }
+
+        String option = menuEntry.getOption();
+        if (!"Take".equals(option) && !"Cast".equals(option)) {
+            return;
+        }
+
+        int itemId = menuEntry.getIdentifier();
+        if (itemId <= 1) {
+            return;
+        }
+
+        GetClickedTileItemOutput output = getClickedTileItem(
+            menuEntry.getParam0(),
+            menuEntry.getParam1(),
+            itemId
+        );
+        if (output == null) {
+            return;
+        }
+
+        EligibilityDecision decision = evaluateTakeEligibility(context, itemId, output.getTile(), output.getTileItem());
+        if (decision.getAction() == EligibilityAction.DENY) {
+            menuEntry.setDeprioritized(true);
+        }
+    }
+
+    private void enforceItemTakePolicyWhereNecessary(MenuOptionClicked event,
+        PolicyContext context) {
+        MenuAction menuAction = event.getMenuAction();
+        if (!isGroundItemAction(menuAction)) {
+            return;
+        }
+
+        String menuOption = event.getMenuOption();
         if (!menuOption.equals("Take") && !menuOption.equals("Cast")) {
             return;
         }
@@ -215,12 +308,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
 
-        // In last man standing we want to allow taking any items
-        if (minigameService.isPlayingLastManStanding()) {
-            return;
-        }
-
-        GetClickedTileItemOutput output = getClickedTileItem(event);
+        GetClickedTileItemOutput output = getClickedTileItem(event.getParam0(), event.getParam1(), itemId);
         if (output == null) {
             log.warn(
                 "Ground item not found at scene ({}, {}) for id {}",
@@ -230,40 +318,89 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             );
             return;
         }
-        Tile tile = output.getTile();
-        TileItem tileItem = output.getTileItem();
+        EligibilityDecision decision = evaluateTakeEligibility(
+            context,
+            itemId,
+            output.getTile(),
+            output.getTileItem()
+        );
+        if (decision.getAction() == EligibilityAction.ALLOW) {
+            return;
+        }
+
+        if (decision.getAction() == EligibilityAction.LOADING) {
+            event.consume();
+            buChatService.sendErrorMessage(chatMessageProvider.messageFor(
+                MessageKey.STILL_LOADING_PLEASE_WAIT));
+            return;
+        }
+
+        if (decision.getMessageKey() != null) {
+            event.consume();
+            MessageKey messageKey = decision.getMessageKey();
+            if (messageKey == MessageKey.GROUND_ITEM_TAKE_RESTRICTION
+                || messageKey == MessageKey.GROUND_ITEM_CAST_RESTRICTION) {
+                messageKey = menuAction == MenuAction.WIDGET_TARGET_ON_GROUND_ITEM
+                    ? MessageKey.GROUND_ITEM_CAST_RESTRICTION
+                    : MessageKey.GROUND_ITEM_TAKE_RESTRICTION;
+            }
+            buChatService.sendRestrictionMessage(messageKey);
+        }
+    }
+
+    private boolean shouldDeprioritizeUnlootableMenuEntries(PolicyContext context) {
+        if (context.isMustEnforceStrictPolicies()) {
+            return true;
+        }
+        GameRules rules = context.getGameRules();
+        return rules != null && rules.isRestrictGroundItems()
+            && rules.isDeprioritizeUnlootableGroundItems();
+    }
+
+    private boolean isGroundItemAction(MenuAction menuAction) {
+        return menuAction.ordinal() >= MenuAction.GROUND_ITEM_FIRST_OPTION.ordinal()
+            && menuAction.ordinal() <= MenuAction.GROUND_ITEM_FIFTH_OPTION.ordinal()
+            || menuAction == MenuAction.WIDGET_TARGET_ON_GROUND_ITEM;
+    }
+
+    private EligibilityDecision evaluateTakeEligibility(PolicyContext context, int itemId, Tile tile,
+        TileItem tileItem) {
+        // In last man standing we want to allow taking any items.
+        if (minigameService.isPlayingLastManStanding()) {
+            return EligibilityDecision.allow();
+        }
 
         ItemComposition itemComposition = client.getItemDefinition(itemId);
-
         int ownership = tileItem.getOwnership();
         if (ownership == TileItem.OWNERSHIP_NONE) {
             log.debug("Item '{}' is not owned by anyone, allow take", itemComposition.getName());
-            return;
+            return EligibilityDecision.allow();
         }
 
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
-        GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
+        GroundItemOwnedByKey key = GroundItemOwnedByKey.of(
+            itemId,
+            client.getWorld(),
+            worldView.getId(),
+            worldPoint
+        );
 
-        ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
+        ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap
+            = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
             boolean mustPerformCheck =
                 context.isMustEnforceStrictPolicies() || (context.getGameRules() != null && (
-                    context.getGameRules().isRestrictGroundItems() || context.getGameRules()
-                        .isRestrictPlayerVersusPlayerLoot()
+                    context.getGameRules().isRestrictGroundItems()
+                        || context.getGameRules().isRestrictPlayerVersusPlayerLoot()
                 ));
-            if (mustPerformCheck) {
-                event.consume();
-                buChatService.sendErrorMessage(chatMessageProvider.messageFor(
-                    MessageKey.STILL_LOADING_PLEASE_WAIT));
-            }
-            return;
+            return mustPerformCheck
+                ? EligibilityDecision.loading()
+                : EligibilityDecision.allow();
         }
 
-        if (groundItemOwnedByDataProvider.hasEntries(key)) {
-            // Our group owns at least one instance of this item at this location
-
-            // Check for pvp acquired items
+        int trackedOwnedQuantity = groundItemOwnedByDataProvider.getTotalOwnedQuantity(key);
+        if (trackedOwnedQuantity > 0) {
             boolean mustPerformPlayerVersusPlayerCheck =
                 context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
                     && context.getGameRules().isRestrictPlayerVersusPlayerLoot());
@@ -273,55 +410,40 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 if (entries != null) {
                     for (GroundItemOwnedByData data : entries.values()) {
                         String droppedByPlayerName = data.getDroppedByPlayerName();
-                        if (droppedByPlayerName != null) {
-                            log.debug(
-                                "Performing player versus player loot check for item '{}' dropped by {}",
-                                itemId,
-                                droppedByPlayerName
-                            );
+                        if (droppedByPlayerName == null) {
+                            continue;
+                        }
 
-                            Member member = null;
-                            try {
-                                member = memberService.getMemberByName(droppedByPlayerName);
-                            } catch (Exception ignored) {
-                            }
-                            if (member != null) {
-                                log.debug("Player '{}' is part of our group, allow take", droppedByPlayerName);
-                                continue;
-                            }
-
+                        Member member = null;
+                        try {
+                            member = memberService.getMemberByName(droppedByPlayerName);
+                        } catch (Exception ignored) {
+                        }
+                        if (member == null) {
                             log.debug("Player '{}' is not part of our group, deny take", droppedByPlayerName);
-                            buChatService.sendRestrictionMessage(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION);
-                            return;
+                            return EligibilityDecision.deny(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION);
                         }
                     }
                 }
             }
-            return;
+            return EligibilityDecision.allow();
         }
 
         if (ownership == TileItem.OWNERSHIP_SELF) {
             log.debug("Item '{}' is owned by me, allow take", itemComposition.getName());
-            return;
+            return EligibilityDecision.allow();
         }
 
         boolean mustPerformGroundItemsCheck =
             context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
                 && context.getGameRules().isRestrictGroundItems());
         if (mustPerformGroundItemsCheck) {
-            event.consume();
-            MessageKey messageKey = isWidgetTargetOnGroundItemAction
-                ? MessageKey.GROUND_ITEM_CAST_RESTRICTION
-                : MessageKey.GROUND_ITEM_TAKE_RESTRICTION;
-            buChatService.sendRestrictionMessage(messageKey);
+            return EligibilityDecision.deny(MessageKey.GROUND_ITEM_TAKE_RESTRICTION);
         }
+        return EligibilityDecision.allow();
     }
 
-    private GetClickedTileItemOutput getClickedTileItem(MenuOptionClicked event) {
-        // For ground item menu actions, param0 = scene X, param1 = scene Y, id = item ID
-        final int sceneX = event.getParam0();
-        final int sceneY = event.getParam1();
-        final int itemId = event.getId();
+    private GetClickedTileItemOutput getClickedTileItem(int sceneX, int sceneY, int itemId) {
         WorldView worldView = client.getTopLevelWorldView();
         final int plane = worldView.getPlane();
 
@@ -431,6 +553,31 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                     }
                 });
             }
+        }
+    }
+
+    private enum EligibilityAction {
+        ALLOW,
+        DENY,
+        LOADING
+    }
+
+    @Value
+    private static class EligibilityDecision {
+
+        EligibilityAction action;
+        MessageKey messageKey;
+
+        static EligibilityDecision allow() {
+            return new EligibilityDecision(EligibilityAction.ALLOW, null);
+        }
+
+        static EligibilityDecision deny(MessageKey messageKey) {
+            return new EligibilityDecision(EligibilityAction.DENY, messageKey);
+        }
+
+        static EligibilityDecision loading() {
+            return new EligibilityDecision(EligibilityAction.LOADING, MessageKey.STILL_LOADING_PLEASE_WAIT);
         }
     }
 
