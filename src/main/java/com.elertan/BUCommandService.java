@@ -67,7 +67,7 @@ public class BUCommandService implements BUPluginLifecycle {
         ));
         debugCommands.add(new CommandInfo(
             "droptest",
-            "Force ownership-loss simulation for known ground-item keys (also supports ::droptest)",
+            "Force ownership-loss simulation for known ground-item keys",
             "[on|off|status]",
             this::handleDropTest
         ));
@@ -85,15 +85,7 @@ public class BUCommandService implements BUPluginLifecycle {
      * @param event the command executed event
      */
     public void onCommandExecuted(CommandExecuted event) {
-        String command = event.getCommand();
-        if (command.equalsIgnoreCase("droptest")) {
-            String[] args = event.getArguments();
-            String argument = args.length > 0 ? args[0] : null;
-            handleDropTest(argument);
-            return;
-        }
-
-        if (!command.equalsIgnoreCase("bu")) {
+        if (!event.getCommand().equalsIgnoreCase("bu")) {
             return;
         }
 
@@ -113,7 +105,7 @@ public class BUCommandService implements BUPluginLifecycle {
             : commands.stream();
 
         commandStream
-            .filter(c -> c.getName().equals(commandName))
+            .filter(c -> c.getName().equalsIgnoreCase(commandName))
             .findFirst()
             .ifPresentOrElse(
                 c -> c.getHandler().handle(argument),
