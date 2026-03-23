@@ -22,9 +22,7 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -34,6 +32,7 @@ import lombok.NonNull;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
@@ -42,6 +41,7 @@ import net.runelite.api.Tile;
 import net.runelite.api.TileItem;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemDespawned;
 import net.runelite.api.events.ItemQuantityChanged;
 import net.runelite.api.events.ItemSpawned;
@@ -77,7 +77,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private final ConcurrentHashMap<GroundItemOwnedByKey, OffsetDateTime> knownOwnedKeyExpiresAt
         = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> lastOwnershipInfoLogAtMillis = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<GroundItemOwnedByKey, Integer> pendingLootAttemptExpiresAtTick
+        = new ConcurrentHashMap<>();
     private static final long OWNERSHIP_INFO_LOG_THROTTLE_MILLIS = 5000L;
+    private static final int PENDING_LOOT_TICKS = 3;
     private volatile boolean debugForceOwnershipLossForKnownKeys;
 
     @Inject
@@ -125,6 +128,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             }
         };
         groundItemOwnedByDataProvider.addMapListener(groundItemOwnedByDataProviderListener);
+        syncInventoryQuantities(client.getItemContainer(InventoryID.INV));
 
         scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(this::cleanupExpiredGroundItems, 10, 10, TimeUnit.SECONDS);
@@ -143,6 +147,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     public void shutDown() throws Exception {
         groundItemOwnedByDataProvider.removeMapListener(groundItemOwnedByDataProviderListener);
         knownOwnedKeyExpiresAt.clear();
+        inventoryQuantitiesByItemId.clear();
+        pendingInventoryGainsByItemId.clear();
+        pendingLootAttemptExpiresAtTick.clear();
+        pendingGroundConsumptionsByKey.clear();
         debugForceOwnershipLossForKnownKeys = false;
 
         scheduler.shutdownNow();
@@ -167,12 +175,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         TileItem tileItem = event.getItem();
-        Tile tile = event.getTile();
-        WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
-        WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
-        int itemId = tileItem.getId();
-        GroundItemOwnedByKey key = GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
-
         boolean isSelfOrGroupOwnership = tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
             || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
         if (!isSelfOrGroupOwnership) {
@@ -181,6 +183,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
 
+        Tile tile = event.getTile();
+        GroundItemOwnedByKey key = createGroundItemKey(tileItem.getId(), tile);
         ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
             log.warn("Ground item spawned for me but groundItemOwnedByMap is null");
@@ -206,6 +210,15 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             });
     }
 
+    public void onGameTick(GameTick event) {
+        if (!accountConfigurationService.isBronzemanEnabled()) {
+            pendingLootAttemptExpiresAtTick.clear();
+            return;
+        }
+
+        cleanupExpiredLootAttempts(client.getTickCount());
+    }
+
     public void onItemDespawned(ItemDespawned event) {
         if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
@@ -222,19 +235,24 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
         boolean allowCrossViewFallback = !isSelfOrGroupOwnership;
         int trackedOwnedQuantity = getTrackedOwnedQuantityForKeyOrFallback(key, allowCrossViewFallback);
-        boolean hasTrackedOwnership = trackedOwnedQuantity > 0;
-        if (!isSelfOrGroupOwnership && !hasTrackedOwnership) {
-            // Unknown ownership and no tracked ownership to reconcile.
-            return;
-        }
-
-        if (!hasTrackedOwnership) {
+        if (trackedOwnedQuantity <= 0) {
             log.debug("gi {} has no entries, ignore", key);
             return;
         }
 
-        consumeTrackedQuantityForKeyOrFallback(key, tileItem.getQuantity(), allowCrossViewFallback)
-            .whenComplete((result, throwable) -> {
+        // Only the local player who clicked this pile (via pending loot attempt from MenuOptionClicked)
+        // should consume shared ownership. Other group members observing the same despawn will ignore it.
+        // This prevents multi-client over-decrement of the shared Firebase state while respecting RuneLite's
+        // single-looter-per-action guarantee (tick-based ~600ms events).
+        if (!hasPendingLootAttemptFor(key)) {
+            return;
+        }
+
+        consumeTrackedQuantityForKeyOrFallback(
+            key,
+            tileItem.getQuantity(),
+            allowCrossViewFallback
+        ).whenComplete((result, throwable) -> {
             if (throwable != null) {
                 log.error("GroundItemOwnedByDataProvider consumeQuantity failed", throwable);
             }
@@ -291,12 +309,22 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         if (!isSelfOrGroupOwnership && !hasTrackedOwnership) {
             return;
         }
-        consumeTrackedQuantityForKeyOrFallback(key, Math.abs(delta), allowCrossViewFallback)
-            .whenComplete((result, throwable) -> {
-                if (throwable != null) {
-                    log.error("GroundItemOwnedByDataProvider consumeQuantity failed", throwable);
-                }
-            });
+
+        // Only the local player who clicked this pile (via pending loot attempt) should consume
+        // shared ownership. Other group members observing the same quantity change will ignore it.
+        if (!hasPendingLootAttemptFor(key)) {
+            return;
+        }
+
+        consumeTrackedQuantityForKeyOrFallback(
+            key,
+            Math.abs(delta),
+            allowCrossViewFallback
+        ).whenComplete((result, throwable) -> {
+            if (throwable != null) {
+                log.error("GroundItemOwnedByDataProvider consumeQuantity failed", throwable);
+            }
+        });
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
@@ -385,6 +413,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         );
         logOwnershipClickDecision(itemId, output.getTile(), output.getTileItem(), decision);
         if (decision.getAction() == EligibilityAction.ALLOW) {
+            recordPendingLootAttempt(itemId, output.getTile());
             return;
         }
 
@@ -560,6 +589,42 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
         return null;
     }
+
+
+    private void recordPendingLootAttempt(int itemId, Tile tile) {
+        GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
+        int expiresAt = client.getTickCount() + PENDING_LOOT_TICKS;
+        pendingLootAttemptExpiresAtTick.merge(key, expiresAt, Math::max);
+    }
+
+    private boolean hasPendingLootAttemptFor(GroundItemOwnedByKey key) {
+        Integer expiresAt = pendingLootAttemptExpiresAtTick.get(key);
+        if (expiresAt == null) {
+            return false;
+        }
+        return expiresAt >= client.getTickCount();
+    }
+
+
+
+        if (gainsByItemId == null || quantity <= 0) {
+            return false;
+        }
+
+        PendingInventoryGain available = gainsByItemId.get(itemId);
+        if (available == null) {
+            return false;
+
+    private void cleanupExpiredLootAttempts(int currentTick) {
+        pendingLootAttemptExpiresAtTick.entrySet().removeIf(entry -> entry.getValue() < currentTick);
+    }
+
+    private GroundItemOwnedByKey createGroundItemKey(int itemId, Tile tile) {
+        WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
+        WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
+        return GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
+    }
+
 
     // Called from scheduler thread - must use clientThread.invoke() for client access
     private void cleanupExpiredGroundItems() {
