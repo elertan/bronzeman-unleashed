@@ -293,6 +293,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
+        // Skip deprioritizing ground Take/Cast in LMS 
+        if (minigameService.isPlayingLastManStanding()) {
+            return;
+        }
 
         PolicyContext context = createContext();
         if (!shouldDeprioritizeUnlootableMenuEntries(context)) {
