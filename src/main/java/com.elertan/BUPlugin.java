@@ -29,7 +29,9 @@ import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ItemDespawned;
+import net.runelite.api.events.ItemQuantityChanged;
 import net.runelite.api.events.ItemSpawned;
+import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.api.events.ScriptPostFired;
@@ -271,6 +273,7 @@ public final class BUPlugin extends Plugin {
         buChatService.onGameTick(event);
         petDropService.onGameTick(event);
         collectionLogService.onGameTick(event);
+        groundItemsPolicy.onGameTick(event);
     }
 
     @Subscribe
@@ -311,6 +314,11 @@ public final class BUPlugin extends Plugin {
     }
 
     @Subscribe
+    public void onMenuEntryAdded(MenuEntryAdded event) {
+        groundItemsPolicy.onMenuEntryAdded(event);
+    }
+
+    @Subscribe
     public void onMenuOptionClicked(MenuOptionClicked event) {
         tradePolicy.onMenuOptionClicked(event);
         groundItemsPolicy.onMenuOptionClicked(event);
@@ -345,6 +353,11 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onItemDespawned(ItemDespawned event) {
         groundItemsPolicy.onItemDespawned(event);
+    }
+
+    @Subscribe
+    public void onItemQuantityChanged(ItemQuantityChanged event) {
+        groundItemsPolicy.onItemQuantityChanged(event);
     }
 
     @Subscribe

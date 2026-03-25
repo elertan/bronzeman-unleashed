@@ -174,7 +174,8 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
             GroundItemOwnedByKey key = GroundItemOwnedByKey.of(
                 itemId, lastDeathLocation.getWorld(), worldView.getId(), worldPoint);
 
-            markGroundItemOwnedByAsPlayerVersusPlayerLoot(key, playerName)
+            int quantity = Math.max(1, itemStack.getQuantity());
+            markGroundItemOwnedByAsPlayerVersusPlayerLoot(key, playerName, quantity)
                 .whenComplete((__, throwable) -> {
                     if (throwable != null) {
                         log.error(
@@ -216,11 +217,16 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
     }
 
     private CompletableFuture<Void> markGroundItemOwnedByAsPlayerVersusPlayerLoot(
-        @NonNull GroundItemOwnedByKey key, @NonNull String playerName) {
+        @NonNull GroundItemOwnedByKey key, @NonNull String playerName, int quantity) {
         // PvP loot despawns after 3 minutes (300 ticks)
         ISOOffsetDateTime despawnsAt = new ISOOffsetDateTime(OffsetDateTime.now()
             .plus(Duration.ofMinutes(3)));
-        GroundItemOwnedByData data = new GroundItemOwnedByData(client.getAccountHash(), despawnsAt, playerName);
+        GroundItemOwnedByData data = new GroundItemOwnedByData(
+            client.getAccountHash(),
+            despawnsAt,
+            Math.max(1, quantity),
+            playerName
+        );
 
         return groundItemOwnedByDataProvider.addEntry(key, data)
             .thenApply(__ -> null);

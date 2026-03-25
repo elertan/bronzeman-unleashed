@@ -16,5 +16,15 @@ public class GroundItemOwnedByData {
     @NonNull
     private ISOOffsetDateTime despawnsAt;
 
+    /**
+     * Stack size for this Firebase entry. Null or absent in JSON means 1 (legacy rows).
+     */
+    private Integer quantity;
+
     private String droppedByPlayerName;
+
+    public int getQuantityOrDefaultOne() {
+        Integer q = quantity;
+        return q == null || q < 1 ? 1 : q;
+    }
 }
