@@ -22,7 +22,9 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -74,11 +76,18 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     private GroundItemOwnedByDataProvider.Listener groundItemOwnedByDataProviderListener;
     private ScheduledExecutorService scheduler;
-    private final ConcurrentHashMap<GroundItemOwnedByKey, OffsetDateTime> knownOwnedKeyExpiresAt
+
+    // Recovery index for rare quest transitions where worldViewId/plane can shift.
+    // This is NOT a second source of truth for quantity; the provider remains authoritative.
+    private final ConcurrentHashMap<GroundItemOwnedByKey, OffsetDateTime> recentOwnedLocationExpiresAt
         = new ConcurrentHashMap<>();
+
+    // Used to throttle debug/ownership logging to avoid spam
     private final ConcurrentHashMap<String, Long> lastOwnershipInfoLogAtMillis = new ConcurrentHashMap<>();
+
     private final ConcurrentHashMap<GroundItemOwnedByKey, Integer> pendingLootAttemptExpiresAtTick
         = new ConcurrentHashMap<>();
+
     private static final long OWNERSHIP_INFO_LOG_THROTTLE_MILLIS = 5000L;
     private static final int PENDING_LOOT_TICKS = 3;
     private volatile boolean debugForceOwnershipLossForKnownKeys;
@@ -95,7 +104,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         groundItemOwnedByDataProviderListener = new GroundItemOwnedByDataProvider.Listener() {
             @Override
             public void onReadAll(ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map) {
-                knownOwnedKeyExpiresAt.clear();
+                // Build a short-lived recovery index keyed by owned locations.
+                // This is only used when the full provider key changes across quest transitions.
+                recentOwnedLocationExpiresAt.clear();
                 if (map == null) {
                     return;
                 }
@@ -110,7 +121,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                         if (data == null || data.getDespawnsAt() == null) {
                             continue;
                         }
-                        markKnownOwnedKey(key, data.getDespawnsAt().getValue());
+                        markRecentOwnedLocation(key, data.getDespawnsAt().getValue());
                     }
                 }
             }
@@ -120,7 +131,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 if (value == null || value.getDespawnsAt() == null) {
                     return;
                 }
-                markKnownOwnedKey(key, value.getDespawnsAt().getValue());
+                markRecentOwnedLocation(key, value.getDespawnsAt().getValue());
             }
 
             @Override
@@ -128,7 +139,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             }
         };
         groundItemOwnedByDataProvider.addMapListener(groundItemOwnedByDataProviderListener);
-        syncInventoryQuantities(client.getItemContainer(InventoryID.INV));
 
         scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(this::cleanupExpiredGroundItems, 10, 10, TimeUnit.SECONDS);
@@ -146,11 +156,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     @Override
     public void shutDown() throws Exception {
         groundItemOwnedByDataProvider.removeMapListener(groundItemOwnedByDataProviderListener);
-        knownOwnedKeyExpiresAt.clear();
-        inventoryQuantitiesByItemId.clear();
-        pendingInventoryGainsByItemId.clear();
+        recentOwnedLocationExpiresAt.clear();
         pendingLootAttemptExpiresAtTick.clear();
-        pendingGroundConsumptionsByKey.clear();
         debugForceOwnershipLossForKnownKeys = false;
 
         scheduler.shutdownNow();
@@ -200,7 +207,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             tileItem.getQuantity(),
             null
         );
-        markKnownOwnedKey(key, despawnsAt);
+        markRecentOwnedLocation(key, despawnsAt);
 
         groundItemOwnedByDataProvider.addEntry(key, newGroundItemOwnedByData)
             .whenComplete((result, throwable) -> {
@@ -244,7 +251,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         // should consume shared ownership. Other group members observing the same despawn will ignore it.
         // This prevents multi-client over-decrement of the shared Firebase state while respecting RuneLite's
         // single-looter-per-action guarantee (tick-based ~600ms events).
-        if (!hasPendingLootAttemptFor(key)) {
+        if (!shouldConsumeSharedOwnership(
+            trackedOwnedQuantity,
+            pendingLootAttemptExpiresAtTick.get(key),
+            client.getTickCount()
+        )) {
             return;
         }
 
@@ -297,7 +308,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 delta,
                 null
             );
-            markKnownOwnedKey(key, despawnsAt);
+            markRecentOwnedLocation(key, despawnsAt);
             groundItemOwnedByDataProvider.addEntry(key, data).whenComplete((result, throwable) -> {
                 if (throwable != null) {
                     log.error("GroundItemOwnedByDataProvider addEntry failed", throwable);
@@ -312,7 +323,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         // Only the local player who clicked this pile (via pending loot attempt) should consume
         // shared ownership. Other group members observing the same quantity change will ignore it.
-        if (!hasPendingLootAttemptFor(key)) {
+        if (!shouldConsumeSharedOwnership(
+            trackedOwnedQuantity,
+            pendingLootAttemptExpiresAtTick.get(key),
+            client.getTickCount()
+        )) {
             return;
         }
 
@@ -483,11 +498,15 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 : EligibilityDecision.allow();
         }
 
+        // We allow fallback to matching by stable location (itemId + world + x + y) when
+        // the full key (including worldViewId and plane) doesn't match. This handles rare
+        // quest transitions where RuneLite changes those fields (e.g. Mourning's End Part II).
+        // Normal gameplay almost always uses the full key.
         boolean allowCrossViewFallback = debugForceOwnershipLossForKnownKeys
             || ownership == TileItem.OWNERSHIP_NONE;
-        int trackedOwnedQuantity = getTrackedOwnedQuantityForKeyOrFallback(key, allowCrossViewFallback);
-        boolean knownOwned = isKnownOwnedKeyStillRelevant(key, allowCrossViewFallback);
-        int effectiveOwnership = getEffectiveOwnershipForEligibility(ownership, knownOwned);
+
+        int trackedOwnedQuantity = getTrackedOwnedQuantityForKey(key, allowCrossViewFallback);
+        boolean isKnownOwnedLocation = isKnownOwnedLocation(key, allowCrossViewFallback);
         if (trackedOwnedQuantity > 0) {
             boolean mustPerformPlayerVersusPlayerCheck =
                 context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
@@ -517,35 +536,25 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return EligibilityDecision.allow();
         }
 
-        // Reconstruction rule: if this key is known-owned (we tracked ownership for its lifetime)
-        // but tracked owned quantity is now exhausted, any remaining ground items for this key are
-        // treated as unlootable until despawn, regardless of ownership metadata.
-        if (knownOwned) {
+        // If we have previously tracked ownership for this stable location, but the tracked
+        // quantity is now zero, we treat any remaining items at this location as unlootable.
+        // This prevents players from looting "leftovers" after their group's share is gone.
+        if (isKnownOwnedLocation) {
             boolean mustPerformGroundItemsCheck =
                 context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
                     && context.getGameRules().isRestrictGroundItems());
             if (mustPerformGroundItemsCheck) {
-                long now = System.currentTimeMillis();
-                String logKey = "deny:" + key.toKey();
-                if (now - lastOwnershipInfoLogAtMillis.getOrDefault(logKey, 0L) >= OWNERSHIP_INFO_LOG_THROTTLE_MILLIS) {
-                    lastOwnershipInfoLogAtMillis.put(logKey, now);
-                    log.debug(
-                        "[ownership-rebuild] deny-known-key-exhausted key={} itemId={} tileQty={} trackedQty=0",
-                        key.toKey(),
-                        itemId,
-                        tileItem.getQuantity()
-                    );
-                }
+                logKnownOwnedLocationExhausted(key, itemId, tileItem.getQuantity());
                 return EligibilityDecision.deny(MessageKey.GROUND_ITEM_TAKE_RESTRICTION);
             }
         }
 
-        if (effectiveOwnership == TileItem.OWNERSHIP_SELF) {
+        if (ownership == TileItem.OWNERSHIP_SELF) {
             log.debug("Item '{}' is owned by me, allow take", itemComposition.getName());
             return EligibilityDecision.allow();
         }
 
-        if (effectiveOwnership == TileItem.OWNERSHIP_NONE) {
+        if (ownership == TileItem.OWNERSHIP_NONE) {
             return EligibilityDecision.allow();
         }
 
@@ -605,15 +614,19 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return expiresAt >= client.getTickCount();
     }
 
-
-
-        if (gainsByItemId == null || quantity <= 0) {
+    /**
+     * Shared write gate for ground-item consumption.
+     * We only consume shared ownership when this client both:
+     * 1) still has tracked owned quantity for the key, and
+     * 2) has a non-expired local loot attempt for the same key.
+     */
+    static boolean shouldConsumeSharedOwnership(int trackedOwnedQuantity, Integer pendingLootAttemptExpiresAtTick,
+        int currentTick) {
+        if (trackedOwnedQuantity <= 0) {
             return false;
         }
-
-        PendingInventoryGain available = gainsByItemId.get(itemId);
-        if (available == null) {
-            return false;
+        return pendingLootAttemptExpiresAtTick != null && pendingLootAttemptExpiresAtTick >= currentTick;
+    }
 
     private void cleanupExpiredLootAttempts(int currentTick) {
         pendingLootAttemptExpiresAtTick.entrySet().removeIf(entry -> entry.getValue() < currentTick);
@@ -629,7 +642,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     // Called from scheduler thread - must use clientThread.invoke() for client access
     private void cleanupExpiredGroundItems() {
         clientThread.invoke(() -> {
-            cleanupKnownOwnedKeys();
+            cleanupRecentOwnedLocations();
             ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
             if (map == null || map.isEmpty()) {
                 return;
@@ -669,7 +682,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     private void cleanupExpiredGroundItemsForEveryone() {
         log.debug("Cleaning up expired ground items for everyone");
-        cleanupKnownOwnedKeys();
+        cleanupRecentOwnedLocations();
 
         ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (map == null || map.isEmpty()) {
@@ -709,42 +722,74 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
     }
 
-    private void markKnownOwnedKey(GroundItemOwnedByKey key, OffsetDateTime expiresAt) {
+
+    private int getEffectiveOwnershipForEligibility(int rawOwnership, boolean knownOwned) {
+        if (debugForceOwnershipLossForKnownKeys && knownOwned) {
+            return TileItem.OWNERSHIP_NONE;
+        }
+        return rawOwnership;
+    }
+
+    private void markRecentOwnedLocation(GroundItemOwnedByKey key, OffsetDateTime expiresAt) {
         if (key == null || expiresAt == null) {
             return;
         }
-        knownOwnedKeyExpiresAt.merge(
+        recentOwnedLocationExpiresAt.merge(
             key,
             expiresAt,
             (current, incoming) -> current.isAfter(incoming) ? current : incoming
         );
-        long now = System.currentTimeMillis();
-        String logKey = "mark:" + key.toKey();
-        // Throttle to avoid spamming on fast stacks.
-        if (now - lastOwnershipInfoLogAtMillis.getOrDefault(logKey, 0L) >= OWNERSHIP_INFO_LOG_THROTTLE_MILLIS) {
-            lastOwnershipInfoLogAtMillis.put(logKey, now);
-            log.debug(
-                "[ownership-rebuild] mark-known-key key={} expiresAt={}",
-                key.toKey(),
-                expiresAt
-            );
-        }
     }
 
-    private boolean isKnownOwnedKeyStillRelevant(GroundItemOwnedByKey key,
-        boolean allowCrossViewFallback) {
+    private void cleanupRecentOwnedLocations() {
         OffsetDateTime now = OffsetDateTime.now();
-        OffsetDateTime expiresAt = knownOwnedKeyExpiresAt.get(key);
+        recentOwnedLocationExpiresAt.entrySet().removeIf(
+            entry -> entry.getValue() == null || entry.getValue().isBefore(now)
+        );
+    }
+
+    /**
+     * Returns tracked owned quantity for this pile.
+     *
+     * Normal path uses the full key (includes worldViewId + plane).
+     * Fallback path matches by stable location (itemId + world + x + y) for rare
+     * quest transitions where RuneLite can shift worldViewId/plane.
+     */
+    private int getTrackedOwnedQuantityForKey(GroundItemOwnedByKey key, boolean allowCrossViewFallback) {
+        return getTrackedOwnedQuantityForKeyOrFallback(key, allowCrossViewFallback);
+    }
+
+    /**
+     * Returns true when the provider still contains ownership entries for this
+     * location (full key or stable-location fallback match).
+     */
+    private boolean isKnownOwnedLocation(GroundItemOwnedByKey key, boolean allowCrossViewFallback) {
+        return isKnownOwnedKeyStillRelevant(key, allowCrossViewFallback);
+    }
+
+    private boolean isKnownOwnedKeyStillRelevant(GroundItemOwnedByKey key, boolean allowCrossViewFallback) {
+        ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map
+            = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
+        if (map != null && !map.isEmpty()) {
+            for (GroundItemOwnedByKey candidate : getTrackedKeysForKeyOrFallback(key, allowCrossViewFallback)) {
+                ConcurrentHashMap<String, GroundItemOwnedByData> entries = map.get(candidate);
+                if (entries != null && !entries.isEmpty()) {
+                    return true;
+                }
+            }
+        }
+
+        // Provider key can fail during quest transitions (worldViewId/plane changes).
+        // This cache preserves "was owned here" until despawn time using stable matching.
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime expiresAt = recentOwnedLocationExpiresAt.get(key);
         if (expiresAt != null && !expiresAt.isBefore(now)) {
             return true;
         }
-
         if (!allowCrossViewFallback) {
             return false;
         }
-
-        // Fallback for quest/instance transitions where worldViewId or plane may differ.
-        for (Map.Entry<GroundItemOwnedByKey, OffsetDateTime> entry : knownOwnedKeyExpiresAt.entrySet()) {
+        for (Map.Entry<GroundItemOwnedByKey, OffsetDateTime> entry : recentOwnedLocationExpiresAt.entrySet()) {
             GroundItemOwnedByKey candidate = entry.getKey();
             OffsetDateTime candidateExpiresAt = entry.getValue();
             if (candidate == null || candidateExpiresAt == null || candidateExpiresAt.isBefore(now)) {
@@ -757,18 +802,20 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return false;
     }
 
-    private void cleanupKnownOwnedKeys() {
-        OffsetDateTime now = OffsetDateTime.now();
-        knownOwnedKeyExpiresAt.entrySet().removeIf(
-            entry -> entry.getValue() == null || entry.getValue().isBefore(now)
-        );
-    }
-
-    private int getEffectiveOwnershipForEligibility(int rawOwnership, boolean knownOwned) {
-        if (debugForceOwnershipLossForKnownKeys && knownOwned) {
-            return TileItem.OWNERSHIP_NONE;
+    private void logKnownOwnedLocationExhausted(GroundItemOwnedByKey key, int itemId, int tileQuantity) {
+        long now = System.currentTimeMillis();
+        String logKey = "deny:" + key.toKey();
+        if (now - lastOwnershipInfoLogAtMillis.getOrDefault(logKey, 0L) < OWNERSHIP_INFO_LOG_THROTTLE_MILLIS) {
+            return;
         }
-        return rawOwnership;
+
+        lastOwnershipInfoLogAtMillis.put(logKey, now);
+        log.debug(
+            "[ownership-rebuild] deny-known-key-exhausted key={} itemId={} tileQty={} trackedQty=0",
+            key.toKey(),
+            itemId,
+            tileQuantity
+        );
     }
 
     private int getTrackedOwnedQuantityForKeyOrFallback(GroundItemOwnedByKey key,
