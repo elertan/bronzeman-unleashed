@@ -50,7 +50,7 @@ import net.runelite.client.callback.ClientThread;
  * <p>
  * Every group member's client receives the same {@link net.runelite.api.events.ItemDespawned} /
  * {@link ItemQuantityChanged} events. Decrements are written through {@link GroundItemOwnedByDataProvider}
- * to shared storage, so only the client that actually performed an allowed Take (within a few ticks)
+ * to shared storage, so only the client that actually performed an allowed ground interaction (within a few ticks)
  * may emit those writes; see {@link #shouldConsumeSharedOwnership}.
  */
 @Slf4j
@@ -293,7 +293,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
-        // Skip deprioritizing ground Take/Cast in LMS 
+        // Skip ground-item menu reordering in LMS (click enforcement already bypasses there).
         if (minigameService.isPlayingLastManStanding()) {
             return;
         }
@@ -312,8 +312,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
 
-        String option = menuEntry.getOption();
-        if ("Examine".equals(option) || (!"Take".equals(option) && !"Cast".equals(option))) {
+        if (isGroundItemExamineMenuOption(menuEntry.getOption())) {
             return;
         }
 
@@ -358,14 +357,24 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             || menuAction == MenuAction.WIDGET_TARGET_ON_GROUND_ITEM;
     }
 
+    /**
+     * Non-interactive option we never deprioritize or block. All other {@link #isGroundItemMenuAction} entries
+     * (Take, Light, Cast-on-item, etc.) use Jagex wording; we key off {@link MenuAction}, not the label.
+     * <p>
+     * "Walk here" is {@link MenuAction#WALK} on the tile, not a ground-item action, so it stays above deprioritized
+     * ground options.
+     */
+    private static boolean isGroundItemExamineMenuOption(String option) {
+        return option != null && "Examine".equals(option);
+    }
+
     private void enforceItemTakePolicyWhereNecessary(MenuOptionClicked event, PolicyContext context) {
         MenuAction menuAction = event.getMenuAction();
         if (!isGroundItemMenuAction(menuAction)) {
             return;
         }
 
-        String menuOption = event.getMenuOption();
-        if (!"Take".equals(menuOption) && !"Cast".equals(menuOption)) {
+        if (isGroundItemExamineMenuOption(event.getMenuOption())) {
             return;
         }
         int itemId = event.getId();
