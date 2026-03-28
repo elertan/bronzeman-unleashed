@@ -43,7 +43,7 @@ Manage data state and Firebase synchronization:
 
 ### 5. Remote Storage Layer
 Firebase Realtime Database abstraction:
-- Port interfaces: `KeyValueStoragePort`, `ObjectStoragePort`, `KeyListStoragePort`, `ObjectListStoragePort`
+- Port interfaces: `KeyValueStoragePort`, `ObjectStoragePort`, `ObjectListStoragePort`
 - Firebase adapters implement ports with SSE streaming
 
 ### 6. UI Layer

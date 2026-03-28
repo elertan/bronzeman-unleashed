@@ -1,6 +1,5 @@
 package com.elertan.remote.local;
 
-import com.elertan.remote.KeyListStoragePort;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.ObjectStoragePort;
 import com.google.gson.Gson;
@@ -16,7 +15,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -346,87 +344,6 @@ public final class LocalStorageAdapters {
         }
     }
 
-    public static final class InMemoryKeyListStorageAdapter<K, V> implements KeyListStoragePort<K, V> {
-
-        private final ConcurrentHashMap<K, ConcurrentHashMap<String, V>> cache = new ConcurrentHashMap<>();
-        private final ConcurrentLinkedQueue<Listener<K, V>> listeners = new ConcurrentLinkedQueue<>();
-
-        @Override
-        public CompletableFuture<Map<String, V>> read(K key) {
-            Map<String, V> innerMap = cache.get(key);
-            if (innerMap == null) {
-                return CompletableFuture.completedFuture(Collections.emptyMap());
-            }
-            return CompletableFuture.completedFuture(new HashMap<>(innerMap));
-        }
-
-        @Override
-        public CompletableFuture<Map<K, Map<String, V>>> readAll() {
-            Map<K, Map<String, V>> snapshot = new HashMap<>();
-            for (Map.Entry<K, ConcurrentHashMap<String, V>> entry : cache.entrySet()) {
-                snapshot.put(entry.getKey(), new HashMap<>(entry.getValue()));
-            }
-            return CompletableFuture.completedFuture(snapshot);
-        }
-
-        @Override
-        public CompletableFuture<String> add(K key, V value) {
-            String entryKey = UUID.randomUUID().toString();
-            cache.computeIfAbsent(key, ignored -> new ConcurrentHashMap<>()).put(entryKey, value);
-            notifyKeyListListeners(
-                listeners,
-                listener -> listener.onAdd(key, entryKey, value),
-                "In-memory key-list listener failed during add"
-            );
-            return CompletableFuture.completedFuture(entryKey);
-        }
-
-        @Override
-        public CompletableFuture<Void> removeOne(K key) {
-            ConcurrentHashMap<String, V> innerMap = cache.get(key);
-            if (innerMap == null || innerMap.isEmpty()) {
-                return CompletableFuture.completedFuture(null);
-            }
-
-            String entryKey = innerMap.keys().nextElement();
-            return remove(key, entryKey);
-        }
-
-        @Override
-        public CompletableFuture<Void> remove(K key, String entryKey) {
-            ConcurrentHashMap<String, V> innerMap = cache.get(key);
-            if (innerMap != null) {
-                innerMap.remove(entryKey);
-                if (innerMap.isEmpty()) {
-                    cache.remove(key);
-                }
-            }
-
-            notifyKeyListListeners(
-                listeners,
-                listener -> listener.onRemove(key, entryKey),
-                "In-memory key-list listener failed during remove"
-            );
-            return CompletableFuture.completedFuture(null);
-        }
-
-        @Override
-        public void addListener(Listener<K, V> listener) {
-            listeners.add(listener);
-        }
-
-        @Override
-        public void removeListener(Listener<K, V> listener) {
-            listeners.remove(listener);
-        }
-
-        @Override
-        public void close() {
-            listeners.clear();
-            cache.clear();
-        }
-    }
-
     private static ExecutorService newSingleThreadExecutor(String label) {
         return Executors.newSingleThreadExecutor(new ThreadFactory() {
             @Override
@@ -449,10 +366,6 @@ public final class LocalStorageAdapters {
         void accept(ObjectStoragePort.Listener<T> listener);
     }
 
-    private interface KeyListListenerAction<K, V> {
-        void accept(KeyListStoragePort.Listener<K, V> listener);
-    }
-
     private static <K, V> void notifyKeyValueListeners(
         Iterable<KeyValueStoragePort.Listener<K, V>> listeners,
         KeyValueListenerAction<K, V> action,
@@ -473,20 +386,6 @@ public final class LocalStorageAdapters {
         String errorMessage
     ) {
         for (ObjectStoragePort.Listener<T> listener : listeners) {
-            try {
-                action.accept(listener);
-            } catch (Exception e) {
-                log.error(errorMessage, e);
-            }
-        }
-    }
-
-    private static <K, V> void notifyKeyListListeners(
-        Iterable<KeyListStoragePort.Listener<K, V>> listeners,
-        KeyListListenerAction<K, V> action,
-        String errorMessage
-    ) {
-        for (KeyListStoragePort.Listener<K, V> listener : listeners) {
             try {
                 action.accept(listener);
             } catch (Exception e) {

@@ -28,7 +28,7 @@ public abstract class AbstractDataProvider implements BUPluginLifecycle {
 | `MembersDataProvider` | `data/MembersDataProvider.java` | Group members | `KeyValueStoragePort<String, Member>` |
 | `GameRulesDataProvider` | `data/GameRulesDataProvider.java` | Game rules | `ObjectStoragePort<GameRules>` |
 | `LastEventDataProvider` | `data/LastEventDataProvider.java` | Recent events | `ObjectListStoragePort<BUEvent>` |
-| `GroundItemOwnedByDataProvider` | `data/GroundItemOwnedByDataProvider.java` | Ground item ownership | `KeyListStoragePort<GroundItemOwnedByKey>` |
+| `GroundItemOwnedByDataProvider` | `data/GroundItemOwnedByDataProvider.java` | Ground item ownership (one object per pile) | `KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData>` |
 
 ## Lifecycle
 

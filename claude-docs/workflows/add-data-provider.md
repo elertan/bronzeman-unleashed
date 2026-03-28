@@ -11,7 +11,6 @@ Location: `src/main/java/com.elertan/remote/firebase/storageAdapters/MyFirebaseS
 Choose base class based on data structure:
 - `FirebaseKeyValueStorageAdapterBase<K, V>` - Map of key-value pairs
 - `FirebaseObjectStorageAdapterBase<T>` - Single object
-- `FirebaseKeyListStorageAdapterBase<K>` - Set of keys
 - `FirebaseObjectListStorageAdapterBase<T>` - List of objects
 
 Example (KeyValue):
