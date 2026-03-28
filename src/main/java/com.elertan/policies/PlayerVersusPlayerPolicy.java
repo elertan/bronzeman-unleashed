@@ -228,7 +228,7 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
             playerName
         );
 
-        return groundItemOwnedByDataProvider.addEntry(key, data)
+        return groundItemOwnedByDataProvider.updatePile(key, data)
             .thenApply(__ -> null);
     }
 

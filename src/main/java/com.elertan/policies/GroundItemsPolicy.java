@@ -95,15 +95,15 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     public void startUp() throws Exception {
         groundItemOwnedByDataProviderListener = new GroundItemOwnedByDataProvider.Listener() {
             @Override
-            public void onReadAll(ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map) {
+            public void onReadAll(ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map) {
             }
 
             @Override
-            public void onAdd(GroundItemOwnedByKey key, String entryKey, GroundItemOwnedByData value) {
+            public void onUpdate(GroundItemOwnedByKey key, GroundItemOwnedByData value) {
             }
 
             @Override
-            public void onRemove(GroundItemOwnedByKey key, String entryKey) {
+            public void onDelete(GroundItemOwnedByKey key) {
             }
         };
         groundItemOwnedByDataProvider.addMapListener(groundItemOwnedByDataProviderListener);
@@ -155,7 +155,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         int itemId = tileItem.getId();
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
 
-        ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap
+        ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap
             = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
             log.warn("Ground item spawned for me but groundItemOwnedByMap is null");
@@ -173,10 +173,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             null
         );
 
-        groundItemOwnedByDataProvider.addEntry(key, newGroundItemOwnedByData)
+        groundItemOwnedByDataProvider.updatePile(key, newGroundItemOwnedByData)
             .whenComplete((result, throwable) -> {
                 if (throwable != null) {
-                    log.error("GroundItemOwnedByDataProvider addEntry failed", throwable);
+                    log.error("GroundItemOwnedByDataProvider updatePile failed", throwable);
                 }
             });
     }
@@ -246,15 +246,18 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             long despawnTimeTicks = tileItem.getDespawnTime() - client.getTickCount();
             Duration despawnDuration = TickUtils.ticksToDuration(despawnTimeTicks);
             OffsetDateTime despawnsAt = OffsetDateTime.now().plus(despawnDuration);
+            GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
+            int baseQty = existing == null ? 0 : existing.getQuantityOrDefaultOne();
+            int mergedQty = baseQty + delta;
             GroundItemOwnedByData data = new GroundItemOwnedByData(
                 client.getAccountHash(),
                 new ISOOffsetDateTime(despawnsAt),
-                delta,
-                null
+                mergedQty,
+                existing != null ? existing.getDroppedByPlayerName() : null
             );
-            groundItemOwnedByDataProvider.addEntry(key, data).whenComplete((result, throwable) -> {
+            groundItemOwnedByDataProvider.updatePile(key, data).whenComplete((result, throwable) -> {
                 if (throwable != null) {
-                    log.error("GroundItemOwnedByDataProvider addEntry failed", throwable);
+                    log.error("GroundItemOwnedByDataProvider updatePile failed", throwable);
                 }
             });
             return;
@@ -439,7 +442,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
-        ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap
+        ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap
             = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
             boolean mustPerformCheck =
@@ -458,30 +461,26 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                     && context.getGameRules().isRestrictPlayerVersusPlayerLoot());
 
             if (mustPerformPlayerVersusPlayerCheck) {
-                ConcurrentHashMap<String, GroundItemOwnedByData> entries = groundItemOwnedByDataProvider.getEntries(key);
-                if (entries != null) {
-                    for (GroundItemOwnedByData data : entries.values()) {
-                        String droppedByPlayerName = data.getDroppedByPlayerName();
-                        if (droppedByPlayerName != null) {
-                            log.debug(
-                                "Performing player versus player loot check for item '{}' dropped by {}",
-                                itemId,
-                                droppedByPlayerName
-                            );
+                GroundItemOwnedByData pile = groundItemOwnedByDataProvider.getPile(key);
+                if (pile != null) {
+                    String droppedByPlayerName = pile.getDroppedByPlayerName();
+                    if (droppedByPlayerName != null) {
+                        log.debug(
+                            "Performing player versus player loot check for item '{}' dropped by {}",
+                            itemId,
+                            droppedByPlayerName
+                        );
 
-                            Member member = null;
-                            try {
-                                member = memberService.getMemberByName(droppedByPlayerName);
-                            } catch (Exception ignored) {
-                            }
-                            if (member != null) {
-                                log.debug("Player '{}' is part of our group, allow take", droppedByPlayerName);
-                                continue;
-                            }
-
+                        Member member = null;
+                        try {
+                            member = memberService.getMemberByName(droppedByPlayerName);
+                        } catch (Exception ignored) {
+                        }
+                        if (member == null) {
                             log.debug("Player '{}' is not part of our group, deny take", droppedByPlayerName);
                             return EligibilityDecision.deny(MessageKey.PLAYER_VERSUS_PLAYER_LOOT_RESTRICTION);
                         }
+                        log.debug("Player '{}' is part of our group, allow take", droppedByPlayerName);
                     }
                 }
             }
@@ -572,7 +571,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     // Called from scheduler thread - must use clientThread.invoke() for client access
     private void cleanupExpiredGroundItems() {
         clientThread.invoke(() -> {
-            ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map
+            ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map
                 = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
             if (map == null || map.isEmpty()) {
                 return;
@@ -581,31 +580,26 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             OffsetDateTime now = OffsetDateTime.now();
             long accountHash = client.getAccountHash();
 
-            for (Map.Entry<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> keyEntry : map.entrySet()) {
+            for (Map.Entry<GroundItemOwnedByKey, GroundItemOwnedByData> keyEntry : map.entrySet()) {
                 GroundItemOwnedByKey key = keyEntry.getKey();
-                ConcurrentHashMap<String, GroundItemOwnedByData> entries = keyEntry.getValue();
-                if (entries == null) {
+                GroundItemOwnedByData data = keyEntry.getValue();
+                if (data == null) {
+                    continue;
+                }
+                if (data.getAccountHash() != accountHash) {
+                    continue;
+                }
+                if (data.getDespawnsAt().getValue().isAfter(now)) {
                     continue;
                 }
 
-                for (Map.Entry<String, GroundItemOwnedByData> entry : entries.entrySet()) {
-                    String entryKey = entry.getKey();
-                    GroundItemOwnedByData data = entry.getValue();
-                    if (data.getAccountHash() != accountHash) {
-                        continue;
-                    }
-                    if (data.getDespawnsAt().getValue().isAfter(now)) {
-                        continue;
-                    }
+                log.debug("Cleaning up expired ground item {}", key);
 
-                    log.debug("Cleaning up expired ground item {} entry {}", key, entryKey);
-
-                    groundItemOwnedByDataProvider.removeEntry(key, entryKey).whenComplete((result, throwable) -> {
-                        if (throwable != null) {
-                            log.error("Failed to clean up expired ground item {} entry {}", key, entryKey, throwable);
-                        }
-                    });
-                }
+                groundItemOwnedByDataProvider.deletePile(key).whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        log.error("Failed to clean up expired ground item {}", key, throwable);
+                    }
+                });
             }
         });
     }
@@ -613,7 +607,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private void cleanupExpiredGroundItemsForEveryone() {
         log.debug("Cleaning up expired ground items for everyone");
 
-        ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map
+        ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map
             = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (map == null || map.isEmpty()) {
             log.debug("Ground item owned by map is empty, nothing to clean up");
@@ -622,33 +616,27 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         OffsetDateTime now = OffsetDateTime.now();
 
-        for (Map.Entry<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> keyEntry : map.entrySet()) {
+        for (Map.Entry<GroundItemOwnedByKey, GroundItemOwnedByData> keyEntry : map.entrySet()) {
             GroundItemOwnedByKey key = keyEntry.getKey();
-            ConcurrentHashMap<String, GroundItemOwnedByData> entries = keyEntry.getValue();
-            if (entries == null) {
+            GroundItemOwnedByData data = keyEntry.getValue();
+            if (data == null) {
+                continue;
+            }
+            if (data.getDespawnsAt().getValue().isAfter(now)) {
                 continue;
             }
 
-            for (Map.Entry<String, GroundItemOwnedByData> entry : entries.entrySet()) {
-                String entryKey = entry.getKey();
-                GroundItemOwnedByData data = entry.getValue();
-                if (data.getDespawnsAt().getValue().isAfter(now)) {
-                    continue;
+            log.debug(
+                "Cleaning up expired ground item {} for account hash: {}",
+                key,
+                data.getAccountHash()
+            );
+
+            groundItemOwnedByDataProvider.deletePile(key).whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    log.error("Failed to clean up expired ground item {}", key, throwable);
                 }
-
-                log.debug(
-                    "Cleaning up expired ground item {} entry {} for account hash: {}",
-                    key,
-                    entryKey,
-                    data.getAccountHash()
-                );
-
-                groundItemOwnedByDataProvider.removeEntry(key, entryKey).whenComplete((result, throwable) -> {
-                    if (throwable != null) {
-                        log.error("Failed to clean up expired ground item {} entry {}", key, entryKey, throwable);
-                    }
-                });
-            }
+            });
         }
     }
 
