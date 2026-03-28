@@ -56,7 +56,7 @@ public class StorageService implements BUPluginLifecycle {
     @Getter
     private ObjectListStoragePort<BUEvent> lastEventStoragePort;
     @Getter
-    private KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
+    private KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
 
     @Inject
     public StorageService(

@@ -2,12 +2,11 @@ package com.elertan.data;
 
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
-import com.elertan.remote.KeyListStoragePort;
+import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.StorageService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -23,11 +22,14 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
     @Inject
     private StorageService storageService;
 
-    private KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> storagePort;
-    private KeyListStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData> storagePortListener;
+    private KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> storagePort;
+    private KeyValueStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData> storagePortListener;
 
+    /**
+     * One {@link GroundItemOwnedByData} per {@link GroundItemOwnedByKey} (one Firebase object per pile).
+     */
     @Getter
-    private ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> groundItemOwnedByMap;
+    private ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap;
 
     @Override
     protected StorageService getStorageService() {
@@ -36,12 +38,12 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
 
     @Override
     public void startUp() throws Exception {
-        storagePortListener = new KeyListStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData>() {
+        storagePortListener = new KeyValueStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData>() {
             @Override
-            public void onFullUpdate(Map<GroundItemOwnedByKey, Map<String, GroundItemOwnedByData>> map) {
+            public void onFullUpdate(Map<GroundItemOwnedByKey, GroundItemOwnedByData> map) {
                 groundItemOwnedByMap = new ConcurrentHashMap<>();
-                for (Map.Entry<GroundItemOwnedByKey, Map<String, GroundItemOwnedByData>> entry : map.entrySet()) {
-                    groundItemOwnedByMap.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
+                if (map != null) {
+                    groundItemOwnedByMap.putAll(map);
                 }
 
                 for (Listener listener : mapListeners) {
@@ -54,18 +56,16 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             }
 
             @Override
-            public void onAdd(GroundItemOwnedByKey key, String entryKey, GroundItemOwnedByData value) {
+            public void onUpdate(GroundItemOwnedByKey key, GroundItemOwnedByData value) {
                 if (groundItemOwnedByMap == null) {
                     return;
                 }
 
-                ConcurrentHashMap<String, GroundItemOwnedByData> innerMap =
-                    groundItemOwnedByMap.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
-                innerMap.put(entryKey, value);
+                groundItemOwnedByMap.put(key, value);
 
                 for (Listener listener : mapListeners) {
                     try {
-                        listener.onAdd(key, entryKey, value);
+                        listener.onUpdate(key, value);
                     } catch (Exception e) {
                         log.error("Error while notifying listener on GroundItemOwnedByDataProvider.", e);
                     }
@@ -73,22 +73,16 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             }
 
             @Override
-            public void onRemove(GroundItemOwnedByKey key, String entryKey) {
+            public void onDelete(GroundItemOwnedByKey key) {
                 if (groundItemOwnedByMap == null) {
                     return;
                 }
 
-                ConcurrentHashMap<String, GroundItemOwnedByData> innerMap = groundItemOwnedByMap.get(key);
-                if (innerMap != null) {
-                    innerMap.remove(entryKey);
-                    if (innerMap.isEmpty()) {
-                        groundItemOwnedByMap.remove(key);
-                    }
-                }
+                groundItemOwnedByMap.remove(key);
 
                 for (Listener listener : mapListeners) {
                     try {
-                        listener.onRemove(key, entryKey);
+                        listener.onDelete(key);
                     } catch (Exception e) {
                         log.error("Error while notifying listener on GroundItemOwnedByDataProvider.", e);
                     }
@@ -110,8 +104,8 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             }
 
             groundItemOwnedByMap = new ConcurrentHashMap<>();
-            for (Map.Entry<GroundItemOwnedByKey, Map<String, GroundItemOwnedByData>> entry : map.entrySet()) {
-                groundItemOwnedByMap.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
+            if (map != null) {
+                groundItemOwnedByMap.putAll(map);
             }
             setState(State.Ready);
         });
@@ -139,64 +133,43 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
         mapListeners.remove(listener);
     }
 
-    public CompletableFuture<String> addEntry(GroundItemOwnedByKey key, GroundItemOwnedByData data) {
-        if (storagePort == null) {
-            CompletableFuture<String> future = new CompletableFuture<>();
-            future.completeExceptionally(new IllegalStateException("storagePort is null"));
-            return future;
-        }
-
-        return storagePort.add(key, data);
-    }
-
-    public CompletableFuture<Void> removeOneEntry(GroundItemOwnedByKey key) {
+    public CompletableFuture<Void> updatePile(GroundItemOwnedByKey key, GroundItemOwnedByData data) {
         if (storagePort == null) {
             CompletableFuture<Void> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("storagePort is null"));
             return future;
         }
 
-        return storagePort.removeOne(key);
+        return storagePort.update(key, data);
     }
 
-    public CompletableFuture<Void> removeEntry(GroundItemOwnedByKey key, String entryKey) {
+    public CompletableFuture<Void> deletePile(GroundItemOwnedByKey key) {
         if (storagePort == null) {
             CompletableFuture<Void> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("storagePort is null"));
             return future;
         }
 
-        return storagePort.remove(key, entryKey);
+        return storagePort.delete(key);
     }
 
-    public boolean hasEntries(GroundItemOwnedByKey key) {
-        if (groundItemOwnedByMap == null) {
-            return false;
-        }
-        ConcurrentHashMap<String, GroundItemOwnedByData> innerMap = groundItemOwnedByMap.get(key);
-        return innerMap != null && !innerMap.isEmpty();
-    }
-
-    public ConcurrentHashMap<String, GroundItemOwnedByData> getEntries(GroundItemOwnedByKey key) {
+    public GroundItemOwnedByData getPile(GroundItemOwnedByKey key) {
         if (groundItemOwnedByMap == null) {
             return null;
         }
         return groundItemOwnedByMap.get(key);
     }
 
+    public boolean hasEntries(GroundItemOwnedByKey key) {
+        return getPile(key) != null;
+    }
+
     public int getTotalOwnedQuantity(GroundItemOwnedByKey key) {
-        ConcurrentHashMap<String, GroundItemOwnedByData> entries = getEntries(key);
-        if (entries == null || entries.isEmpty()) {
+        GroundItemOwnedByData data = getPile(key);
+        if (data == null) {
             return 0;
         }
-        int total = 0;
-        for (GroundItemOwnedByData data : entries.values()) {
-            if (data == null) {
-                continue;
-            }
-            total += data.getQuantityOrDefaultOne();
-        }
-        return total;
+        return data.getQuantityOrDefaultOne();
     }
 
     public CompletableFuture<Void> consumeQuantity(GroundItemOwnedByKey key, int quantity) {
@@ -209,55 +182,32 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             return future;
         }
 
-        ConcurrentHashMap<String, GroundItemOwnedByData> entries = getEntries(key);
-        if (entries == null || entries.isEmpty()) {
+        GroundItemOwnedByData current = getPile(key);
+        if (current == null) {
             return CompletableFuture.completedFuture(null);
         }
 
-        int remaining = quantity;
-        CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
-        for (Entry<String, GroundItemOwnedByData> entry : entries.entrySet()) {
-            if (remaining <= 0) {
-                break;
-            }
-
-            String entryKey = entry.getKey();
-            GroundItemOwnedByData data = entry.getValue();
-            if (data == null) {
-                continue;
-            }
-
-            int entryQty = data.getQuantityOrDefaultOne();
-            if (entryQty <= 0) {
-                continue;
-            }
-
-            if (entryQty <= remaining) {
-                remaining -= entryQty;
-                chain = chain.thenCompose(__ -> removeEntry(key, entryKey));
-                continue;
-            }
-
-            int leftoverQty = entryQty - remaining;
-            remaining = 0;
-            GroundItemOwnedByData replacement = new GroundItemOwnedByData(
-                data.getAccountHash(),
-                data.getDespawnsAt(),
-                leftoverQty,
-                data.getDroppedByPlayerName()
-            );
-
-            chain = chain
-                .thenCompose(__ -> removeEntry(key, entryKey))
-                .thenCompose(__ -> addEntry(key, replacement).thenApply(___ -> null));
+        int entryQty = current.getQuantityOrDefaultOne();
+        int newQty = Math.max(0, entryQty - quantity);
+        if (newQty <= 0) {
+            return storagePort.delete(key);
         }
 
-        return chain;
+        GroundItemOwnedByData replacement = new GroundItemOwnedByData(
+            current.getAccountHash(),
+            current.getDespawnsAt(),
+            newQty,
+            current.getDroppedByPlayerName()
+        );
+
+        return storagePort.update(key, replacement);
     }
 
     public interface Listener {
-        void onReadAll(ConcurrentHashMap<GroundItemOwnedByKey, ConcurrentHashMap<String, GroundItemOwnedByData>> map);
-        void onAdd(GroundItemOwnedByKey key, String entryKey, GroundItemOwnedByData value);
-        void onRemove(GroundItemOwnedByKey key, String entryKey);
+        void onReadAll(ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map);
+
+        void onUpdate(GroundItemOwnedByKey key, GroundItemOwnedByData value);
+
+        void onDelete(GroundItemOwnedByKey key);
     }
 }

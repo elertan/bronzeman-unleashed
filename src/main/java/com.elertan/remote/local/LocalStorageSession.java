@@ -6,7 +6,6 @@ import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.Member;
 import com.elertan.models.UnlockedItem;
-import com.elertan.remote.KeyListStoragePort;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.ObjectListStoragePort;
 import com.elertan.remote.ObjectStoragePort;
@@ -30,7 +29,7 @@ public class LocalStorageSession implements StorageSession {
     private final KeyValueStoragePort<Integer, UnlockedItem> unlockedItemsStoragePort;
     private final ObjectStoragePort<GameRules> gameRulesStoragePort;
     private final ObjectListStoragePort<BUEvent> lastEventStoragePort;
-    private final KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
+    private final KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
 
     public LocalStorageSession(Gson gson, long accountHash) {
         Path accountStorageDirectory = getAccountStorageDir(accountHash);
@@ -50,7 +49,7 @@ public class LocalStorageSession implements StorageSession {
             GameRules.class
         );
         membersStoragePort = new LocalStorageAdapters.InMemoryKeyValueStorageAdapter<>();
-        groundItemOwnedByStoragePort = new LocalStorageAdapters.InMemoryKeyListStorageAdapter<>();
+        groundItemOwnedByStoragePort = new LocalStorageAdapters.InMemoryKeyValueStorageAdapter<>();
         lastEventStoragePort = new NoOpAdapters.NoOpObjectListStorageAdapter<>();
     }
 
@@ -106,7 +105,7 @@ public class LocalStorageSession implements StorageSession {
     }
 
     @Override
-    public KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> getGroundItemOwnedByStoragePort() {
+    public KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> getGroundItemOwnedByStoragePort() {
         return groundItemOwnedByStoragePort;
     }
 

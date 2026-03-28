@@ -17,5 +17,5 @@ public interface StorageSession extends AutoCloseable {
 
     ObjectListStoragePort<BUEvent> getLastEventStoragePort();
 
-    KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> getGroundItemOwnedByStoragePort();
+    KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> getGroundItemOwnedByStoragePort();
 }
