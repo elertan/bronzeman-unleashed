@@ -167,7 +167,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         OffsetDateTime despawnsAt = OffsetDateTime.now().plus(despawnDuration);
         int spawnedQty = Math.max(1, tileItem.getQuantity());
         GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
-        int mergedQty = (existing == null ? 0 : existing.getQuantityOrDefaultOne()) + spawnedQty;
+        // Visible stack size is authoritative: RuneLite may re-fire ItemSpawned after a new scene or group member login 
+        int mergedQty = spawnedQty;
         GroundItemOwnedByData newGroundItemOwnedByData = new GroundItemOwnedByData(
             client.getAccountHash(),
             new ISOOffsetDateTime(despawnsAt),
@@ -249,8 +250,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             Duration despawnDuration = TickUtils.ticksToDuration(despawnTimeTicks);
             OffsetDateTime despawnsAt = OffsetDateTime.now().plus(despawnDuration);
             GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
-            int baseQty = existing == null ? 0 : existing.getQuantityOrDefaultOne();
-            int mergedQty = baseQty + delta;
+            // Match visible stack after the change 
+            int mergedQty = Math.max(1, newQuantity);
             GroundItemOwnedByData data = new GroundItemOwnedByData(
                 client.getAccountHash(),
                 new ISOOffsetDateTime(despawnsAt),
