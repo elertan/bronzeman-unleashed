@@ -166,9 +166,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         Duration despawnDuration = TickUtils.ticksToDuration(despawnTimeTicks);
         OffsetDateTime despawnsAt = OffsetDateTime.now().plus(despawnDuration);
         int spawnedQty = Math.max(1, tileItem.getQuantity());
+        int visibleQty = getVisiblePileQuantity(tile, itemId);
         GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
-        // Visible stack size is authoritative: RuneLite may re-fire ItemSpawned after a new scene or group member login 
-        int mergedQty = spawnedQty;
+        // Use the tile's full visible quantity for this id: supports non-stackable piles (many x1 entries)
+        // and avoids existing+spawned double-counting on scene re-spawns.
+        int mergedQty = visibleQty > 0 ? visibleQty : spawnedQty;
         GroundItemOwnedByData newGroundItemOwnedByData = new GroundItemOwnedByData(
             client.getAccountHash(),
             new ISOOffsetDateTime(despawnsAt),
@@ -190,14 +192,12 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         TileItem tileItem = event.getItem();
-        if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF
-            && tileItem.getOwnership() != TileItem.OWNERSHIP_GROUP) {
-            return;
-        }
         Tile tile = event.getTile();
         int itemId = tileItem.getId();
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
 
+        // Do not gate by TileItem ownership here: group members can loot a tracked pile while seeing
+        // OWNERSHIP_NONE after it becomes public. Pending loot window + tracked quantity gate writes.
         int trackedQty = groundItemOwnedByDataProvider.getTotalOwnedQuantity(key);
         if (trackedQty <= 0) {
             log.debug("gi {} has no tracked quantity, ignore despawn", key);
@@ -250,8 +250,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             Duration despawnDuration = TickUtils.ticksToDuration(despawnTimeTicks);
             OffsetDateTime despawnsAt = OffsetDateTime.now().plus(despawnDuration);
             GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
-            // Match visible stack after the change 
-            int mergedQty = Math.max(1, newQuantity);
+            int visibleQty = getVisiblePileQuantity(tile, itemId);
+            int mergedQty = visibleQty > 0 ? visibleQty : Math.max(1, newQuantity);
             GroundItemOwnedByData data = new GroundItemOwnedByData(
                 client.getAccountHash(),
                 new ISOOffsetDateTime(despawnsAt),
@@ -541,6 +541,20 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             }
         }
         return null;
+    }
+
+    private int getVisiblePileQuantity(Tile tile, int itemId) {
+        if (tile == null || tile.getGroundItems() == null) {
+            return 0;
+        }
+
+        int totalQty = 0;
+        for (TileItem ti : tile.getGroundItems()) {
+            if (ti.getId() == itemId) {
+                totalQty += Math.max(1, ti.getQuantity());
+            }
+        }
+        return totalQty;
     }
 
     private void recordPendingLootAttempt(int itemId, Tile tile) {
