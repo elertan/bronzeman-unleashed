@@ -140,6 +140,9 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             return future;
         }
 
+        if (groundItemOwnedByMap != null) {
+            groundItemOwnedByMap.put(key, data);
+        }
         return storagePort.update(key, data);
     }
 
@@ -150,6 +153,9 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             return future;
         }
 
+        if (groundItemOwnedByMap != null) {
+            groundItemOwnedByMap.remove(key);
+        }
         return storagePort.delete(key);
     }
 
@@ -190,6 +196,9 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
         int entryQty = current.getQuantityOrDefaultOne();
         int newQty = Math.max(0, entryQty - quantity);
         if (newQty <= 0) {
+            if (groundItemOwnedByMap != null) {
+                groundItemOwnedByMap.remove(key);
+            }
             return storagePort.delete(key);
         }
 
@@ -200,6 +209,9 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             current.getDroppedByPlayerName()
         );
 
+        if (groundItemOwnedByMap != null) {
+            groundItemOwnedByMap.put(key, replacement);
+        }
         return storagePort.update(key, replacement);
     }
 

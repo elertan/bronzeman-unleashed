@@ -165,12 +165,14 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         long despawnTimeTicks = tileItem.getDespawnTime() - client.getTickCount();
         Duration despawnDuration = TickUtils.ticksToDuration(despawnTimeTicks);
         OffsetDateTime despawnsAt = OffsetDateTime.now().plus(despawnDuration);
-        int quantity = Math.max(1, tileItem.getQuantity());
+        int spawnedQty = Math.max(1, tileItem.getQuantity());
+        GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
+        int mergedQty = (existing == null ? 0 : existing.getQuantityOrDefaultOne()) + spawnedQty;
         GroundItemOwnedByData newGroundItemOwnedByData = new GroundItemOwnedByData(
             client.getAccountHash(),
             new ISOOffsetDateTime(despawnsAt),
-            quantity,
-            null
+            mergedQty,
+            existing != null ? existing.getDroppedByPlayerName() : null
         );
 
         groundItemOwnedByDataProvider.updatePile(key, newGroundItemOwnedByData)
