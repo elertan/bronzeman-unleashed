@@ -21,6 +21,7 @@ import com.google.inject.Inject;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -53,6 +54,11 @@ import net.runelite.client.callback.ClientThread;
  */
 @Slf4j
 public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
+    /**
+     * Recomputed despawn timestamps can differ slightly even when the pile state is effectively unchanged.
+     * Treat sub-tick drift as equivalent so we skip duplicate Firebase writes.
+     */
+    private static final Duration DESPAWNS_AT_NO_OP_TOLERANCE = TickUtils.ticksToDuration(1);
 
     @Inject
     private Client client;
@@ -455,6 +461,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     /**
      * Create/update tracked shared state using the current visible pile quantity.
      * This keeps remote quantity aligned with scene truth for spawns/increases.
+     * <p>
+     * Multiple clients can observe the same spawn/increase event and attempt the same write.
+     * We short-circuit no-op upserts to reduce write amplification while still allowing real
+     * metadata changes (quantity/owner/despawn window/drop source) to be persisted.
      */
     private void upsertTrackedPileFromVisibleQuantity(
         GroundItemOwnedByKey key,
@@ -474,12 +484,49 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             mergedQty,
             existing != null ? existing.getDroppedByPlayerName() : null
         );
+        // Skip remote update if the tracked state is materially unchanged.
+        if (isNoOpUpsert(existing, replacement)) {
+            return;
+        }
 
         groundItemOwnedByDataProvider.updatePile(key, replacement).whenComplete((result, throwable) -> {
             if (throwable != null) {
                 log.error("GroundItemOwnedByDataProvider updatePile failed", throwable);
             }
         });
+    }
+
+    /**
+     * Returns true when upserting would rewrite effectively the same state.
+     * <p>
+     * Equality intentionally uses a despawn timestamp tolerance because we recompute
+     * "now + remaining ticks" on each event, which can drift by milliseconds.
+     */
+    private boolean isNoOpUpsert(GroundItemOwnedByData existing, GroundItemOwnedByData replacement) {
+        if (existing == null) {
+            return false;
+        }
+        if (existing.getAccountHash() != replacement.getAccountHash()) {
+            return false;
+        }
+        if (existing.getQuantityOrDefaultOne() != replacement.getQuantityOrDefaultOne()) {
+            return false;
+        }
+        if (!Objects.equals(existing.getDroppedByPlayerName(), replacement.getDroppedByPlayerName())) {
+            return false;
+        }
+
+        OffsetDateTime existingDespawnsAt = existing.getDespawnsAt() != null ? existing.getDespawnsAt().getValue() : null;
+        OffsetDateTime replacementDespawnsAt = replacement.getDespawnsAt() != null
+            ? replacement.getDespawnsAt().getValue()
+            : null;
+        if (existingDespawnsAt == null || replacementDespawnsAt == null) {
+            return Objects.equals(existingDespawnsAt, replacementDespawnsAt);
+        }
+
+        // Ignore sub-tick drift from recomputing "now + remaining ticks".
+        Duration delta = Duration.between(existingDespawnsAt, replacementDespawnsAt).abs();
+        return delta.compareTo(DESPAWNS_AT_NO_OP_TOLERANCE) < 0;
     }
 
     /**
