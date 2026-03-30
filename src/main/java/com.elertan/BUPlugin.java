@@ -273,7 +273,6 @@ public final class BUPlugin extends Plugin {
         buChatService.onGameTick(event);
         petDropService.onGameTick(event);
         collectionLogService.onGameTick(event);
-        groundItemsPolicy.onGameTick(event);
     }
 
     @Subscribe

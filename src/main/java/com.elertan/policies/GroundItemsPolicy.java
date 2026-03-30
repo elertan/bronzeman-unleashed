@@ -37,7 +37,6 @@ import net.runelite.api.Tile;
 import net.runelite.api.TileItem;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldPoint;
-import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemDespawned;
 import net.runelite.api.events.ItemQuantityChanged;
 import net.runelite.api.events.ItemSpawned;
@@ -72,7 +71,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     @Inject
     private MinigameService minigameService;
 
-    private GroundItemOwnedByDataProvider.Listener groundItemOwnedByDataProviderListener;
     private ScheduledExecutorService scheduler;
 
     @Inject
@@ -84,21 +82,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     @Override
     public void startUp() throws Exception {
-        groundItemOwnedByDataProviderListener = new GroundItemOwnedByDataProvider.Listener() {
-            @Override
-            public void onReadAll(ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map) {
-            }
-
-            @Override
-            public void onUpdate(GroundItemOwnedByKey key, GroundItemOwnedByData value) {
-            }
-
-            @Override
-            public void onDelete(GroundItemOwnedByKey key) {
-            }
-        };
-        groundItemOwnedByDataProvider.addMapListener(groundItemOwnedByDataProviderListener);
-
         scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(this::cleanupExpiredGroundItems, 10, 10, TimeUnit.SECONDS);
 
@@ -114,13 +97,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     @Override
     public void shutDown() throws Exception {
-        groundItemOwnedByDataProvider.removeMapListener(groundItemOwnedByDataProviderListener);
-
         scheduler.shutdownNow();
-    }
-
-    public void onGameTick(GameTick event) {
-        // No per-tick local loot state to maintain.
     }
 
     public void onItemSpawned(ItemSpawned event) {
@@ -134,11 +111,14 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         TileItem tileItem = event.getItem();
+        Tile tile = event.getTile();
+        if (tileItem == null || tile == null) {
+            return;
+        }
         if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF
             && tileItem.getOwnership() != TileItem.OWNERSHIP_GROUP) {
             return;
         }
-        Tile tile = event.getTile();
         int itemId = tileItem.getId();
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
 
@@ -182,6 +162,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         TileItem tileItem = event.getItem();
         Tile tile = event.getTile();
+        if (tileItem == null || tile == null) {
+            return;
+        }
         int itemId = tileItem.getId();
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
 
@@ -469,6 +452,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return totalQty;
     }
 
+    /**
+     * Create/update tracked shared state using the current visible pile quantity.
+     * This keeps remote quantity aligned with scene truth for spawns/increases.
+     */
     private void upsertTrackedPileFromVisibleQuantity(
         GroundItemOwnedByKey key,
         Tile tile,
@@ -495,6 +482,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         });
     }
 
+    /**
+     * Reconcile tracked shared state to what is currently visible on the tile.
+     * Used for despawns/decreases so clients converge on the same absolute quantity.
+     */
     private void syncTrackedPileToVisibleQuantity(GroundItemOwnedByKey key, Tile tile, int itemId) {
         GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
         if (existing == null) {
