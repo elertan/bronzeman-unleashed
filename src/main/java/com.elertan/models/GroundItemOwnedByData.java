@@ -2,6 +2,7 @@ package com.elertan.models;
 
 import com.elertan.gson.AccountHashJsonAdapter;
 import com.google.gson.annotations.JsonAdapter;
+import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NonNull;
@@ -30,6 +31,40 @@ public class GroundItemOwnedByData {
     private Long writeVersion;
 
     /**
+     * Short-lived lease used to arbitrate contested take updates in shared piles.
+     */
+    private Long takeClaimedByAccountHash;
+
+    /**
+     * Expiry for the active take claim lease.
+     */
+    private ISOOffsetDateTime takeClaimExpiresAt;
+
+    /**
+     * Client-generated claim id for diagnostics and optional matching.
+     */
+    private String takeClaimId;
+
+    public GroundItemOwnedByData(
+        long accountHash,
+        ISOOffsetDateTime despawnsAt,
+        Integer quantity,
+        String droppedByPlayerName,
+        Long writeVersion
+    ) {
+        this(
+            accountHash,
+            despawnsAt,
+            quantity,
+            droppedByPlayerName,
+            writeVersion,
+            null,
+            null,
+            null
+        );
+    }
+
+    /**
      * Bronzeman entitled count for policy and storage math. {@code null} still means 1 (legacy JSON);
      * explicit {@code 0} is allowed so a row can remain while blocking further loot after quota is met.
      */
@@ -43,5 +78,19 @@ public class GroundItemOwnedByData {
 
     public long getWriteVersionOrZero() {
         return writeVersion == null ? 0L : writeVersion;
+    }
+
+    public boolean hasActiveTakeClaimForAccount(long accountHash, OffsetDateTime now) {
+        if (takeClaimedByAccountHash == null || takeClaimExpiresAt == null || now == null) {
+            return false;
+        }
+        return takeClaimedByAccountHash == accountHash && takeClaimExpiresAt.getValue().isAfter(now);
+    }
+
+    public boolean hasAnyActiveTakeClaim(OffsetDateTime now) {
+        if (takeClaimedByAccountHash == null || takeClaimExpiresAt == null || now == null) {
+            return false;
+        }
+        return takeClaimExpiresAt.getValue().isAfter(now);
     }
 }

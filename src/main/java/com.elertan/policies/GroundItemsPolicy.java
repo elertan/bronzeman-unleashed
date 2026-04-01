@@ -21,6 +21,8 @@ import com.google.inject.Inject;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -65,6 +67,8 @@ import net.runelite.client.callback.ClientThread;
 @Slf4j
 public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private static final int TAKE_INTENT_TICKS = 3;
+    private static final int DROP_INTENT_TICKS = 8;
+    private static final Duration TAKE_CLAIM_LEASE_DURATION = Duration.ofMillis(1800);
 
     @Inject
     private Client client;
@@ -86,7 +90,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private ScheduledExecutorService scheduler;
     private final ConcurrentHashMap<GroundItemOwnedByKey, Integer> pendingTakeIntentUntilTickByKey
         = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Integer, Integer> pendingDropIntentUntilTickByItemId
+    private final ConcurrentHashMap<GroundItemOwnedByKey, ActiveTakeClaim> activeTakeClaimsByKey
+        = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, PendingDropIntent> pendingDropIntentByItemId
         = new ConcurrentHashMap<>();
 
     @Inject
@@ -123,9 +129,14 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
         int itemId = tileItem.getId();
-        if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF
-            && tileItem.getOwnership() != TileItem.OWNERSHIP_GROUP) {
-            if (!hasActiveDropIntent(itemId)) {
+        int trustedIncreaseQty;
+        if (tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
+            || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP) {
+            trustedIncreaseQty = Math.max(1, tileItem.getQuantity());
+            consumePendingDropIntentQuantity(itemId, trustedIncreaseQty);
+        } else {
+            trustedIncreaseQty = claimPendingDropIntentQuantity(itemId, Math.max(1, tileItem.getQuantity()));
+            if (trustedIncreaseQty <= 0) {
                 return;
             }
         }
@@ -143,7 +154,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             key,
             tileItem,
             existing,
-            Math.max(1, tileItem.getQuantity())
+            trustedIncreaseQty
         );
     }
 
@@ -193,11 +204,18 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         if (delta > 0) {
             boolean selfOrGroup = tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
                 || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
-            if (!selfOrGroup && !hasActiveDropIntent(itemId)) {
-                return;
+            int trustedIncreaseQty;
+            if (selfOrGroup) {
+                trustedIncreaseQty = delta;
+                consumePendingDropIntentQuantity(itemId, delta);
+            } else {
+                trustedIncreaseQty = claimPendingDropIntentQuantity(itemId, delta);
+                if (trustedIncreaseQty <= 0) {
+                    return;
+                }
             }
             GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
-            upsertTrackedEntitledQuantity(key, tileItem, existing, delta);
+            upsertTrackedEntitledQuantity(key, tileItem, existing, trustedIncreaseQty);
             return;
         }
 
@@ -207,6 +225,13 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         if (!hasActiveTakeIntent(key)) {
             return;
         }
+
+        int tickNow = client.getTickCount();
+        int despawnScheduledTick = tileItem.getDespawnTime();
+        if (!shouldApplyLootDecrementOnDespawn(despawnScheduledTick, tickNow)) {
+            return;
+        }
+
         consumeTrackedQuantity(key, Math.abs(delta), "quantity-changed");
     }
 
@@ -579,11 +604,26 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
         int untilTick = client.getTickCount() + TAKE_INTENT_TICKS;
         pendingTakeIntentUntilTickByKey.put(key, untilTick);
+
+        acquireTakeClaim(key, client.getAccountHash()).whenComplete((acquired, throwable) -> {
+            if (throwable != null) {
+                log.debug("Failed pre-acquiring take claim for {}", key, throwable);
+            }
+        });
     }
 
     private void registerDropIntent(int itemId) {
-        int untilTick = client.getTickCount() + TAKE_INTENT_TICKS;
-        pendingDropIntentUntilTickByItemId.put(itemId, untilTick);
+        int now = client.getTickCount();
+        int untilTick = now + DROP_INTENT_TICKS;
+        pendingDropIntentByItemId.compute(itemId, (id, pending) -> {
+            if (pending == null || now > pending.getUntilTick()) {
+                return new PendingDropIntent(untilTick, 1);
+            }
+            return new PendingDropIntent(
+                Math.max(untilTick, pending.getUntilTick()),
+                pending.getRemainingQuantity() + 1
+            );
+        });
     }
 
     private boolean hasActiveTakeIntent(GroundItemOwnedByKey key) {
@@ -594,35 +634,169 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         int now = client.getTickCount();
         if (now > untilTick) {
             pendingTakeIntentUntilTickByKey.remove(key, untilTick);
+            activeTakeClaimsByKey.remove(key);
             return false;
         }
         return true;
     }
 
-    private boolean hasActiveDropIntent(int itemId) {
-        Integer untilTick = pendingDropIntentUntilTickByItemId.get(itemId);
-        if (untilTick == null) {
-            return false;
+    private int claimPendingDropIntentQuantity(int itemId, int maxQuantityToClaim) {
+        if (maxQuantityToClaim <= 0) {
+            return 0;
         }
+
         int now = client.getTickCount();
-        if (now > untilTick) {
-            pendingDropIntentUntilTickByItemId.remove(itemId, untilTick);
-            return false;
+        final int[] claimed = {0};
+        pendingDropIntentByItemId.compute(itemId, (id, pending) -> {
+            if (pending == null || now > pending.getUntilTick()) {
+                return null;
+            }
+            claimed[0] = Math.min(maxQuantityToClaim, pending.getRemainingQuantity());
+            int remaining = pending.getRemainingQuantity() - claimed[0];
+            if (remaining <= 0) {
+                return null;
+            }
+            return new PendingDropIntent(pending.getUntilTick(), remaining);
+        });
+        return claimed[0];
+    }
+
+    private void consumePendingDropIntentQuantity(int itemId, int quantity) {
+        if (quantity <= 0) {
+            return;
         }
-        return true;
+        claimPendingDropIntentQuantity(itemId, quantity);
     }
 
     private void consumeTrackedQuantity(GroundItemOwnedByKey key, int removedQty, String reason) {
         if (removedQty <= 0) {
             return;
         }
-        groundItemOwnedByDataProvider.consumeQuantity(key, removedQty).whenComplete((result, throwable) -> {
+
+        long accountHash = client.getAccountHash();
+        ActiveTakeClaim activeClaim = getActiveTakeClaimForAccount(key, accountHash);
+
+        CompletableFuture<Boolean> consumeFuture;
+        if (activeClaim != null) {
+            consumeFuture = groundItemOwnedByDataProvider.consumeQuantityWithTakeClaim(
+                key,
+                removedQty,
+                accountHash,
+                activeClaim.getClaimId()
+            ).thenCompose(consumed -> {
+                if (consumed) {
+                    return CompletableFuture.completedFuture(true);
+                }
+                activeTakeClaimsByKey.remove(key, activeClaim);
+                return consumeWithExistingOrNewClaim(key, removedQty, accountHash);
+            });
+        } else {
+            consumeFuture = consumeWithExistingOrNewClaim(key, removedQty, accountHash);
+        }
+
+        consumeFuture.whenComplete((consumed, throwable) -> {
             if (throwable != null) {
                 log.error("consumeQuantity failed on {} {}", reason, key, throwable);
                 return;
             }
+
+            if (!Boolean.TRUE.equals(consumed)) {
+                log.debug("Skipped consume on {} {} because take claim was unavailable", reason, key);
+                return;
+            }
+
             pendingTakeIntentUntilTickByKey.remove(key);
+            activeTakeClaimsByKey.remove(key);
         });
+    }
+
+    private CompletableFuture<Boolean> consumeWithExistingOrNewClaim(
+        GroundItemOwnedByKey key,
+        int removedQty,
+        long accountHash
+    ) {
+        if (groundItemOwnedByDataProvider.hasActiveTakeClaimForAccount(key, accountHash)) {
+            return groundItemOwnedByDataProvider.consumeQuantityWithTakeClaim(
+                key,
+                removedQty,
+                accountHash,
+                null
+            ).thenCompose(consumed -> {
+                if (consumed) {
+                    return CompletableFuture.completedFuture(true);
+                }
+
+                activeTakeClaimsByKey.remove(key);
+                return acquireTakeClaim(key, accountHash).thenCompose(acquired -> {
+                    if (!acquired) {
+                        return CompletableFuture.completedFuture(false);
+                    }
+
+                    ActiveTakeClaim refreshed = getActiveTakeClaimForAccount(key, accountHash);
+                    if (refreshed == null) {
+                        return CompletableFuture.completedFuture(false);
+                    }
+
+                    return groundItemOwnedByDataProvider.consumeQuantityWithTakeClaim(
+                        key,
+                        removedQty,
+                        accountHash,
+                        refreshed.getClaimId()
+                    );
+                });
+            });
+        }
+
+        return acquireTakeClaim(key, accountHash).thenCompose(acquired -> {
+            if (!acquired) {
+                return CompletableFuture.completedFuture(false);
+            }
+
+            ActiveTakeClaim claim = getActiveTakeClaimForAccount(key, accountHash);
+            if (claim == null) {
+                return CompletableFuture.completedFuture(false);
+            }
+
+            return groundItemOwnedByDataProvider.consumeQuantityWithTakeClaim(
+                key,
+                removedQty,
+                accountHash,
+                claim.getClaimId()
+            );
+        });
+    }
+
+    private CompletableFuture<Boolean> acquireTakeClaim(GroundItemOwnedByKey key, long accountHash) {
+        ActiveTakeClaim existing = getActiveTakeClaimForAccount(key, accountHash);
+        if (existing != null) {
+            return CompletableFuture.completedFuture(true);
+        }
+
+        OffsetDateTime claimExpiresAt = OffsetDateTime.now().plus(TAKE_CLAIM_LEASE_DURATION);
+        ISOOffsetDateTime leaseExpiry = new ISOOffsetDateTime(claimExpiresAt);
+        String claimId = UUID.randomUUID().toString();
+
+        return groundItemOwnedByDataProvider.tryAcquireTakeClaim(key, accountHash, leaseExpiry, claimId)
+            .thenApply(acquired -> {
+                if (!acquired) {
+                    return false;
+                }
+                activeTakeClaimsByKey.put(key, new ActiveTakeClaim(accountHash, claimId, claimExpiresAt));
+                return true;
+            });
+    }
+
+    private ActiveTakeClaim getActiveTakeClaimForAccount(GroundItemOwnedByKey key, long accountHash) {
+        ActiveTakeClaim claim = activeTakeClaimsByKey.get(key);
+        if (claim == null) {
+            return null;
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        if (!claim.isActiveForAccount(accountHash, now)) {
+            activeTakeClaimsByKey.remove(key, claim);
+            return null;
+        }
+        return claim;
     }
 
     /**
@@ -671,6 +845,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                     continue;
                 }
 
+                activeTakeClaimsByKey.remove(key);
+
                 log.debug("Cleaning up expired ground item {}", key);
 
                 groundItemOwnedByDataProvider.deletePile(key).whenComplete((result, throwable) -> {
@@ -711,5 +887,22 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         @NonNull Tile tile;
         @NonNull TileItem tileItem;
+    }
+
+    @Value
+    private static class ActiveTakeClaim {
+        long accountHash;
+        @NonNull String claimId;
+        @NonNull OffsetDateTime expiresAt;
+
+        boolean isActiveForAccount(long expectedAccountHash, OffsetDateTime now) {
+            return accountHash == expectedAccountHash && expiresAt.isAfter(now);
+        }
+    }
+
+    @Value
+    private static class PendingDropIntent {
+        int untilTick;
+        int remainingQuantity;
     }
 }

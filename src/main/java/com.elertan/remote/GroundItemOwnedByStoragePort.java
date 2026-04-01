@@ -2,6 +2,7 @@ package com.elertan.remote;
 
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
+import com.elertan.models.ISOOffsetDateTime;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -13,6 +14,28 @@ public interface GroundItemOwnedByStoragePort extends KeyValueStoragePort<Ground
      * Decrements entitled quantity using compare-and-swap against the latest remote snapshot (no local map read).
      */
     CompletableFuture<Void> transactionalConsumeQuantity(GroundItemOwnedByKey key, int quantity);
+
+    /**
+     * Attempts to acquire/refresh a short-lived take claim lease for a pile.
+     * Returns false when another active claimant currently owns the lease.
+     */
+    CompletableFuture<Boolean> transactionalAcquireTakeClaim(
+        GroundItemOwnedByKey key,
+        long claimantAccountHash,
+        ISOOffsetDateTime claimExpiresAt,
+        String claimId
+    );
+
+    /**
+     * Consumes quantity only when the caller has an active take-claim lease.
+     * Returns false when no valid lease is present.
+     */
+    CompletableFuture<Boolean> transactionalConsumeQuantityWithTakeClaim(
+        GroundItemOwnedByKey key,
+        int quantity,
+        long claimantAccountHash,
+        String expectedClaimId
+    );
 
     /**
      * Atomically increases entitled quantity using the latest remote value:

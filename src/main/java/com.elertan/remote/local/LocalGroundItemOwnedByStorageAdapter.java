@@ -74,7 +74,10 @@ public final class LocalGroundItemOwnedByStorageAdapter implements GroundItemOwn
                     cur.getDespawnsAt(),
                     newQty,
                     cur.getDroppedByPlayerName(),
-                    nextVer
+                    nextVer,
+                    cur.getTakeClaimedByAccountHash(),
+                    cur.getTakeClaimExpiresAt(),
+                    cur.getTakeClaimId()
                 );
                 inner.update(key, next).join();
                 return null;
@@ -100,7 +103,10 @@ public final class LocalGroundItemOwnedByStorageAdapter implements GroundItemOwn
                     mergedDespawn,
                     newQty,
                     droppedBy,
-                    nextVer
+                    nextVer,
+                    cur != null ? cur.getTakeClaimedByAccountHash() : null,
+                    cur != null ? cur.getTakeClaimExpiresAt() : null,
+                    cur != null ? cur.getTakeClaimId() : null
                 );
                 inner.update(key, stamped).join();
                 return null;
@@ -126,6 +132,83 @@ public final class LocalGroundItemOwnedByStorageAdapter implements GroundItemOwn
             synchronized (txLock) {
                 inner.delete(key).join();
                 return null;
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<Boolean> transactionalAcquireTakeClaim(
+        GroundItemOwnedByKey key,
+        long claimantAccountHash,
+        ISOOffsetDateTime claimExpiresAt,
+        String claimId
+    ) {
+        return CompletableFuture.supplyAsync(() -> {
+            synchronized (txLock) {
+                GroundItemOwnedByData cur = inner.read(key).join();
+                if (cur == null) {
+                    return false;
+                }
+                OffsetDateTime now = OffsetDateTime.now();
+                if (cur.hasAnyActiveTakeClaim(now)
+                    && (cur.getTakeClaimedByAccountHash() == null
+                    || cur.getTakeClaimedByAccountHash() != claimantAccountHash)) {
+                    return false;
+                }
+
+                GroundItemOwnedByData next = new GroundItemOwnedByData(
+                    cur.getAccountHash(),
+                    cur.getDespawnsAt(),
+                    cur.getQuantity(),
+                    cur.getDroppedByPlayerName(),
+                    cur.getWriteVersionOrZero() + 1L,
+                    claimantAccountHash,
+                    claimExpiresAt,
+                    claimId
+                );
+                inner.update(key, next).join();
+                return true;
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<Boolean> transactionalConsumeQuantityWithTakeClaim(
+        GroundItemOwnedByKey key,
+        int quantity,
+        long claimantAccountHash,
+        String expectedClaimId
+    ) {
+        return CompletableFuture.supplyAsync(() -> {
+            synchronized (txLock) {
+                GroundItemOwnedByData cur = inner.read(key).join();
+                if (cur == null) {
+                    return false;
+                }
+                OffsetDateTime now = OffsetDateTime.now();
+                if (!cur.hasActiveTakeClaimForAccount(claimantAccountHash, now)) {
+                    return false;
+                }
+                if (expectedClaimId != null
+                    && cur.getTakeClaimId() != null
+                    && !expectedClaimId.equals(cur.getTakeClaimId())) {
+                    return false;
+                }
+
+                int entryQty = cur.getEntitlementQuantity();
+                int newQty = Math.max(0, entryQty - Math.max(1, quantity));
+                GroundItemOwnedByData next = new GroundItemOwnedByData(
+                    cur.getAccountHash(),
+                    cur.getDespawnsAt(),
+                    newQty,
+                    cur.getDroppedByPlayerName(),
+                    cur.getWriteVersionOrZero() + 1L,
+                    null,
+                    null,
+                    null
+                );
+                inner.update(key, next).join();
+                return true;
             }
         });
     }

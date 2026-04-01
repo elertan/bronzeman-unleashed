@@ -2,11 +2,13 @@ package com.elertan.data;
 
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
+import com.elertan.models.ISOOffsetDateTime;
 import com.elertan.remote.GroundItemOwnedByStoragePort;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.StorageService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -212,6 +214,49 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             return 0;
         }
         return data.getEntitlementQuantity();
+    }
+
+    public boolean hasActiveTakeClaimForAccount(GroundItemOwnedByKey key, long accountHash) {
+        GroundItemOwnedByData data = getPile(key);
+        if (data == null) {
+            return false;
+        }
+        return data.hasActiveTakeClaimForAccount(accountHash, OffsetDateTime.now());
+    }
+
+    public CompletableFuture<Boolean> tryAcquireTakeClaim(
+        GroundItemOwnedByKey key,
+        long accountHash,
+        ISOOffsetDateTime claimExpiresAt,
+        String claimId
+    ) {
+        if (storagePort == null) {
+            CompletableFuture<Boolean> future = new CompletableFuture<>();
+            future.completeExceptionally(new IllegalStateException("storagePort is null"));
+            return future;
+        }
+
+        return storagePort.transactionalAcquireTakeClaim(key, accountHash, claimExpiresAt, claimId)
+            .thenCompose(acquired -> syncLocalFromRead(key).thenApply(__ -> acquired));
+    }
+
+    public CompletableFuture<Boolean> consumeQuantityWithTakeClaim(
+        GroundItemOwnedByKey key,
+        int quantity,
+        long accountHash,
+        String expectedClaimId
+    ) {
+        if (quantity <= 0) {
+            return CompletableFuture.completedFuture(true);
+        }
+        if (storagePort == null) {
+            CompletableFuture<Boolean> future = new CompletableFuture<>();
+            future.completeExceptionally(new IllegalStateException("storagePort is null"));
+            return future;
+        }
+
+        return storagePort.transactionalConsumeQuantityWithTakeClaim(key, quantity, accountHash, expectedClaimId)
+            .thenCompose(consumed -> syncLocalFromRead(key).thenApply(__ -> consumed));
     }
 
     public CompletableFuture<Void> consumeQuantity(GroundItemOwnedByKey key, int quantity) {

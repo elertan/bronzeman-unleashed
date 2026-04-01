@@ -58,7 +58,7 @@ public class GroundItemOwnedByKeyValueStorageAdapter
         return tDelta.isAfter(tCur) ? delta.getDespawnsAt() : cur.getDespawnsAt();
     }
 
-    private CompletableFuture<Void> backoffThen(long attempt, java.util.concurrent.CompletableFuture<Void> next) {
+    private <T> CompletableFuture<T> backoffThen(long attempt, java.util.concurrent.CompletableFuture<T> next) {
         if (attempt <= 0) {
             return next;
         }
@@ -66,7 +66,7 @@ public class GroundItemOwnedByKeyValueStorageAdapter
             Thread.sleep(Math.min(40L, 2L + attempt * 2L));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            CompletableFuture<Void> f = new CompletableFuture<>();
+            CompletableFuture<T> f = new CompletableFuture<>();
             f.completeExceptionally(e);
             return f;
         }
@@ -101,7 +101,10 @@ public class GroundItemOwnedByKeyValueStorageAdapter
                 cur.getDespawnsAt(),
                 newQty,
                 cur.getDroppedByPlayerName(),
-                nextVer
+                nextVer,
+                cur.getTakeClaimedByAccountHash(),
+                cur.getTakeClaimExpiresAt(),
+                cur.getTakeClaimId()
             );
             JsonElement json = gson.toJsonTree(next);
             if (etag == null) {
@@ -144,7 +147,10 @@ public class GroundItemOwnedByKeyValueStorageAdapter
                 mergedDespawn,
                 newQty,
                 droppedBy,
-                nextVer
+                nextVer,
+                cur == null ? null : cur.getTakeClaimedByAccountHash(),
+                cur == null ? null : cur.getTakeClaimExpiresAt(),
+                cur == null ? null : cur.getTakeClaimId()
             );
             JsonElement json = firebaseGson().toJsonTree(stamped);
             String etag = snap.getEtag();
@@ -163,6 +169,149 @@ public class GroundItemOwnedByKeyValueStorageAdapter
     @Override
     public CompletableFuture<Void> transactionalDelete(GroundItemOwnedByKey key) {
         return deleteWithRetry(key, 0);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> transactionalAcquireTakeClaim(
+        GroundItemOwnedByKey key,
+        long claimantAccountHash,
+        ISOOffsetDateTime claimExpiresAt,
+        String claimId
+    ) {
+        return acquireTakeClaimWithRetry(key, claimantAccountHash, claimExpiresAt, claimId, 0);
+    }
+
+    private CompletableFuture<Boolean> acquireTakeClaimWithRetry(
+        GroundItemOwnedByKey key,
+        long claimantAccountHash,
+        ISOOffsetDateTime claimExpiresAt,
+        String claimId,
+        int attempt
+    ) {
+        if (attempt >= MAX_CAS_ATTEMPTS) {
+            CompletableFuture<Boolean> f = new CompletableFuture<>();
+            f.completeExceptionally(new IllegalStateException(
+                "GroundItemOwnedBy CAS acquire-claim exceeded retries for " + key));
+            return f;
+        }
+
+        String path = childPath(key);
+        return firebaseDb().getWithEtag(path).thenCompose(snap -> {
+            GroundItemOwnedByData cur = deserializePile(snap);
+            if (cur == null) {
+                return CompletableFuture.completedFuture(false);
+            }
+
+            OffsetDateTime now = OffsetDateTime.now();
+            if (cur.hasAnyActiveTakeClaim(now)
+                && (cur.getTakeClaimedByAccountHash() == null
+                || cur.getTakeClaimedByAccountHash() != claimantAccountHash)) {
+                return CompletableFuture.completedFuture(false);
+            }
+
+            long nextVer = cur.getWriteVersionOrZero() + 1L;
+            GroundItemOwnedByData next = new GroundItemOwnedByData(
+                cur.getAccountHash(),
+                cur.getDespawnsAt(),
+                cur.getQuantity(),
+                cur.getDroppedByPlayerName(),
+                nextVer,
+                claimantAccountHash,
+                claimExpiresAt,
+                claimId
+            );
+            JsonElement json = firebaseGson().toJsonTree(next);
+            String etag = snap.getEtag();
+            if (etag == null) {
+                return firebaseDb().put(path, json).thenApply(__ -> true);
+            }
+            return firebaseDb().putConditional(path, json, etag).thenCompose(res -> {
+                if (res == ConditionalWriteResult.PRECONDITION_FAILED) {
+                    return backoffThen(attempt, acquireTakeClaimWithRetry(
+                        key,
+                        claimantAccountHash,
+                        claimExpiresAt,
+                        claimId,
+                        attempt + 1
+                    ));
+                }
+                return CompletableFuture.completedFuture(true);
+            });
+        });
+    }
+
+    @Override
+    public CompletableFuture<Boolean> transactionalConsumeQuantityWithTakeClaim(
+        GroundItemOwnedByKey key,
+        int quantity,
+        long claimantAccountHash,
+        String expectedClaimId
+    ) {
+        return consumeWithTakeClaimRetry(key, quantity, claimantAccountHash, expectedClaimId, 0);
+    }
+
+    private CompletableFuture<Boolean> consumeWithTakeClaimRetry(
+        GroundItemOwnedByKey key,
+        int quantity,
+        long claimantAccountHash,
+        String expectedClaimId,
+        int attempt
+    ) {
+        if (attempt >= MAX_CAS_ATTEMPTS) {
+            CompletableFuture<Boolean> f = new CompletableFuture<>();
+            f.completeExceptionally(new IllegalStateException(
+                "GroundItemOwnedBy CAS consume-with-claim exceeded retries for " + key));
+            return f;
+        }
+
+        String path = childPath(key);
+        return firebaseDb().getWithEtag(path).thenCompose(snap -> {
+            GroundItemOwnedByData cur = deserializePile(snap);
+            if (cur == null) {
+                return CompletableFuture.completedFuture(false);
+            }
+            OffsetDateTime now = OffsetDateTime.now();
+            if (!cur.hasActiveTakeClaimForAccount(claimantAccountHash, now)) {
+                return CompletableFuture.completedFuture(false);
+            }
+            if (expectedClaimId != null
+                && cur.getTakeClaimId() != null
+                && !expectedClaimId.equals(cur.getTakeClaimId())) {
+                return CompletableFuture.completedFuture(false);
+            }
+
+            int entryQty = cur.getEntitlementQuantity();
+            int newQty = Math.max(0, entryQty - Math.max(1, quantity));
+            long nextVer = cur.getWriteVersionOrZero() + 1L;
+            GroundItemOwnedByData next = new GroundItemOwnedByData(
+                cur.getAccountHash(),
+                cur.getDespawnsAt(),
+                newQty,
+                cur.getDroppedByPlayerName(),
+                nextVer,
+                null,
+                null,
+                null
+            );
+
+            JsonElement json = firebaseGson().toJsonTree(next);
+            String etag = snap.getEtag();
+            if (etag == null) {
+                return firebaseDb().put(path, json).thenApply(__ -> true);
+            }
+            return firebaseDb().putConditional(path, json, etag).thenCompose(res -> {
+                if (res == ConditionalWriteResult.PRECONDITION_FAILED) {
+                    return backoffThen(attempt, consumeWithTakeClaimRetry(
+                        key,
+                        quantity,
+                        claimantAccountHash,
+                        expectedClaimId,
+                        attempt + 1
+                    ));
+                }
+                return CompletableFuture.completedFuture(true);
+            });
+        });
     }
 
     private CompletableFuture<Void> deleteWithRetry(GroundItemOwnedByKey key, int attempt) {
