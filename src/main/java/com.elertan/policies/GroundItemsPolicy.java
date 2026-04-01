@@ -21,7 +21,6 @@ import com.google.inject.Inject;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -48,17 +47,24 @@ import net.runelite.client.callback.ClientThread;
 /**
  * Ground-item Bronzeman rules and Firebase-backed ownership for group drops.
  * <p>
- * Every group member's client receives the same {@link net.runelite.api.events.ItemDespawned} /
- * {@link ItemQuantityChanged} events. Shared quantity writes are reconciled from visible scene state so
- * correctness does not depend on local pending-loot memory.
+ * Firebase stores how many of this pile the Bronzeman rules still let you take. Dropping logs (self/group)
+ * {@linkplain GroundItemOwnedByDataProvider#addToPileQuantity adds} to that budget.
+ * <p>
+ * Budget only goes down when there is a recent successful local take intent for that tile/item and we then observe
+ * qualifying pile shrink/despawn signals. This avoids burning quota from unrelated mixed-pile churn.
+ * Timer expiry and unknown/zero despawn times skip Firebase. Once budget hits {@code 0} the row stays until
+ * you drop again.
+ * <p>
+ * Partial pickups do not shrink the budget until the stack fully leaves via a qualifying pickup despawn; leaving
+ * loot on the ground until timer despawn is acceptable — we do not try to mirror stack size in Firebase.
+ * <p>
+ * {@link TileItem#OWNERSHIP_OTHER} is Jagex/RuneLite's label for another player's drops (overlays often show
+ * "OTHER"); {@link TileItem#OWNERSHIP_NONE} is separate. We only grant entitlement from OTHER/NONE when there is
+ * a recent local drop intent for that item id (merged-pile fallback).
  */
 @Slf4j
 public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
-    /**
-     * Recomputed despawn timestamps can differ slightly even when the pile state is effectively unchanged.
-     * Treat sub-tick drift as equivalent so we skip duplicate Firebase writes.
-     */
-    private static final Duration DESPAWNS_AT_NO_OP_TOLERANCE = TickUtils.ticksToDuration(1);
+    private static final int TAKE_INTENT_TICKS = 3;
 
     @Inject
     private Client client;
@@ -78,6 +84,10 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private MinigameService minigameService;
 
     private ScheduledExecutorService scheduler;
+    private final ConcurrentHashMap<GroundItemOwnedByKey, Integer> pendingTakeIntentUntilTickByKey
+        = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, Integer> pendingDropIntentUntilTickByItemId
+        = new ConcurrentHashMap<>();
 
     @Inject
     public GroundItemsPolicy(AccountConfigurationService accountConfigurationService,
@@ -90,15 +100,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     public void startUp() throws Exception {
         scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(this::cleanupExpiredGroundItems, 10, 10, TimeUnit.SECONDS);
-
-        groundItemOwnedByDataProvider.await(null).whenComplete((__, throwable) -> {
-            if (throwable != null) {
-                log.error("GroundItemOwnedByDataProvider await failed", throwable);
-                return;
-            }
-
-            cleanupExpiredGroundItemsForEveryone();
-        });
     }
 
     @Override
@@ -121,11 +122,13 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         if (tileItem == null || tile == null) {
             return;
         }
+        int itemId = tileItem.getId();
         if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF
             && tileItem.getOwnership() != TileItem.OWNERSHIP_GROUP) {
-            return;
+            if (!hasActiveDropIntent(itemId)) {
+                return;
+            }
         }
-        int itemId = tileItem.getId();
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
 
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap
@@ -136,7 +139,12 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
-        upsertTrackedPileFromVisibleQuantity(key, tile, tileItem, existing);
+        upsertTrackedEntitledQuantity(
+            key,
+            tileItem,
+            existing,
+            Math.max(1, tileItem.getQuantity())
+        );
     }
 
     public void onItemDespawned(ItemDespawned event) {
@@ -148,10 +156,18 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         if (tile == null || tileItem == null) {
             return;
         }
-
         int itemId = tileItem.getId();
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
-        syncTrackedPileToVisibleQuantity(key, tile, itemId);
+
+        if (!hasActiveTakeIntent(key)) {
+            return;
+        }
+        if (!groundItemOwnedByDataProvider.hasEntries(key)) {
+            return;
+        }
+        int removedQty = Math.max(1, tileItem.getQuantity());
+        int despawnScheduledTick = tileItem.getDespawnTime();
+        deferConsumeOnPickupDespawnOnly(key, removedQty, despawnScheduledTick);
     }
 
     public void onItemQuantityChanged(ItemQuantityChanged event) {
@@ -174,23 +190,37 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         int itemId = tileItem.getId();
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
 
-        boolean selfOrGroup = tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
-            || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
         if (delta > 0) {
-            if (!selfOrGroup) {
+            boolean selfOrGroup = tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
+                || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
+            if (!selfOrGroup && !hasActiveDropIntent(itemId)) {
                 return;
             }
             GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
-            upsertTrackedPileFromVisibleQuantity(key, tile, tileItem, existing);
+            upsertTrackedEntitledQuantity(key, tileItem, existing, delta);
             return;
         }
-        // delta < 0: sync tracked pile to current visible scene quantity.
-        syncTrackedPileToVisibleQuantity(key, tile, itemId);
+
+        if (!groundItemOwnedByDataProvider.hasEntries(key)) {
+            return;
+        }
+        if (!hasActiveTakeIntent(key)) {
+            return;
+        }
+        consumeTrackedQuantity(key, Math.abs(delta), "quantity-changed");
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
         if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
+        }
+
+        String option = event.getMenuOption();
+        if (option != null && option.startsWith("Drop")) {
+            int itemId = event.getId();
+            if (itemId > 0) {
+                registerDropIntent(itemId);
+            }
         }
 
         PolicyContext context = createContext();
@@ -230,6 +260,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         GetClickedTileItemOutput output = getClickedTileItemFromScene(
+            resolveWorldView(menuEntry),
             menuEntry.getParam0(),
             menuEntry.getParam1(),
             itemId
@@ -276,6 +307,13 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return option != null && "Examine".equals(option);
     }
 
+    private static boolean isTakeIntent(String menuOption, MenuAction menuAction) {
+        if (menuAction == MenuAction.WIDGET_TARGET_ON_GROUND_ITEM) {
+            return false;
+        }
+        return menuOption != null && menuOption.startsWith("Take");
+    }
+
     private void enforceItemTakePolicyWhereNecessary(MenuOptionClicked event, PolicyContext context) {
         MenuAction menuAction = event.getMenuAction();
         if (!isGroundItemMenuAction(menuAction)) {
@@ -315,6 +353,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         );
 
         if (decision.getAction() == EligibilityAction.ALLOW) {
+            if (isTakeIntent(event.getMenuOption(), menuAction)) {
+                registerTakeIntent(output.getTile(), itemId);
+            }
             return;
         }
 
@@ -339,13 +380,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         TileItem tileItem, boolean widgetTargetOnGroundItem) {
         ItemComposition itemComposition = client.getItemDefinition(itemId);
         int ownership = tileItem.getOwnership();
-
-        if (ownership == TileItem.OWNERSHIP_NONE) {
-            log.debug("Item '{}' is not owned by anyone, allow take", itemComposition.getName());
-            return EligibilityDecision.allow();
-        }
-
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
+
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap
             = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
         if (groundItemOwnedByMap == null) {
@@ -359,6 +395,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 : EligibilityDecision.allow();
         }
 
+        // Merged / woodcut piles often advertise OWNERSHIP_NONE — still enforce Firebase budget when present.
         if (groundItemOwnedByDataProvider.hasEntries(key)) {
             boolean mustPerformPlayerVersusPlayerCheck =
                 context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
@@ -388,6 +425,24 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                     }
                 }
             }
+
+            boolean mustPerformGroundItemsCheck =
+                context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
+                    && context.getGameRules().isRestrictGroundItems());
+            if (mustPerformGroundItemsCheck) {
+                int entitledQty = groundItemOwnedByDataProvider.getTotalOwnedQuantity(key);
+                if (entitledQty <= 0) {
+                    MessageKey mk = widgetTargetOnGroundItem
+                        ? MessageKey.GROUND_ITEM_CAST_RESTRICTION
+                        : MessageKey.GROUND_ITEM_TAKE_RESTRICTION;
+                    return EligibilityDecision.deny(mk);
+                }
+            }
+            return EligibilityDecision.allow();
+        }
+
+        if (ownership == TileItem.OWNERSHIP_NONE) {
+            log.debug("Item '{}' is not owned by anyone, allow take", itemComposition.getName());
             return EligibilityDecision.allow();
         }
 
@@ -409,11 +464,28 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     private GetClickedTileItemOutput getClickedTileItem(MenuOptionClicked event) {
-        return getClickedTileItemFromScene(event.getParam0(), event.getParam1(), event.getId());
+        MenuEntry menuEntry = event.getMenuEntry();
+        return getClickedTileItemFromScene(
+            resolveWorldView(menuEntry),
+            menuEntry.getParam0(),
+            menuEntry.getParam1(),
+            event.getId()
+        );
     }
 
-    private GetClickedTileItemOutput getClickedTileItemFromScene(int sceneX, int sceneY, int itemId) {
-        WorldView worldView = client.getTopLevelWorldView();
+    private WorldView resolveWorldView(MenuEntry menuEntry) {
+        if (menuEntry == null) {
+            return client.getTopLevelWorldView();
+        }
+        WorldView wv = client.getWorldView(menuEntry.getWorldViewId());
+        return wv != null ? wv : client.getTopLevelWorldView();
+    }
+
+    private GetClickedTileItemOutput getClickedTileItemFromScene(WorldView worldView, int sceneX, int sceneY,
+        int itemId) {
+        if (worldView == null) {
+            worldView = client.getTopLevelWorldView();
+        }
         int plane = worldView.getPlane();
 
         Scene scene = worldView.getScene();
@@ -437,132 +509,132 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
 
         for (TileItem ti : tile.getGroundItems()) {
-            if (ti.getId() == itemId) {
-                return new GetClickedTileItemOutput(tile, ti);
+            if (ti.getId() != itemId) {
+                continue;
             }
+            return new GetClickedTileItemOutput(tile, ti);
         }
         return null;
     }
 
-    private int getVisiblePileQuantity(Tile tile, int itemId) {
-        if (tile == null || tile.getGroundItems() == null) {
-            return 0;
-        }
-
-        int totalQty = 0;
-        for (TileItem ti : tile.getGroundItems()) {
-            if (ti.getId() == itemId) {
-                totalQty += Math.max(1, ti.getQuantity());
-            }
-        }
-        return totalQty;
-    }
-
     /**
-     * Create/update tracked shared state using the current visible pile quantity.
-     * This keeps remote quantity aligned with scene truth for spawns/increases.
+     * Increase the shared entitled quantity for this pile from trusted spawn signals
+     * (self/group ownership or recent local drop intent).
      * <p>
-     * Multiple clients can observe the same spawn/increase event and attempt the same write.
-     * We short-circuit no-op upserts to reduce write amplification while still allowing real
-     * metadata changes (quantity/owner/despawn window/drop source) to be persisted.
+     * Uses a remote read-add-write (CAS) so rapid sequential drops do not lose increments when the local map
+     * lags behind Firebase.
      */
-    private void upsertTrackedPileFromVisibleQuantity(
+    private void upsertTrackedEntitledQuantity(
         GroundItemOwnedByKey key,
-        Tile tile,
         TileItem tileItem,
-        GroundItemOwnedByData existing
+        GroundItemOwnedByData existing,
+        int trustedIncreaseQty
     ) {
         long despawnTimeTicks = tileItem.getDespawnTime() - client.getTickCount();
         Duration despawnDuration = TickUtils.ticksToDuration(despawnTimeTicks);
         OffsetDateTime despawnsAt = OffsetDateTime.now().plus(despawnDuration);
-        int visibleQty = getVisiblePileQuantity(tile, tileItem.getId());
-        int fallbackQty = Math.max(1, tileItem.getQuantity());
-        int mergedQty = visibleQty > 0 ? visibleQty : fallbackQty;
-        GroundItemOwnedByData replacement = new GroundItemOwnedByData(
+        int safeIncreaseQty = Math.max(1, trustedIncreaseQty);
+        GroundItemOwnedByData delta = new GroundItemOwnedByData(
             client.getAccountHash(),
             new ISOOffsetDateTime(despawnsAt),
-            mergedQty,
-            existing != null ? existing.getDroppedByPlayerName() : null
+            safeIncreaseQty,
+            existing != null ? existing.getDroppedByPlayerName() : null,
+            null
         );
-        // Skip remote update if the tracked state is materially unchanged.
-        if (isNoOpUpsert(existing, replacement)) {
-            return;
-        }
 
-        groundItemOwnedByDataProvider.updatePile(key, replacement).whenComplete((result, throwable) -> {
+        groundItemOwnedByDataProvider.addToPileQuantity(key, delta).whenComplete((result, throwable) -> {
             if (throwable != null) {
-                log.error("GroundItemOwnedByDataProvider updatePile failed", throwable);
+                log.error("GroundItemOwnedByDataProvider addToPileQuantity failed", throwable);
             }
         });
     }
 
-    /**
-     * Returns true when upserting would rewrite effectively the same state.
-     * <p>
-     * Equality intentionally uses a despawn timestamp tolerance because we recompute
-     * "now + remaining ticks" on each event, which can drift by milliseconds.
-     */
-    private boolean isNoOpUpsert(GroundItemOwnedByData existing, GroundItemOwnedByData replacement) {
-        if (existing == null) {
-            return false;
+    private void deferConsumeOnPickupDespawnOnly(
+        GroundItemOwnedByKey key,
+        int removedQty,
+        int despawnScheduledTick
+    ) {
+        if (!groundItemOwnedByDataProvider.hasEntries(key)) {
+            return;
         }
-        if (existing.getAccountHash() != replacement.getAccountHash()) {
-            return false;
-        }
-        if (existing.getQuantityOrDefaultOne() != replacement.getQuantityOrDefaultOne()) {
-            return false;
-        }
-        if (!Objects.equals(existing.getDroppedByPlayerName(), replacement.getDroppedByPlayerName())) {
-            return false;
-        }
+        clientThread.invokeLater(() -> {
+            if (!accountConfigurationService.isBronzemanEnabled()) {
+                return;
+            }
+            if (groundItemOwnedByDataProvider.getGroundItemOwnedByMap() == null) {
+                return;
+            }
+            if (!groundItemOwnedByDataProvider.hasEntries(key)) {
+                return;
+            }
+            int tickNow = client.getTickCount();
+            if (!shouldApplyLootDecrementOnDespawn(despawnScheduledTick, tickNow)) {
+                return;
+            }
+            consumeTrackedQuantity(key, removedQty, "despawn");
+        });
+    }
 
-        OffsetDateTime existingDespawnsAt = existing.getDespawnsAt() != null ? existing.getDespawnsAt().getValue() : null;
-        OffsetDateTime replacementDespawnsAt = replacement.getDespawnsAt() != null
-            ? replacement.getDespawnsAt().getValue()
-            : null;
-        if (existingDespawnsAt == null || replacementDespawnsAt == null) {
-            return Objects.equals(existingDespawnsAt, replacementDespawnsAt);
-        }
+    private void registerTakeIntent(Tile tile, int itemId) {
+        GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
+        int untilTick = client.getTickCount() + TAKE_INTENT_TICKS;
+        pendingTakeIntentUntilTickByKey.put(key, untilTick);
+    }
 
-        // Ignore sub-tick drift from recomputing "now + remaining ticks".
-        Duration delta = Duration.between(existingDespawnsAt, replacementDespawnsAt).abs();
-        return delta.compareTo(DESPAWNS_AT_NO_OP_TOLERANCE) < 0;
+    private void registerDropIntent(int itemId) {
+        int untilTick = client.getTickCount() + TAKE_INTENT_TICKS;
+        pendingDropIntentUntilTickByItemId.put(itemId, untilTick);
+    }
+
+    private boolean hasActiveTakeIntent(GroundItemOwnedByKey key) {
+        Integer untilTick = pendingTakeIntentUntilTickByKey.get(key);
+        if (untilTick == null) {
+            return false;
+        }
+        int now = client.getTickCount();
+        if (now > untilTick) {
+            pendingTakeIntentUntilTickByKey.remove(key, untilTick);
+            return false;
+        }
+        return true;
+    }
+
+    private boolean hasActiveDropIntent(int itemId) {
+        Integer untilTick = pendingDropIntentUntilTickByItemId.get(itemId);
+        if (untilTick == null) {
+            return false;
+        }
+        int now = client.getTickCount();
+        if (now > untilTick) {
+            pendingDropIntentUntilTickByItemId.remove(itemId, untilTick);
+            return false;
+        }
+        return true;
+    }
+
+    private void consumeTrackedQuantity(GroundItemOwnedByKey key, int removedQty, String reason) {
+        if (removedQty <= 0) {
+            return;
+        }
+        groundItemOwnedByDataProvider.consumeQuantity(key, removedQty).whenComplete((result, throwable) -> {
+            if (throwable != null) {
+                log.error("consumeQuantity failed on {} {}", reason, key, throwable);
+                return;
+            }
+            pendingTakeIntentUntilTickByKey.remove(key);
+        });
     }
 
     /**
-     * Reconcile tracked shared state to what is currently visible on the tile.
-     * Used for despawns/decreases so clients converge on the same absolute quantity.
+     * Only treat {@link ItemDespawned} as a player loot removal when the tile item left before its scheduled
+     * despawn tick. If the scheduled tick is unknown ({@code <= 0}), we skip — mixed piles often clear the timer
+     * or report bogus values, and consuming then would burn your budget when someone else's stack vanishes.
      */
-    private void syncTrackedPileToVisibleQuantity(GroundItemOwnedByKey key, Tile tile, int itemId) {
-        GroundItemOwnedByData existing = groundItemOwnedByDataProvider.getPile(key);
-        if (existing == null) {
-            return;
+    private static boolean shouldApplyLootDecrementOnDespawn(int despawnScheduledTick, int tickNow) {
+        if (despawnScheduledTick <= 0) {
+            return false;
         }
-
-        int visibleQty = getVisiblePileQuantity(tile, itemId);
-        if (visibleQty <= 0) {
-            groundItemOwnedByDataProvider.deletePile(key).whenComplete((result, throwable) -> {
-                if (throwable != null) {
-                    log.error("GroundItemOwnedByDataProvider deletePile failed", throwable);
-                }
-            });
-            return;
-        }
-        if (existing.getQuantityOrDefaultOne() == visibleQty) {
-            return;
-        }
-
-        GroundItemOwnedByData replacement = new GroundItemOwnedByData(
-            existing.getAccountHash(),
-            existing.getDespawnsAt(),
-            visibleQty,
-            existing.getDroppedByPlayerName()
-        );
-        groundItemOwnedByDataProvider.updatePile(key, replacement).whenComplete((result, throwable) -> {
-            if (throwable != null) {
-                log.error("GroundItemOwnedByDataProvider updatePile failed", throwable);
-            }
-        });
+        return tickNow < despawnScheduledTick;
     }
 
     private GroundItemOwnedByKey createGroundItemKey(int itemId, Tile tile) {
@@ -595,6 +667,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 if (data.getDespawnsAt().getValue().isAfter(now)) {
                     continue;
                 }
+                if (hasActiveTakeIntent(key)) {
+                    continue;
+                }
 
                 log.debug("Cleaning up expired ground item {}", key);
 
@@ -605,42 +680,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 });
             }
         });
-    }
-
-    private void cleanupExpiredGroundItemsForEveryone() {
-        log.debug("Cleaning up expired ground items for everyone");
-
-        ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map
-            = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
-        if (map == null || map.isEmpty()) {
-            log.debug("Ground item owned by map is empty, nothing to clean up");
-            return;
-        }
-
-        OffsetDateTime now = OffsetDateTime.now();
-
-        for (Map.Entry<GroundItemOwnedByKey, GroundItemOwnedByData> keyEntry : map.entrySet()) {
-            GroundItemOwnedByKey key = keyEntry.getKey();
-            GroundItemOwnedByData data = keyEntry.getValue();
-            if (data == null) {
-                continue;
-            }
-            if (data.getDespawnsAt().getValue().isAfter(now)) {
-                continue;
-            }
-
-            log.debug(
-                "Cleaning up expired ground item {} for account hash: {}",
-                key,
-                data.getAccountHash()
-            );
-
-            groundItemOwnedByDataProvider.deletePile(key).whenComplete((result, throwable) -> {
-                if (throwable != null) {
-                    log.error("Failed to clean up expired ground item {}", key, throwable);
-                }
-            });
-        }
     }
 
     private enum EligibilityAction {

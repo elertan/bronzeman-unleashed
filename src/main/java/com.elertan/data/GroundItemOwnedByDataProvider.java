@@ -2,6 +2,7 @@ package com.elertan.data;
 
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
+import com.elertan.remote.GroundItemOwnedByStoragePort;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.StorageService;
 import com.google.inject.Inject;
@@ -22,7 +23,7 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
     @Inject
     private StorageService storageService;
 
-    private KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> storagePort;
+    private GroundItemOwnedByStoragePort storagePort;
     private KeyValueStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData> storagePortListener;
 
     /**
@@ -41,9 +42,28 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
         storagePortListener = new KeyValueStoragePort.Listener<GroundItemOwnedByKey, GroundItemOwnedByData>() {
             @Override
             public void onFullUpdate(Map<GroundItemOwnedByKey, GroundItemOwnedByData> map) {
+                ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> prior = groundItemOwnedByMap;
                 groundItemOwnedByMap = new ConcurrentHashMap<>();
                 if (map != null) {
-                    groundItemOwnedByMap.putAll(map);
+                    for (Map.Entry<GroundItemOwnedByKey, GroundItemOwnedByData> e : map.entrySet()) {
+                        GroundItemOwnedByKey k = e.getKey();
+                        GroundItemOwnedByData remote = e.getValue();
+                        GroundItemOwnedByData local = prior == null ? null : prior.get(k);
+                        if (local != null && remote != null
+                            && local.getWriteVersionOrZero() > remote.getWriteVersionOrZero()) {
+                            groundItemOwnedByMap.put(k, local);
+                        } else {
+                            groundItemOwnedByMap.put(k, remote);
+                        }
+                    }
+                }
+                if (prior != null) {
+                    for (Map.Entry<GroundItemOwnedByKey, GroundItemOwnedByData> e : prior.entrySet()) {
+                        GroundItemOwnedByKey k = e.getKey();
+                        if (!groundItemOwnedByMap.containsKey(k) && e.getValue().getWriteVersionOrZero() > 0) {
+                            groundItemOwnedByMap.put(k, e.getValue());
+                        }
+                    }
                 }
 
                 for (Listener listener : mapListeners) {
@@ -58,6 +78,18 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             @Override
             public void onUpdate(GroundItemOwnedByKey key, GroundItemOwnedByData value) {
                 if (groundItemOwnedByMap == null) {
+                    return;
+                }
+
+                GroundItemOwnedByData current = groundItemOwnedByMap.get(key);
+                if (current != null && value != null
+                    && value.getWriteVersionOrZero() < current.getWriteVersionOrZero()) {
+                    log.debug(
+                        "Ignoring stale GroundItemOwnedBy remote update for {} (remoteVer={} localVer={})",
+                        key,
+                        value.getWriteVersionOrZero(),
+                        current.getWriteVersionOrZero()
+                    );
                     return;
                 }
 
@@ -133,17 +165,24 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
         mapListeners.remove(listener);
     }
 
-    public CompletableFuture<Void> updatePile(GroundItemOwnedByKey key, GroundItemOwnedByData data) {
+    /**
+     * {@link GroundItemOwnedByData#getQuantity()} is the amount to add (not the new total).
+     */
+    public CompletableFuture<Void> addToPileQuantity(GroundItemOwnedByKey key, GroundItemOwnedByData trustedDelta) {
         if (storagePort == null) {
             CompletableFuture<Void> future = new CompletableFuture<>();
             future.completeExceptionally(new IllegalStateException("storagePort is null"));
             return future;
         }
 
-        if (groundItemOwnedByMap != null) {
-            groundItemOwnedByMap.put(key, data);
-        }
-        return storagePort.update(key, data);
+        GroundItemOwnedByData body = new GroundItemOwnedByData(
+            trustedDelta.getAccountHash(),
+            trustedDelta.getDespawnsAt(),
+            trustedDelta.getQuantity(),
+            trustedDelta.getDroppedByPlayerName(),
+            null
+        );
+        return storagePort.transactionalAddQuantity(key, body).thenCompose(v -> syncLocalFromRead(key));
     }
 
     public CompletableFuture<Void> deletePile(GroundItemOwnedByKey key) {
@@ -153,10 +192,7 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             return future;
         }
 
-        if (groundItemOwnedByMap != null) {
-            groundItemOwnedByMap.remove(key);
-        }
-        return storagePort.delete(key);
+        return storagePort.transactionalDelete(key).thenCompose(v -> syncLocalFromRead(key));
     }
 
     public GroundItemOwnedByData getPile(GroundItemOwnedByKey key) {
@@ -175,7 +211,7 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
         if (data == null) {
             return 0;
         }
-        return data.getQuantityOrDefaultOne();
+        return data.getEntitlementQuantity();
     }
 
     public CompletableFuture<Void> consumeQuantity(GroundItemOwnedByKey key, int quantity) {
@@ -188,31 +224,24 @@ public class GroundItemOwnedByDataProvider extends AbstractDataProvider {
             return future;
         }
 
-        GroundItemOwnedByData current = getPile(key);
-        if (current == null) {
+        return storagePort.transactionalConsumeQuantity(key, quantity)
+            .thenCompose(v -> syncLocalFromRead(key));
+    }
+
+    private CompletableFuture<Void> syncLocalFromRead(GroundItemOwnedByKey key) {
+        if (storagePort == null || groundItemOwnedByMap == null) {
             return CompletableFuture.completedFuture(null);
         }
-
-        int entryQty = current.getQuantityOrDefaultOne();
-        int newQty = Math.max(0, entryQty - quantity);
-        if (newQty <= 0) {
-            if (groundItemOwnedByMap != null) {
-                groundItemOwnedByMap.remove(key);
+        return storagePort.read(key).thenAccept(data -> {
+            if (groundItemOwnedByMap == null) {
+                return;
             }
-            return storagePort.delete(key);
-        }
-
-        GroundItemOwnedByData replacement = new GroundItemOwnedByData(
-            current.getAccountHash(),
-            current.getDespawnsAt(),
-            newQty,
-            current.getDroppedByPlayerName()
-        );
-
-        if (groundItemOwnedByMap != null) {
-            groundItemOwnedByMap.put(key, replacement);
-        }
-        return storagePort.update(key, replacement);
+            if (data == null) {
+                groundItemOwnedByMap.remove(key);
+            } else {
+                groundItemOwnedByMap.put(key, data);
+            }
+        });
     }
 
     public interface Listener {

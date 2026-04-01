@@ -23,8 +23,25 @@ public class GroundItemOwnedByData {
 
     private String droppedByPlayerName;
 
-    public int getQuantityOrDefaultOne() {
+    /**
+     * Increments on every local write to Firebase. Used to ignore stale SSE updates that would
+     * resurrect quantity after a pickup (legacy JSON has no field {@code -> 0}).
+     */
+    private Long writeVersion;
+
+    /**
+     * Bronzeman entitled count for policy and storage math. {@code null} still means 1 (legacy JSON);
+     * explicit {@code 0} is allowed so a row can remain while blocking further loot after quota is met.
+     */
+    public int getEntitlementQuantity() {
         Integer q = quantity;
-        return q == null || q < 1 ? 1 : q;
+        if (q == null) {
+            return 1;
+        }
+        return Math.max(0, q);
+    }
+
+    public long getWriteVersionOrZero() {
+        return writeVersion == null ? 0L : writeVersion;
     }
 }

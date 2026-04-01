@@ -27,6 +27,22 @@ public class FirebaseKeyValueStorageAdapterBase<K, V> implements KeyValueStorage
 
     private final Consumer<FirebaseSSE> sseListener = this::sseListener;
 
+    protected String childPath(K key) {
+        return basePath + "/" + keyToStringTransformer.apply(key);
+    }
+
+    protected FirebaseRealtimeDatabase firebaseDb() {
+        return db;
+    }
+
+    protected Gson firebaseGson() {
+        return gson;
+    }
+
+    protected V deserializeValue(JsonElement jsonElement) {
+        return deserializeFromJsonElement.apply(jsonElement);
+    }
+
     public FirebaseKeyValueStorageAdapterBase(
         String basePath,
         FirebaseRealtimeDatabase db,
@@ -57,7 +73,7 @@ public class FirebaseKeyValueStorageAdapterBase<K, V> implements KeyValueStorage
 
     @Override
     public CompletableFuture<V> read(K key) {
-        String path = basePath + "/" + keyToStringTransformer.apply(key);
+        String path = childPath(key);
         return db.get(path)
             .thenApply(this.deserializeFromJsonElement);
     }
@@ -85,7 +101,7 @@ public class FirebaseKeyValueStorageAdapterBase<K, V> implements KeyValueStorage
 
     @Override
     public CompletableFuture<Void> update(K key, V value) {
-        String path = basePath + "/" + keyToStringTransformer.apply(key);
+        String path = childPath(key);
         JsonElement jsonElement = gson.toJsonTree(value);
         return db.put(path, jsonElement).thenApply(__ -> null);
     }
@@ -103,7 +119,7 @@ public class FirebaseKeyValueStorageAdapterBase<K, V> implements KeyValueStorage
 
     @Override
     public CompletableFuture<Void> delete(K key) {
-        String path = basePath + "/" + keyToStringTransformer.apply(key);
+        String path = childPath(key);
         return db.delete(path);
     }
 

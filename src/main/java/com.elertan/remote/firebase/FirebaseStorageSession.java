@@ -2,10 +2,9 @@ package com.elertan.remote.firebase;
 
 import com.elertan.event.BUEvent;
 import com.elertan.models.GameRules;
-import com.elertan.models.GroundItemOwnedByData;
-import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.Member;
 import com.elertan.models.UnlockedItem;
+import com.elertan.remote.GroundItemOwnedByStoragePort;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.ObjectListStoragePort;
 import com.elertan.remote.ObjectStoragePort;
@@ -27,7 +26,7 @@ public class FirebaseStorageSession implements StorageSession {
     private final KeyValueStoragePort<Integer, UnlockedItem> unlockedItemsStoragePort;
     private final ObjectStoragePort<GameRules> gameRulesStoragePort;
     private final ObjectListStoragePort<BUEvent> lastEventStoragePort;
-    private final KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
+    private final GroundItemOwnedByStoragePort groundItemOwnedByStoragePort;
 
     public FirebaseStorageSession(
         OkHttpClient httpClient,
@@ -81,7 +80,7 @@ public class FirebaseStorageSession implements StorageSession {
     }
 
     @Override
-    public KeyValueStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> getGroundItemOwnedByStoragePort() {
+    public GroundItemOwnedByStoragePort getGroundItemOwnedByStoragePort() {
         return groundItemOwnedByStoragePort;
     }
 

@@ -225,10 +225,11 @@ public class PlayerVersusPlayerPolicy extends PolicyBase implements BUPluginLife
             client.getAccountHash(),
             despawnsAt,
             Math.max(1, quantity),
-            playerName
+            playerName,
+            null
         );
 
-        return groundItemOwnedByDataProvider.updatePile(key, data)
+        return groundItemOwnedByDataProvider.addToPileQuantity(key, data)
             .thenApply(__ -> null);
     }
 
