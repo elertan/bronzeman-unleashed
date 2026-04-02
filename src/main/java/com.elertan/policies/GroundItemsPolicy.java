@@ -62,7 +62,7 @@ import net.runelite.client.callback.ClientThread;
  * <p>
  * {@link TileItem#OWNERSHIP_OTHER} is Jagex/RuneLite's label for another player's drops (overlays often show
  * "OTHER"); {@link TileItem#OWNERSHIP_NONE} is separate. We only grant entitlement from OTHER/NONE when there is
- * a recent local drop intent for that item id (merged-pile fallback).
+ * a recent local drop intent for that exact pile key (merged-pile fallback).
  */
 @Slf4j
 public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
@@ -92,7 +92,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<GroundItemOwnedByKey, ActiveTakeClaim> activeTakeClaimsByKey
         = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Integer, PendingDropIntent> pendingDropIntentByItemId
+    private final ConcurrentHashMap<GroundItemOwnedByKey, PendingDropIntent> pendingDropIntentByKey
         = new ConcurrentHashMap<>();
 
     @Inject
@@ -129,18 +129,18 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
         int itemId = tileItem.getId();
+        GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
         int trustedIncreaseQty;
         if (tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
             || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP) {
             trustedIncreaseQty = Math.max(1, tileItem.getQuantity());
-            consumePendingDropIntentQuantity(itemId, trustedIncreaseQty);
+            consumePendingDropIntentQuantity(key, trustedIncreaseQty);
         } else {
-            trustedIncreaseQty = claimPendingDropIntentQuantity(itemId, Math.max(1, tileItem.getQuantity()));
+            trustedIncreaseQty = claimPendingDropIntentQuantity(key, Math.max(1, tileItem.getQuantity()));
             if (trustedIncreaseQty <= 0) {
                 return;
             }
         }
-        GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
 
         ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByMap
             = groundItemOwnedByDataProvider.getGroundItemOwnedByMap();
@@ -207,9 +207,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             int trustedIncreaseQty;
             if (selfOrGroup) {
                 trustedIncreaseQty = delta;
-                consumePendingDropIntentQuantity(itemId, delta);
+                consumePendingDropIntentQuantity(key, delta);
             } else {
-                trustedIncreaseQty = claimPendingDropIntentQuantity(itemId, delta);
+                trustedIncreaseQty = claimPendingDropIntentQuantity(key, delta);
                 if (trustedIncreaseQty <= 0) {
                     return;
                 }
@@ -613,9 +613,13 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     }
 
     private void registerDropIntent(int itemId) {
+        GroundItemOwnedByKey key = createLocalPlayerGroundItemKey(itemId);
+        if (key == null) {
+            return;
+        }
         int now = client.getTickCount();
         int untilTick = now + DROP_INTENT_TICKS;
-        pendingDropIntentByItemId.compute(itemId, (id, pending) -> {
+        pendingDropIntentByKey.compute(key, (ignored, pending) -> {
             if (pending == null || now > pending.getUntilTick()) {
                 return new PendingDropIntent(untilTick, 1);
             }
@@ -640,14 +644,14 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return true;
     }
 
-    private int claimPendingDropIntentQuantity(int itemId, int maxQuantityToClaim) {
+    private int claimPendingDropIntentQuantity(GroundItemOwnedByKey key, int maxQuantityToClaim) {
         if (maxQuantityToClaim <= 0) {
             return 0;
         }
 
         int now = client.getTickCount();
         final int[] claimed = {0};
-        pendingDropIntentByItemId.compute(itemId, (id, pending) -> {
+        pendingDropIntentByKey.compute(key, (ignored, pending) -> {
             if (pending == null || now > pending.getUntilTick()) {
                 return null;
             }
@@ -661,11 +665,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return claimed[0];
     }
 
-    private void consumePendingDropIntentQuantity(int itemId, int quantity) {
+    private void consumePendingDropIntentQuantity(GroundItemOwnedByKey key, int quantity) {
         if (quantity <= 0) {
             return;
         }
-        claimPendingDropIntentQuantity(itemId, quantity);
+        claimPendingDropIntentQuantity(key, quantity);
     }
 
     private void consumeTrackedQuantity(GroundItemOwnedByKey key, int removedQty, String reason) {
@@ -814,6 +818,24 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private GroundItemOwnedByKey createGroundItemKey(int itemId, Tile tile) {
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
+        return GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
+    }
+
+    private GroundItemOwnedByKey createLocalPlayerGroundItemKey(int itemId) {
+        if (client.getLocalPlayer() == null) {
+            return null;
+        }
+
+        WorldPoint worldPoint = client.getLocalPlayer().getWorldLocation();
+        if (worldPoint == null) {
+            return null;
+        }
+
+        WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
+        if (worldView == null) {
+            return null;
+        }
+
         return GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
     }
 
