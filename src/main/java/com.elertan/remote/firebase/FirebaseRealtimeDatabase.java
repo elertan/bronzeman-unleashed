@@ -45,10 +45,10 @@ public class FirebaseRealtimeDatabase implements AutoCloseable {
 
     public FirebaseRealtimeDatabase(OkHttpClient httpClient, Gson gson,
         FirebaseRealtimeDatabaseURL databaseURL) {
-        this.httpClient = httpClient;
+        this.httpClient = httpClient.newBuilder().cache(null).build();
         this.gson = gson;
         this.databaseURL = databaseURL;
-        this.stream = new FirebaseSSEStream(httpClient, gson, databaseURL);
+        this.stream = new FirebaseSSEStream(this.httpClient, gson, databaseURL);
     }
 
     public static CompletableFuture<Boolean> canConnectTo(OkHttpClient httpClient,
@@ -431,6 +431,12 @@ public class FirebaseRealtimeDatabase implements AutoCloseable {
             .build();
     }
 
+    /**
+     * Builds a canonical Firebase Realtime Database REST URL for the given resource path.
+     * <p>
+     * Normalizes a leading slash, guarantees a {@code .json} suffix on the path portion, preserves caller query
+     * parameters, and appends path segments individually to avoid malformed double-slash URLs.
+     */
     private String getUrlForPath(String path) {
         HttpUrl base = HttpUrl.parse(databaseURL.getBaseUrl());
         if (base == null) {
@@ -445,7 +451,6 @@ public class FirebaseRealtimeDatabase implements AutoCloseable {
             rawQuery = path.substring(q + 1);
         }
 
-        // normalize leading slash
         if (rawPath.startsWith("/")) {
             rawPath = rawPath.substring(1);
         }

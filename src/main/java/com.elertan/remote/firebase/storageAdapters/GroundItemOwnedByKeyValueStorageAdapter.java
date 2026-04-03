@@ -15,12 +15,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 
-
 @Slf4j
 public class GroundItemOwnedByKeyValueStorageAdapter
     extends FirebaseKeyValueStorageAdapterBase<GroundItemOwnedByKey, GroundItemOwnedByData>
     implements GroundItemOwnedByStoragePort {
 
+    /**
+     * Upper bound for CAS retries during high-contention pile churn.
+     */
     private static final int MAX_CAS_ATTEMPTS = 16;
 
     private final static String BASE_PATH = "/GroundItemOwnedBy";
@@ -58,6 +60,9 @@ public class GroundItemOwnedByKeyValueStorageAdapter
         return tDelta.isAfter(tCur) ? delta.getDespawnsAt() : cur.getDespawnsAt();
     }
 
+    /**
+     * Bounded backoff between CAS retries to reduce immediate re-collisions on hot keys.
+     */
     private <T> CompletableFuture<T> backoffThen(long attempt, java.util.concurrent.CompletableFuture<T> next) {
         if (attempt <= 0) {
             return next;
@@ -78,6 +83,9 @@ public class GroundItemOwnedByKeyValueStorageAdapter
         return consumeWithRetry(key, quantity, 0);
     }
 
+    /**
+     * Legacy/non-claim consume path using CAS to avoid lost updates during concurrent decrements.
+     */
     private CompletableFuture<Void> consumeWithRetry(GroundItemOwnedByKey key, int quantity, int attempt) {
         if (attempt >= MAX_CAS_ATTEMPTS) {
             CompletableFuture<Void> f = new CompletableFuture<>();
@@ -124,6 +132,9 @@ public class GroundItemOwnedByKeyValueStorageAdapter
         return addWithRetry(key, trustedDelta, 0);
     }
 
+    /**
+     * CAS add path that preserves merged despawn metadata and survives contested write races.
+     */
     private CompletableFuture<Void> addWithRetry(GroundItemOwnedByKey key, GroundItemOwnedByData delta, int attempt) {
         if (attempt >= MAX_CAS_ATTEMPTS) {
             CompletableFuture<Void> f = new CompletableFuture<>();
@@ -181,6 +192,10 @@ public class GroundItemOwnedByKeyValueStorageAdapter
         return acquireTakeClaimWithRetry(key, claimantAccountHash, claimExpiresAt, claimId, 0);
     }
 
+    /**
+     * CAS claim-acquisition path.
+     * Solves double-consume races by granting the lease to one active account at a time for a row.
+     */
     private CompletableFuture<Boolean> acquireTakeClaimWithRetry(
         GroundItemOwnedByKey key,
         long claimantAccountHash,
@@ -250,6 +265,11 @@ public class GroundItemOwnedByKeyValueStorageAdapter
         return consumeWithTakeClaimRetry(key, quantity, claimantAccountHash, expectedClaimId, 0);
     }
 
+    /**
+     * Claim-gated consume path used by pickup flows.
+     * Solves extra-loot/over-consume incidents by requiring an active matching claim and refusing
+     * decrements once entitlement has already reached zero.
+     */
     private CompletableFuture<Boolean> consumeWithTakeClaimRetry(
         GroundItemOwnedByKey key,
         int quantity,
@@ -281,6 +301,9 @@ public class GroundItemOwnedByKeyValueStorageAdapter
             }
 
             int entryQty = cur.getEntitlementQuantity();
+            if (entryQty <= 0) {
+                return CompletableFuture.completedFuture(false);
+            }
             int newQty = Math.max(0, entryQty - Math.max(1, quantity));
             long nextVer = cur.getWriteVersionOrZero() + 1L;
             GroundItemOwnedByData next = new GroundItemOwnedByData(
@@ -314,6 +337,9 @@ public class GroundItemOwnedByKeyValueStorageAdapter
         });
     }
 
+    /**
+     * CAS delete path for expiry/cleanup where concurrent writers may still be touching the row.
+     */
     private CompletableFuture<Void> deleteWithRetry(GroundItemOwnedByKey key, int attempt) {
         if (attempt >= MAX_CAS_ATTEMPTS) {
             CompletableFuture<Void> f = new CompletableFuture<>();

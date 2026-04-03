@@ -54,11 +54,12 @@ import net.runelite.client.callback.ClientThread;
  * <p>
  * Budget only goes down when there is a recent successful local take intent for that tile/item and we then observe
  * qualifying pile shrink/despawn signals. This avoids burning quota from unrelated mixed-pile churn.
- * Timer expiry and unknown/zero despawn times skip Firebase. Once budget hits {@code 0} the row stays until
- * you drop again.
+ * Timer expiry and unknown/zero despawn times generally skip Firebase, with a narrow fallback for the
+ * single-remaining-entitlement + active-claim case to avoid Firebase Quantity = 1 leaks. Once budget hits {@code 0}
+ * the row stays until you drop again.
  * <p>
  * Partial pickups do not shrink the budget until the stack fully leaves via a qualifying pickup despawn; leaving
- * loot on the ground until timer despawn is acceptable — we do not try to mirror stack size in Firebase.
+ * loot on the ground until timer despawn is acceptable.
  * <p>
  * {@link TileItem#OWNERSHIP_OTHER} is Jagex/RuneLite's label for another player's drops (overlays often show
  * "OTHER"); {@link TileItem#OWNERSHIP_NONE} is separate. We only grant entitlement from OTHER/NONE when there is
@@ -68,7 +69,12 @@ import net.runelite.client.callback.ClientThread;
 public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     private static final int TAKE_INTENT_TICKS = 3;
     private static final int DROP_INTENT_TICKS = 8;
-    private static final Duration TAKE_CLAIM_LEASE_DURATION = Duration.ofMillis(1800);
+
+    /**
+     * Claim lease intentionally outlives the intent window to absorb delayed despawn/quantity callbacks.
+     * This was added after mixed-pile delay cases where consume arrived a tick late and missed claim-guarded decrement.
+     */
+    private static final Duration TAKE_CLAIM_LEASE_DURATION = TickUtils.ticksToDuration(TAKE_INTENT_TICKS + 2);
 
     @Inject
     private Client client;
@@ -89,6 +95,16 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
     private ScheduledExecutorService scheduler;
     private final ConcurrentHashMap<GroundItemOwnedByKey, Integer> pendingTakeIntentUntilTickByKey
+        = new ConcurrentHashMap<>();
+    /**
+     * Same-tick dedupe for despawn signals so duplicate callbacks do not schedule multiple consumes.
+     */
+    private final ConcurrentHashMap<GroundItemOwnedByKey, Integer> lastDespawnConsumeScheduledTickByKey
+        = new ConcurrentHashMap<>();
+    /**
+     * Same-tick dedupe for consume execution so asynchronous repeats cannot decrement twice.
+     */
+    private final ConcurrentHashMap<GroundItemOwnedByKey, Integer> lastDespawnConsumeAttemptTickByKey
         = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<GroundItemOwnedByKey, ActiveTakeClaim> activeTakeClaimsByKey
         = new ConcurrentHashMap<>();
@@ -158,6 +174,13 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         );
     }
 
+    /**
+     * Handles terminal stack removal for a tracked pile after a take signal.
+     * <p>
+     * Despawn events are treated as full-stack removal signals; partial reductions are handled by
+     * {@link #onItemQuantityChanged(ItemQuantityChanged)}. We also require active take signal + existing Firebase
+     * entry to avoid decrementing from unrelated mixed-pile churn.
+     */
     public void onItemDespawned(ItemDespawned event) {
         if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
@@ -169,18 +192,25 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         }
         int itemId = tileItem.getId();
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
+        int removedQty = Math.max(1, tileItem.getQuantity());
+        int despawnScheduledTick = tileItem.getDespawnTime();
 
-        if (!hasActiveTakeIntent(key)) {
+        if (!hasActiveTakeSignal(key)) {
             return;
         }
         if (!groundItemOwnedByDataProvider.hasEntries(key)) {
             return;
         }
-        int removedQty = Math.max(1, tileItem.getQuantity());
-        int despawnScheduledTick = tileItem.getDespawnTime();
         deferConsumeOnPickupDespawnOnly(key, removedQty, despawnScheduledTick);
     }
 
+    /**
+     * Handles pile delta events for entitlement accounting.
+     * <p>
+     * Positive deltas increase entitlement only from trusted ownership or recent local drop intent.
+     * Negative deltas consume entitlement only for pickup-like despawn timing, with a narrow unknown-timer fallback
+     * (single remaining entitlement + active claim) that was added to prevent the known "stuck at 1" leak.
+     */
     public void onItemQuantityChanged(ItemQuantityChanged event) {
         if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
@@ -202,9 +232,9 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         GroundItemOwnedByKey key = createGroundItemKey(itemId, tile);
 
         if (delta > 0) {
+            int trustedIncreaseQty;
             boolean selfOrGroup = tileItem.getOwnership() == TileItem.OWNERSHIP_SELF
                 || tileItem.getOwnership() == TileItem.OWNERSHIP_GROUP;
-            int trustedIncreaseQty;
             if (selfOrGroup) {
                 trustedIncreaseQty = delta;
                 consumePendingDropIntentQuantity(key, delta);
@@ -222,17 +252,26 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         if (!groundItemOwnedByDataProvider.hasEntries(key)) {
             return;
         }
-        if (!hasActiveTakeIntent(key)) {
+        if (!hasActiveTakeSignal(key)) {
             return;
         }
 
         int tickNow = client.getTickCount();
         int despawnScheduledTick = tileItem.getDespawnTime();
         if (!shouldApplyLootDecrementOnDespawn(despawnScheduledTick, tickNow)) {
+            if (despawnScheduledTick <= 0
+                && shouldApplyUnknownDespawnSingleQuantityFallback(key, Math.abs(delta))) {
+                consumeTrackedQuantity(
+                    key,
+                    Math.abs(delta),
+                    ConsumeReason.QUANTITY_CHANGED_UNKNOWN_DESPAWN_FALLBACK
+                );
+                return;
+            }
             return;
         }
 
-        consumeTrackedQuantity(key, Math.abs(delta), "quantity-changed");
+        consumeTrackedQuantity(key, Math.abs(delta), ConsumeReason.QUANTITY_CHANGED);
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
@@ -252,11 +291,15 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         enforceItemTakePolicyWhereNecessary(event, context);
     }
 
+    /**
+     * Reorders blocked ground-item actions lower in the menu while preserving explicit allowance paths.
+     * <p>
+     * LMS is excluded because the minigame bypasses normal Bronzeman click enforcement behavior.
+     */
     public void onMenuEntryAdded(MenuEntryAdded event) {
         if (!accountConfigurationService.isBronzemanEnabled()) {
             return;
         }
-        // Skip ground-item menu reordering in LMS (click enforcement already bypasses there).
         if (minigameService.isPlayingLastManStanding()) {
             return;
         }
@@ -339,6 +382,12 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return menuOption != null && menuOption.startsWith("Take");
     }
 
+    /**
+     * Enforces click-time ground-item restrictions by allowing, blocking, or showing loading feedback.
+     * <p>
+     * This path works with merged-pile behavior where visible ownership can drift from entitlement state,
+     * so Firebase-backed checks remain authoritative for whether pickup should proceed.
+     */
     private void enforceItemTakePolicyWhereNecessary(MenuOptionClicked event, PolicyContext context) {
         MenuAction menuAction = event.getMenuAction();
         if (!isGroundItemMenuAction(menuAction)) {
@@ -420,7 +469,6 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 : EligibilityDecision.allow();
         }
 
-        // Merged / woodcut piles often advertise OWNERSHIP_NONE — still enforce Firebase budget when present.
         if (groundItemOwnedByDataProvider.hasEntries(key)) {
             boolean mustPerformPlayerVersusPlayerCheck =
                 context.isMustEnforceStrictPolicies() || (context.getGameRules() != null
@@ -548,6 +596,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
      * <p>
      * Uses a remote read-add-write (CAS) so rapid sequential drops do not lose increments when the local map
      * lags behind Firebase.
+     * Failures are logged with key/timing context because missed upserts can look like entitlement leaks.
      */
     private void upsertTrackedEntitledQuantity(
         GroundItemOwnedByKey key,
@@ -569,11 +618,24 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
 
         groundItemOwnedByDataProvider.addToPileQuantity(key, delta).whenComplete((result, throwable) -> {
             if (throwable != null) {
-                log.error("GroundItemOwnedByDataProvider addToPileQuantity failed", throwable);
+                log.error(
+                    "GroundItemOwnedByDataProvider addToPileQuantity failed key={} addQty={} despawnTick={} nowTick={}",
+                    key,
+                    safeIncreaseQty,
+                    tileItem.getDespawnTime(),
+                    client.getTickCount(),
+                    throwable
+                );
             }
         });
     }
 
+    /**
+     * Defers despawn consume to the client thread and enforces pickup-only decrement rules.
+     * <p>
+     * Unknown/cleared despawn timers generally do not consume entitlement to avoid mixed-pile false positives,
+     * except for the narrow single-entitlement active-claim fallback used to prevent lingering "stuck at 1" rows.
+     */
     private void deferConsumeOnPickupDespawnOnly(
         GroundItemOwnedByKey key,
         int removedQty,
@@ -594,9 +656,24 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             }
             int tickNow = client.getTickCount();
             if (!shouldApplyLootDecrementOnDespawn(despawnScheduledTick, tickNow)) {
+                if (despawnScheduledTick <= 0
+                    && shouldApplyUnknownDespawnSingleQuantityFallback(key, removedQty)) {
+                    consumeTrackedQuantity(
+                        key,
+                        removedQty,
+                        ConsumeReason.DESPAWN_UNKNOWN_DESPAWN_FALLBACK
+                    );
+                    return;
+                }
                 return;
             }
-            consumeTrackedQuantity(key, removedQty, "despawn");
+
+            Integer previousScheduledTick = lastDespawnConsumeScheduledTickByKey.put(key, tickNow);
+            if (previousScheduledTick != null && previousScheduledTick == tickNow) {
+                return;
+            }
+
+            consumeTrackedQuantity(key, removedQty, ConsumeReason.DESPAWN);
         });
     }
 
@@ -608,6 +685,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         acquireTakeClaim(key, client.getAccountHash()).whenComplete((acquired, throwable) -> {
             if (throwable != null) {
                 log.debug("Failed pre-acquiring take claim for {}", key, throwable);
+                return;
             }
         });
     }
@@ -644,6 +722,23 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return true;
     }
 
+    /**
+     * Despawn/quantity events can arrive a few ticks late under client/network delay.
+     * Keep consume eligibility open while either intent is active OR the take claim lease is still active.
+     */
+    private boolean hasActiveTakeSignal(GroundItemOwnedByKey key) {
+        if (hasActiveTakeIntent(key)) {
+            return true;
+        }
+
+        long accountHash = client.getAccountHash();
+        if (getActiveTakeClaimForAccount(key, accountHash) != null) {
+            return true;
+        }
+
+        return groundItemOwnedByDataProvider.hasActiveTakeClaimForAccount(key, accountHash);
+    }
+
     private int claimPendingDropIntentQuantity(GroundItemOwnedByKey key, int maxQuantityToClaim) {
         if (maxQuantityToClaim <= 0) {
             return 0;
@@ -672,9 +767,21 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         claimPendingDropIntentQuantity(key, quantity);
     }
 
-    private void consumeTrackedQuantity(GroundItemOwnedByKey key, int removedQty, String reason) {
+    private void consumeTrackedQuantity(
+        GroundItemOwnedByKey key,
+        int removedQty,
+        ConsumeReason reason
+    ) {
         if (removedQty <= 0) {
             return;
+        }
+
+        if (isDespawnConsumeReason(reason)) {
+            int tickNow = client.getTickCount();
+            Integer previousAttemptTick = lastDespawnConsumeAttemptTickByKey.put(key, tickNow);
+            if (previousAttemptTick != null && previousAttemptTick == tickNow) {
+                return;
+            }
         }
 
         long accountHash = client.getAccountHash();
@@ -686,7 +793,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 key,
                 removedQty,
                 accountHash,
-                activeClaim.getClaimId()
+                null
             ).thenCompose(consumed -> {
                 if (consumed) {
                     return CompletableFuture.completedFuture(true);
@@ -714,6 +821,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         });
     }
 
+    private static boolean isDespawnConsumeReason(ConsumeReason reason) {
+        return reason == ConsumeReason.DESPAWN
+            || reason == ConsumeReason.DESPAWN_UNKNOWN_DESPAWN_FALLBACK;
+    }
+
     private CompletableFuture<Boolean> consumeWithExistingOrNewClaim(
         GroundItemOwnedByKey key,
         int removedQty,
@@ -736,16 +848,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                         return CompletableFuture.completedFuture(false);
                     }
 
-                    ActiveTakeClaim refreshed = getActiveTakeClaimForAccount(key, accountHash);
-                    if (refreshed == null) {
-                        return CompletableFuture.completedFuture(false);
-                    }
-
                     return groundItemOwnedByDataProvider.consumeQuantityWithTakeClaim(
                         key,
                         removedQty,
                         accountHash,
-                        refreshed.getClaimId()
+                        null
                     );
                 });
             });
@@ -756,16 +863,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 return CompletableFuture.completedFuture(false);
             }
 
-            ActiveTakeClaim claim = getActiveTakeClaimForAccount(key, accountHash);
-            if (claim == null) {
-                return CompletableFuture.completedFuture(false);
-            }
-
             return groundItemOwnedByDataProvider.consumeQuantityWithTakeClaim(
                 key,
                 removedQty,
                 accountHash,
-                claim.getClaimId()
+                null
             );
         });
     }
@@ -815,6 +917,28 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return tickNow < despawnScheduledTick;
     }
 
+    /**
+     * Fallback for mixed piles that report unknown despawn ticks.
+     * <p>
+     * We only apply this in the narrowest case: consuming a single remaining entitled unit while the
+     * local account currently holds the take claim lease. This reduces "stuck at 1" leaks without
+     * broadly treating unknown despawn timer churn as loot.
+     */
+    private boolean shouldApplyUnknownDespawnSingleQuantityFallback(GroundItemOwnedByKey key, int removedQty) {
+        if (removedQty != 1) {
+            return false;
+        }
+        if (groundItemOwnedByDataProvider.getTotalOwnedQuantity(key) != 1) {
+            return false;
+        }
+
+        long accountHash = client.getAccountHash();
+        if (getActiveTakeClaimForAccount(key, accountHash) != null) {
+            return true;
+        }
+        return groundItemOwnedByDataProvider.hasActiveTakeClaimForAccount(key, accountHash);
+    }
+
     private GroundItemOwnedByKey createGroundItemKey(int itemId, Tile tile) {
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, tile.getLocalLocation());
         WorldView worldView = client.findWorldViewFromWorldPoint(worldPoint);
@@ -839,7 +963,11 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
         return GroundItemOwnedByKey.of(itemId, client.getWorld(), worldView.getId(), worldPoint);
     }
 
-    // Called from scheduler thread - must use clientThread.invoke() for client access
+    /**
+     * Periodically removes expired local-account rows once no active take intent remains.
+     * <p>
+     * Invoked by scheduler thread and marshaled onto {@link ClientThread} before any client access.
+     */
     private void cleanupExpiredGroundItems() {
         clientThread.invoke(() -> {
             ConcurrentHashMap<GroundItemOwnedByKey, GroundItemOwnedByData> map
@@ -878,6 +1006,28 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
                 });
             }
         });
+    }
+
+    private enum ConsumeReason {
+        QUANTITY_CHANGED("quantity-changed"),
+        QUANTITY_CHANGED_UNKNOWN_DESPAWN_FALLBACK("quantity-changed unknown-despawn fallback"),
+        DESPAWN("despawn"),
+        DESPAWN_UNKNOWN_DESPAWN_FALLBACK("despawn unknown-despawn fallback");
+
+        private final String label;
+
+        ConsumeReason(String label) {
+            this.label = label;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
     }
 
     private enum EligibilityAction {

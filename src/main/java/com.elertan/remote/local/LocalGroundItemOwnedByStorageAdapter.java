@@ -10,12 +10,12 @@ import com.elertan.remote.local.LocalStorageAdapters.InMemoryKeyValueStorageAdap
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * In-memory ground piles with serialized compare-and-swap semantics (for solo/local parity with Firebase CAS).
- */
 public final class LocalGroundItemOwnedByStorageAdapter implements GroundItemOwnedByStoragePort {
 
     private final InMemoryKeyValueStorageAdapter<GroundItemOwnedByKey, GroundItemOwnedByData> inner = new InMemoryKeyValueStorageAdapter<>();
+    /**
+     * Serializes transactional operations so solo updates remain atomic and deterministic.
+     */
     private final Object txLock = new Object();
 
     @Override
@@ -114,6 +114,9 @@ public final class LocalGroundItemOwnedByStorageAdapter implements GroundItemOwn
         });
     }
 
+    /**
+     * Keeps the latest despawn horizon when merging pile updates.
+     */
     private static ISOOffsetDateTime mergeDespawnsAtLater(GroundItemOwnedByData cur, GroundItemOwnedByData delta) {
         if (delta.getDespawnsAt() == null) {
             return cur != null ? cur.getDespawnsAt() : null;
@@ -136,6 +139,10 @@ public final class LocalGroundItemOwnedByStorageAdapter implements GroundItemOwn
         });
     }
 
+    /**
+      * Enforces one active claim window at a time for a row.
+      * This prevents overlapping solo consume windows from decrementing the same entitlement twice.
+     */
     @Override
     public CompletableFuture<Boolean> transactionalAcquireTakeClaim(
         GroundItemOwnedByKey key,
@@ -172,6 +179,11 @@ public final class LocalGroundItemOwnedByStorageAdapter implements GroundItemOwn
         });
     }
 
+    /**
+     * Claim-gated local consume path.
+     * Blocks consumption without an active claim and never decrements below zero entitlement,
+      * preserving consistency in solo flows and future timing edge cases.
+     */
     @Override
     public CompletableFuture<Boolean> transactionalConsumeQuantityWithTakeClaim(
         GroundItemOwnedByKey key,
@@ -196,6 +208,9 @@ public final class LocalGroundItemOwnedByStorageAdapter implements GroundItemOwn
                 }
 
                 int entryQty = cur.getEntitlementQuantity();
+                if (entryQty <= 0) {
+                    return false;
+                }
                 int newQty = Math.max(0, entryQty - Math.max(1, quantity));
                 GroundItemOwnedByData next = new GroundItemOwnedByData(
                     cur.getAccountHash(),
