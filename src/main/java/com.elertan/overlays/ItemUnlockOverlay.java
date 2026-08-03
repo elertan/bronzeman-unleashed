@@ -234,11 +234,11 @@ public class ItemUnlockOverlay extends Overlay {
         }
 
         Point overlayLocation = getViewportOverlayLocation();
-        setPreferredLocation(overlayLocation);
-
         Point currentLocation = getBounds().getLocation();
         int originX = overlayLocation.x - currentLocation.x;
         int originY = overlayLocation.y - currentLocation.y;
+        // Preferred locations cause RuneLite to promote UNDER_WIDGETS overlays to ABOVE_WIDGETS.
+        getBounds().setLocation(overlayLocation);
         int y = originY;
         int frameX = originX + (WIDTH - visibleWidth) / 2;
 
