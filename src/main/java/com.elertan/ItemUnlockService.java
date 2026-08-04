@@ -6,6 +6,7 @@ import com.elertan.data.AbstractDataProvider;
 import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.models.*;
 import com.elertan.overlays.ItemUnlockOverlay;
+import com.elertan.RelatedItemsRegistry;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -149,6 +150,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private MinigameService minigameService;
     @Inject
     private CollectionLogService collectionLogService;
+    @Inject
+    private RelatedItemsRegistry relatedItemsRegistry;
     @Inject
     private WorldTypeService worldTypeService;
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
@@ -502,7 +505,9 @@ public class ItemUnlockService implements BUPluginLifecycle {
 
                 ISOOffsetDateTime acquiredAt = new ISOOffsetDateTime(OffsetDateTime.now());
 
-                UnlockedItem unlockedItem = new UnlockedItem(
+                // Always create the primary unlocked item first; this is the one that will drive
+                // overlays and chat notifications via the data provider listener.
+                UnlockedItem primaryUnlockedItem = new UnlockedItem(
                     fItemId,
                     fItemName,
                     acquiredByAccountHash,
@@ -510,7 +515,93 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     droppedByNPCId
                 );
                 log.debug("Unlocked item ({}) '{}'", fItemId, fItemName);
-                return unlockedItemsDataProvider.addUnlockedItem(unlockedItem);
+
+                // Derive additional item IDs to unlock based on equivalence and recipe
+                // relationships. We treat the current unlocked-items map as the "already owned"
+                // set, then:
+                // 1) add any missing equivalents for the primary item
+                // 2) add any recipe results that become satisfiable
+                Map<Integer, UnlockedItem> currentUnlockedItems =
+                    unlockedItemsDataProvider.getUnlockedItemsMap();
+                if (currentUnlockedItems == null) {
+                    return unlockedItemsDataProvider.addUnlockedItem(primaryUnlockedItem);
+                }
+
+                // Start from the canonical item ID we are unlocking.
+                Set<Integer> equivalentItemIds = relatedItemsRegistry.getEquivalentItemIds(fItemId);
+                // Ensure the primary ID is always included.
+                if (!equivalentItemIds.contains(fItemId)) {
+                    Set<Integer> copy = new HashSet<>(equivalentItemIds);
+                    copy.add(fItemId);
+                    equivalentItemIds = copy;
+                }
+
+                // Build the "owned" set for recipe evaluation: everything currently unlocked,
+                // plus all equivalents of the item we're about to add.
+                Set<Integer> ownedIdsForRecipes = new HashSet<>(currentUnlockedItems.keySet());
+                ownedIdsForRecipes.addAll(equivalentItemIds);
+
+                Set<Integer> recipeResultIds = gameRules.isEnableRecipeDerivedUnlocks()
+                    ? relatedItemsRegistry.getRecipeResultItemIds(ownedIdsForRecipes)
+                    : Collections.emptySet();
+
+                // Create additional unlocks for equivalent and recipe result IDs that are not yet
+                // unlocked. Keep the same acquiredAt/acquiredBy metadata so they look like a single
+                // unlock event from the player's perspective.
+                List<CompletableFuture<Void>> futures = new ArrayList<>();
+                futures.add(unlockedItemsDataProvider.addUnlockedItem(primaryUnlockedItem));
+
+                for (int equivalentId : equivalentItemIds) {
+                    if (equivalentId == fItemId) {
+                        continue;
+                    }
+                    if (currentUnlockedItems.containsKey(equivalentId)) {
+                        continue;
+                    }
+
+                    ItemComposition equivalentComposition = client.getItemDefinition(equivalentId);
+                    String equivalentName = equivalentComposition.getName();
+                    UnlockedItem equivalentUnlockedItem = new UnlockedItem(
+                        equivalentId,
+                        equivalentName,
+                        acquiredByAccountHash,
+                        acquiredAt,
+                        droppedByNPCId
+                    );
+                    futures.add(unlockedItemsDataProvider.addUnlockedItem(equivalentUnlockedItem));
+                }
+
+                for (int resultId : recipeResultIds) {
+                    if (resultId == fItemId) {
+                        continue;
+                    }
+                    if (currentUnlockedItems.containsKey(resultId)) {
+                        continue;
+                    }
+
+                    // Interaction with "Only for tradeable items":
+                    // when enabled, derived recipe unlocks should only apply to tradeable results.
+                    if (gameRules.isOnlyForTradeableItems()
+                        && !client.getItemDefinition(resultId).isTradeable()) {
+                        continue;
+                    }
+
+                    ItemComposition resultComposition = client.getItemDefinition(resultId);
+                    String resultName = resultComposition.getName();
+                    UnlockedItem resultUnlockedItem = new UnlockedItem(
+                        resultId,
+                        resultName,
+                        acquiredByAccountHash,
+                        acquiredAt,
+                        droppedByNPCId
+                    );
+                    futures.add(unlockedItemsDataProvider.addUnlockedItem(resultUnlockedItem));
+                }
+
+                if (futures.size() == 1) {
+                    return futures.get(0);
+                }
+                return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
             });
     }
 

@@ -183,6 +183,11 @@ public final class BUPlugin extends Plugin {
         return configManager.getConfig(BUPluginConfig.class);
     }
 
+    @Provides
+    RelatedItemsRegistry provideRelatedItemsRegistry() {
+        return RelatedItemsRegistry.createDefault();
+    }
+
     @Override
     protected void startUp() throws Exception {
         log.debug("BU: startup begin");
