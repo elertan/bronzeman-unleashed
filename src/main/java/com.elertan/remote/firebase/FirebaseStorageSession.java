@@ -2,17 +2,15 @@ package com.elertan.remote.firebase;
 
 import com.elertan.event.BUEvent;
 import com.elertan.models.GameRules;
-import com.elertan.models.GroundItemOwnedByData;
-import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.Member;
 import com.elertan.models.UnlockedItem;
-import com.elertan.remote.KeyListStoragePort;
+import com.elertan.remote.GroundItemOwnedByStoragePort;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.ObjectListStoragePort;
 import com.elertan.remote.ObjectStoragePort;
 import com.elertan.remote.StorageSession;
 import com.elertan.remote.firebase.storageAdapters.GameRulesFirebaseObjectStorageAdapter;
-import com.elertan.remote.firebase.storageAdapters.GroundItemOwnedByKeyListStorageAdapter;
+import com.elertan.remote.firebase.storageAdapters.GroundItemOwnedByKeyValueStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.LastEventFirebaseObjectListStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.MembersFirebaseKeyValueStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.UnlockedItemsFirebaseKeyValueStorageAdapter;
@@ -28,7 +26,7 @@ public class FirebaseStorageSession implements StorageSession {
     private final KeyValueStoragePort<Integer, UnlockedItem> unlockedItemsStoragePort;
     private final ObjectStoragePort<GameRules> gameRulesStoragePort;
     private final ObjectListStoragePort<BUEvent> lastEventStoragePort;
-    private final KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
+    private final GroundItemOwnedByStoragePort groundItemOwnedByStoragePort;
 
     public FirebaseStorageSession(
         OkHttpClient httpClient,
@@ -37,7 +35,7 @@ public class FirebaseStorageSession implements StorageSession {
     ) {
         firebaseRealtimeDatabase = new FirebaseRealtimeDatabase(httpClient, gson, url);
 
-        groundItemOwnedByStoragePort = new GroundItemOwnedByKeyListStorageAdapter(
+        groundItemOwnedByStoragePort = new GroundItemOwnedByKeyValueStorageAdapter(
             firebaseRealtimeDatabase,
             gson
         );
@@ -82,7 +80,7 @@ public class FirebaseStorageSession implements StorageSession {
     }
 
     @Override
-    public KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> getGroundItemOwnedByStoragePort() {
+    public GroundItemOwnedByStoragePort getGroundItemOwnedByStoragePort() {
         return groundItemOwnedByStoragePort;
     }
 

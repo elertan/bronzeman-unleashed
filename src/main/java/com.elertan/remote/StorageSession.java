@@ -2,8 +2,6 @@ package com.elertan.remote;
 
 import com.elertan.event.BUEvent;
 import com.elertan.models.GameRules;
-import com.elertan.models.GroundItemOwnedByData;
-import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.Member;
 import com.elertan.models.UnlockedItem;
 
@@ -17,5 +15,5 @@ public interface StorageSession extends AutoCloseable {
 
     ObjectListStoragePort<BUEvent> getLastEventStoragePort();
 
-    KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> getGroundItemOwnedByStoragePort();
+    GroundItemOwnedByStoragePort getGroundItemOwnedByStoragePort();
 }

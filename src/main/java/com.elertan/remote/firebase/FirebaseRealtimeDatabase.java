@@ -7,16 +7,30 @@ import java.io.Reader;
 import java.util.concurrent.CompletableFuture;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import lombok.Value;
 import okhttp3.Call;
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
+import okhttp3.Response;
 import okhttp3.ResponseBody;
 
 @Slf4j
 public class FirebaseRealtimeDatabase implements AutoCloseable {
+
+    public enum ConditionalWriteResult {
+        SUCCESS,
+        PRECONDITION_FAILED
+    }
+
+    @Value
+    public static class EtaggedSnapshot {
+
+        JsonElement data;
+        String etag;
+    }
 
     private static final MediaType JSON_MEDIA_TYPE = MediaType.parse(
         "application/json; charset=utf-8");
@@ -31,10 +45,10 @@ public class FirebaseRealtimeDatabase implements AutoCloseable {
 
     public FirebaseRealtimeDatabase(OkHttpClient httpClient, Gson gson,
         FirebaseRealtimeDatabaseURL databaseURL) {
-        this.httpClient = httpClient;
+        this.httpClient = httpClient.newBuilder().cache(null).build();
         this.gson = gson;
         this.databaseURL = databaseURL;
-        this.stream = new FirebaseSSEStream(httpClient, gson, databaseURL);
+        this.stream = new FirebaseSSEStream(this.httpClient, gson, databaseURL);
     }
 
     public static CompletableFuture<Boolean> canConnectTo(OkHttpClient httpClient,
@@ -115,6 +129,142 @@ public class FirebaseRealtimeDatabase implements AutoCloseable {
             .get()
             .build();
         return executeJsonRequest(request);
+    }
+
+    /**
+     * Conditional GET for Realtime Database REST (returns body + {@code ETag} for If-Match writes).
+     *
+     * @see <a href="https://firebase.google.com/docs/database/rest/saving-data#section-rest-conditional-requests">Conditional REST requests</a>
+     */
+    public CompletableFuture<EtaggedSnapshot> getWithEtag(String path) {
+        String url = getUrlForPath(path);
+        Request request = getRequestBuilder(url)
+            .header("X-Firebase-ETag", "true")
+            .get()
+            .build();
+        CompletableFuture<EtaggedSnapshot> future = new CompletableFuture<>();
+        httpClient.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                if (!future.isDone()) {
+                    future.completeExceptionally(e);
+                }
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) {
+                try (Response res = response) {
+                    if (res.code() == 404) {
+                        if (!future.isDone()) {
+                            future.complete(new EtaggedSnapshot(null, null));
+                        }
+                        return;
+                    }
+                    if (!res.isSuccessful()) {
+                        String snippet = drainBodySnippet(res);
+                        if (!future.isDone()) {
+                            future.completeExceptionally(new IOException(
+                                "GET ETag " + request.url() + " -> HTTP " + res.code() + snippet));
+                        }
+                        return;
+                    }
+                    String etag = res.header("ETag");
+                    ResponseBody body = res.body();
+                    if (body == null) {
+                        if (!future.isDone()) {
+                            future.completeExceptionally(new IOException("GET ETag empty body"));
+                        }
+                        return;
+                    }
+                    try (Reader reader = body.charStream()) {
+                        JsonElement jsonElement = gson.fromJson(reader, JsonElement.class);
+                        if (!future.isDone()) {
+                            future.complete(new EtaggedSnapshot(jsonElement, etag));
+                        }
+                    } catch (Exception parseErr) {
+                        if (!future.isDone()) {
+                            future.completeExceptionally(parseErr);
+                        }
+                    }
+                }
+            }
+        });
+        return future;
+    }
+
+    public CompletableFuture<ConditionalWriteResult> putConditional(String path, JsonElement data, String ifMatch) {
+        if (ifMatch == null) {
+            return put(path, data).thenApply(__ -> ConditionalWriteResult.SUCCESS);
+        }
+        String url = getUrlForPath(path);
+        String jsonPayload = gson.toJson(data);
+        RequestBody body = RequestBody.create(JSON_MEDIA_TYPE, jsonPayload);
+        Request request = getRequestBuilder(url)
+            .header("Content-Type", "application/json")
+            .header("If-Match", ifMatch)
+            .put(body)
+            .build();
+        return executeConditionalWrite(request);
+    }
+
+    public CompletableFuture<ConditionalWriteResult> deleteConditional(String path, String ifMatch) {
+        if (ifMatch == null) {
+            return delete(path).thenApply(__ -> ConditionalWriteResult.SUCCESS);
+        }
+        String url = getUrlForPath(path);
+        Request request = getRequestBuilder(url)
+            .header("If-Match", ifMatch)
+            .delete()
+            .build();
+        return executeConditionalWrite(request);
+    }
+
+    private CompletableFuture<ConditionalWriteResult> executeConditionalWrite(Request request) {
+        CompletableFuture<ConditionalWriteResult> future = new CompletableFuture<>();
+        httpClient.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                if (!future.isDone()) {
+                    future.completeExceptionally(e);
+                }
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) {
+                try (Response res = response) {
+                    if (res.code() == 412) {
+                        if (!future.isDone()) {
+                            future.complete(ConditionalWriteResult.PRECONDITION_FAILED);
+                        }
+                        return;
+                    }
+                    if (!res.isSuccessful()) {
+                        String snippet = drainBodySnippet(res);
+                        if (!future.isDone()) {
+                            future.completeExceptionally(new IOException(
+                                request.method() + " " + request.url() + " -> HTTP " + res.code() + snippet));
+                        }
+                        return;
+                    }
+                    if (!future.isDone()) {
+                        future.complete(ConditionalWriteResult.SUCCESS);
+                    }
+                }
+            }
+        });
+        return future;
+    }
+
+    private static String drainBodySnippet(Response res) {
+        ResponseBody errBody = res.body();
+        if (errBody == null) {
+            return "";
+        }
+        try {
+            return ": " + errBody.string();
+        } catch (IOException e) {
+            return "";
+        }
     }
 
     public CompletableFuture<JsonElement> post(String path, JsonElement data) {
@@ -281,6 +431,12 @@ public class FirebaseRealtimeDatabase implements AutoCloseable {
             .build();
     }
 
+    /**
+     * Builds a canonical Firebase Realtime Database REST URL for the given resource path.
+     * <p>
+     * Normalizes a leading slash, guarantees a {@code .json} suffix on the path portion, preserves caller query
+     * parameters, and appends path segments individually to avoid malformed double-slash URLs.
+     */
     private String getUrlForPath(String path) {
         HttpUrl base = HttpUrl.parse(databaseURL.getBaseUrl());
         if (base == null) {
@@ -295,7 +451,6 @@ public class FirebaseRealtimeDatabase implements AutoCloseable {
             rawQuery = path.substring(q + 1);
         }
 
-        // normalize leading slash
         if (rawPath.startsWith("/")) {
             rawPath = rawPath.substring(1);
         }

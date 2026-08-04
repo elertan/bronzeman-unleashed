@@ -18,9 +18,8 @@ Firebase Realtime Database (SSE streaming)
 
 | Interface | File | Use Case |
 |-----------|------|----------|
-| `KeyValueStoragePort<K,V>` | `remote/KeyValueStoragePort.java` | Key-value maps (members, unlocked items) |
+| `KeyValueStoragePort<K,V>` | `remote/KeyValueStoragePort.java` | Key-value maps (members, unlocked items, ground piles) |
 | `ObjectStoragePort<T>` | `remote/ObjectStoragePort.java` | Single objects (game rules) |
-| `KeyListStoragePort<K>` | `remote/KeyListStoragePort.java` | Sets of keys (ground item ownership) |
 | `ObjectListStoragePort<T>` | `remote/ObjectListStoragePort.java` | Lists of objects (events) |
 
 ### KeyValueStoragePort
@@ -41,7 +40,6 @@ public interface KeyValueStoragePort<K, V> extends AutoCloseable {
 |------------|------|------------|
 | `FirebaseKeyValueStorageAdapterBase` | `remote/firebase/FirebaseKeyValueStorageAdapterBase.java` | `KeyValueStoragePort` |
 | `FirebaseObjectStorageAdapterBase` | `remote/firebase/FirebaseObjectStorageAdapterBase.java` | `ObjectStoragePort` |
-| `FirebaseKeyListStorageAdapterBase` | `remote/firebase/FirebaseKeyListStorageAdapterBase.java` | `KeyListStoragePort` |
 | `FirebaseObjectListStorageAdapterBase` | `remote/firebase/FirebaseObjectListStorageAdapterBase.java` | `ObjectListStoragePort` |
 
 ## Concrete Adapters
@@ -52,7 +50,7 @@ public interface KeyValueStoragePort<K, V> extends AutoCloseable {
 | `MembersFirebaseKeyValueStorageAdapter` | `remote/firebase/storageAdapters/...` | KeyValue |
 | `GameRulesFirebaseObjectStorageAdapter` | `remote/firebase/storageAdapters/...` | Object |
 | `LastEventFirebaseObjectListStorageAdapter` | `remote/firebase/storageAdapters/...` | ObjectList |
-| `GroundItemOwnedByKeyListStorageAdapter` | `remote/firebase/storageAdapters/...` | KeyList |
+| `GroundItemOwnedByKeyValueStorageAdapter` | `remote/firebase/storageAdapters/...` | KeyValue (`/GroundItemOwnedBy`) |
 
 ## Firebase SSE
 

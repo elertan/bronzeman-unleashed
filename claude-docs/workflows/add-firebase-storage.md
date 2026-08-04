@@ -8,9 +8,8 @@ Add new data path to Firebase Realtime Database.
 
 | Pattern | Interface | Use Case |
 |---------|-----------|----------|
-| Key-Value | `KeyValueStoragePort<K, V>` | Maps with unique keys (members, items) |
+| Key-Value | `KeyValueStoragePort<K, V>` | Maps with unique keys (members, items, ground piles) |
 | Single Object | `ObjectStoragePort<T>` | Single config object |
-| Key List | `KeyListStoragePort<K>` | Set of unique keys |
 | Object List | `ObjectListStoragePort<T>` | List of objects (events) |
 
 ### 2. Create Model (if new)

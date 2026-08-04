@@ -6,8 +6,6 @@ import com.elertan.event.BUEvent;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.models.AccountConfiguration.StorageMode;
 import com.elertan.models.GameRules;
-import com.elertan.models.GroundItemOwnedByData;
-import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.Member;
 import com.elertan.models.UnlockedItem;
 import com.elertan.remote.firebase.FirebaseStorageSession;
@@ -56,7 +54,7 @@ public class StorageService implements BUPluginLifecycle {
     @Getter
     private ObjectListStoragePort<BUEvent> lastEventStoragePort;
     @Getter
-    private KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
+    private GroundItemOwnedByStoragePort groundItemOwnedByStoragePort;
 
     @Inject
     public StorageService(
