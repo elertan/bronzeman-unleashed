@@ -9,6 +9,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -26,6 +28,7 @@ import okhttp3.ResponseBody;
 public class FirebaseSSEStream {
 
     private static final int READ_TIMEOUT_SECONDS = 90;
+    private static final int MAX_BACKOFF_SECONDS = 30;
 
     private static final String EVENT_PREFIX = "event:";
     private static final int EVENT_PREFIX_LENGTH = EVENT_PREFIX.length();
@@ -40,7 +43,11 @@ public class FirebaseSSEStream {
     private final OkHttpClient sseClient;
     private ExecutorService streamExecutor;
     private ExecutorService readExecutor;
+    private ScheduledExecutorService retryScheduler;
+    private ScheduledFuture<?> scheduledRetry;
     private volatile Call currentCall;
+    private int backoffSeconds;
+    private boolean loggedStart;
 
     @Getter
     private volatile boolean isRunning = false;
@@ -64,12 +71,18 @@ public class FirebaseSSEStream {
     }
 
     private static ExecutorService newSingleThreadExecutor(String threadName) {
-        return Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, threadName);
-            t.setDaemon(true);
-            t.setUncaughtExceptionHandler((thr, ex) -> log.error("{} uncaught", threadName, ex));
-            return t;
-        });
+        return Executors.newSingleThreadExecutor(r -> newDaemonThread(r, threadName));
+    }
+
+    private static ScheduledExecutorService newSingleThreadScheduledExecutor(String threadName) {
+        return Executors.newSingleThreadScheduledExecutor(r -> newDaemonThread(r, threadName));
+    }
+
+    private static Thread newDaemonThread(Runnable runnable, String threadName) {
+        Thread thread = new Thread(runnable, threadName);
+        thread.setDaemon(true);
+        thread.setUncaughtExceptionHandler((thr, ex) -> log.error("{} uncaught", threadName, ex));
+        return thread;
     }
 
     private synchronized ExecutorService ensureReadExecutor() {
@@ -81,25 +94,30 @@ public class FirebaseSSEStream {
 
     private synchronized void recreateReadExecutor() {
         if (readExecutor != null) {
-            readExecutor.shutdownNow();
+            readExecutor.shutdown();
         }
         readExecutor = newSingleThreadExecutor("firebase-sse-read");
         log.warn("Firebase read executor recreated");
     }
 
-    private void sleepWithJitterSeconds(int baseSeconds) {
-        long jitterMillis = ThreadLocalRandom.current().nextLong(250, 1250);
-        long totalMillis = baseSeconds * 1000L + jitterMillis;
-        long deadline = System.currentTimeMillis() + totalMillis;
-        while (isRunning && System.currentTimeMillis() < deadline) {
-            long remaining = deadline - System.currentTimeMillis();
-            try {
-                Thread.sleep(Math.min(250L, Math.max(1L, remaining)));
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+    private synchronized void scheduleRetry() {
+        if (!isRunning || retryScheduler == null || retryScheduler.isShutdown()) {
+            return;
         }
+
+        long jitterMillis = ThreadLocalRandom.current().nextLong(250, 1250);
+        long delayMillis = backoffSeconds * 1000L + jitterMillis;
+        backoffSeconds = Math.min(backoffSeconds * 2, MAX_BACKOFF_SECONDS);
+        scheduledRetry = retryScheduler.schedule(this::submitConnectionAttempt,
+            delayMillis, TimeUnit.MILLISECONDS);
+    }
+
+    private synchronized void submitConnectionAttempt() {
+        scheduledRetry = null;
+        if (!isRunning || streamExecutor == null || streamExecutor.isShutdown()) {
+            return;
+        }
+        streamExecutor.submit(this::runConnectionAttempt);
     }
 
     public void addServerSentEventListener(Consumer<FirebaseSSE> listener) {
@@ -125,9 +143,14 @@ public class FirebaseSSEStream {
         if (streamExecutor == null || streamExecutor.isShutdown()) {
             streamExecutor = newSingleThreadExecutor("firebase-sse-stream");
         }
+        if (retryScheduler == null || retryScheduler.isShutdown()) {
+            retryScheduler = newSingleThreadScheduledExecutor("firebase-sse-retry");
+        }
         ensureReadExecutor();
+        backoffSeconds = 1;
+        loggedStart = false;
         setIsRunning(true);
-        streamExecutor.submit(this::loop);
+        submitConnectionAttempt();
     }
 
     public synchronized void stop() {
@@ -139,12 +162,20 @@ public class FirebaseSSEStream {
         if (call != null) {
             call.cancel();
         }
+        if (scheduledRetry != null) {
+            scheduledRetry.cancel(false);
+            scheduledRetry = null;
+        }
+        if (retryScheduler != null) {
+            retryScheduler.shutdown();
+            retryScheduler = null;
+        }
         if (streamExecutor != null) {
-            streamExecutor.shutdownNow();
+            streamExecutor.shutdown();
             streamExecutor = null;
         }
         if (readExecutor != null) {
-            readExecutor.shutdownNow();
+            readExecutor.shutdown();
             readExecutor = null;
         }
 
@@ -166,77 +197,72 @@ public class FirebaseSSEStream {
         }
     }
 
-    private void loop() {
-        int backoffSeconds = 1;       // start small
-        final int maxBackoffSeconds = 30;
-        boolean loggedStart = false;
-
-        while (isRunning) {
-            final String url = databaseURL.getBaseUrl() + "/.json";
-
-            Request request = FirebaseRealtimeDatabase.getRequestBuilder(url)
-                .header("Accept", "text/event-stream")
-                .header("Connection", "keep-alive")
-                .header("Cache-Control", "no-cache")
-                .build();
-
-            try {
-                Call call = sseClient.newCall(request);
-                currentCall = call;
-                try (Response response = call.execute()) {
-                    if (!response.isSuccessful()) {
-                        log.warn("Firebase stream HTTP {}. Will retry.", response.code());
-                        if (!isRunning) {
-                            break;
-                        }
-                        // Drop any potentially stale sockets after sleep/wake
-                        sseClient.connectionPool().evictAll();
-                        sleepWithJitterSeconds(backoffSeconds);
-                        backoffSeconds = Math.min(backoffSeconds * 2, maxBackoffSeconds);
-                        continue;
-                    }
-
-                    if (!loggedStart) {
-                        log.debug("Firebase SSE stream connected");
-                        loggedStart = true;
-                    }
-
-                    ResponseBody body = response.body();
-                    if (body == null) {
-                        log.warn("Firebase stream response body is null. Retrying.");
-                        if (!isRunning) {
-                            break;
-                        }
-                        sseClient.connectionPool().evictAll();
-                        sleepWithJitterSeconds(backoffSeconds);
-                        backoffSeconds = Math.min(backoffSeconds * 2, maxBackoffSeconds);
-                        continue;
-                    }
-
-                    lastReadNano = System.nanoTime();
-
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(body.byteStream()))) {
-                        // read loop; timeouts are treated as keep-alives
-                        readStream(reader);
-                    }
-
-                    // successful session; reset backoff
-                    backoffSeconds = 1;
-                }
-            } catch (Exception e) {
-                if (!isRunning) {
-                    break;
-                }
-                log.warn("Firebase stream error. Will retry.", e);
-                // After sleep, TLS sockets in the pool may be invalid. Clear them.
-                sseClient.connectionPool().evictAll();
-                sleepWithJitterSeconds(backoffSeconds);
-                backoffSeconds = Math.min(backoffSeconds * 2, maxBackoffSeconds);
-            } finally {
-                currentCall = null;
-            }
+    private void runConnectionAttempt() {
+        if (!isRunning) {
+            return;
         }
-        setIsRunning(false);
+
+        final String url = databaseURL.getBaseUrl() + "/.json";
+
+        Request request = FirebaseRealtimeDatabase.getRequestBuilder(url)
+            .header("Accept", "text/event-stream")
+            .header("Connection", "keep-alive")
+            .header("Cache-Control", "no-cache")
+            .build();
+
+        try {
+            Call call = sseClient.newCall(request);
+            currentCall = call;
+            try (Response response = call.execute()) {
+                if (!response.isSuccessful()) {
+                    log.warn("Firebase stream HTTP {}. Will retry.", response.code());
+                    if (!isRunning) {
+                        return;
+                    }
+                    // Drop any potentially stale sockets after sleep/wake
+                    sseClient.connectionPool().evictAll();
+                    scheduleRetry();
+                    return;
+                }
+
+                if (!loggedStart) {
+                    log.debug("Firebase SSE stream connected");
+                    loggedStart = true;
+                }
+
+                ResponseBody body = response.body();
+                if (body == null) {
+                    log.warn("Firebase stream response body is null. Retrying.");
+                    if (!isRunning) {
+                        return;
+                    }
+                    sseClient.connectionPool().evictAll();
+                    scheduleRetry();
+                    return;
+                }
+
+                lastReadNano = System.nanoTime();
+
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(body.byteStream()))) {
+                    // read loop; timeouts are treated as keep-alives
+                    readStream(reader);
+                }
+
+                // successful session; reset backoff
+                backoffSeconds = 1;
+                submitConnectionAttempt();
+            }
+        } catch (Exception e) {
+            if (!isRunning) {
+                return;
+            }
+            log.warn("Firebase stream error. Will retry.", e);
+            // After sleep, TLS sockets in the pool may be invalid. Clear them.
+            sseClient.connectionPool().evictAll();
+            scheduleRetry();
+        } finally {
+            currentCall = null;
+        }
     }
 
     private void readStream(BufferedReader reader) throws Exception {
@@ -314,7 +340,7 @@ public class FirebaseSSEStream {
         try {
             return futureLine.get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
-            futureLine.cancel(true);
+            futureLine.cancel(false);
             throw new TimeoutException("Firebase stream read timeout");
         }
     }
