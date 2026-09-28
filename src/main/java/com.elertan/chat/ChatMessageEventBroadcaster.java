@@ -275,7 +275,7 @@ public class ChatMessageEventBroadcaster implements BUPluginLifecycle {
             .thenAccept((itemComposition) -> {
                 builder.append(config.chatItemNameColor(), itemComposition.getName());
 
-                int totalCoins = e.getPricePerItem() * e.getQuantity();
+                long totalCoins = e.getPricePerItem() * e.getQuantity();
                 String formattedCoins = String.format("%,d", totalCoins);
                 builder.append(" (" + formattedCoins + " coins) from ");
             })

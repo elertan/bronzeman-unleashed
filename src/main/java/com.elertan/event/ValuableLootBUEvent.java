@@ -9,12 +9,12 @@ import lombok.Getter;
 public class ValuableLootBUEvent extends BUEvent {
 
     private final int itemId;
-    private final int quantity;
-    private final int pricePerItem;
+    private final long quantity;
+    private final long pricePerItem;
     private final int npcId;
 
     public ValuableLootBUEvent(long dispatchedFromAccountHash, ISOOffsetDateTime isoOffsetDateTime,
-        int itemId, int quantity, int pricePerItem, int npcId) {
+        int itemId, long quantity, long pricePerItem, int npcId) {
         super(dispatchedFromAccountHash, isoOffsetDateTime);
         this.itemId = itemId;
         this.quantity = quantity;
