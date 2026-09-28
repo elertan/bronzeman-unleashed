@@ -63,9 +63,9 @@ public class LootValuationService implements BUPluginLifecycle {
 
         for (ItemStack itemStack : itemStacks) {
             int itemId = itemStack.getId();
-            int quantity = itemStack.getQuantity();
-            int price = itemManager.getItemPrice(itemId);
-            int totalPrice = price * quantity;
+            long quantity = itemStack.getQuantity();
+            long price = itemManager.getItemPrice(itemId);
+            long totalPrice = price * quantity;
 
             if (totalPrice >= valuableLootNotificationThreshold) {
                 ValuableLootBUEvent valuableLootBUEvent = new ValuableLootBUEvent(

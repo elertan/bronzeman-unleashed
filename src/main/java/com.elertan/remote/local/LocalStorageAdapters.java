@@ -145,7 +145,7 @@ public final class LocalStorageAdapters {
         @Override
         public void close() {
             listeners.clear();
-            executor.shutdownNow();
+            executor.shutdown();
         }
 
         private void ensureLoaded() {
@@ -249,7 +249,7 @@ public final class LocalStorageAdapters {
         @Override
         public void close() {
             listeners.clear();
-            executor.shutdownNow();
+            executor.shutdown();
         }
 
         private void ensureLoaded() {

@@ -108,7 +108,7 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
     public void shutDown() throws Exception {
         groundItemOwnedByDataProvider.removeMapListener(groundItemOwnedByDataProviderListener);
 
-        scheduler.shutdownNow();
+        scheduler.shutdown();
     }
 
     public void onItemSpawned(ItemSpawned event) {
