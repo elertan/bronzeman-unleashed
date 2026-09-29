@@ -23,6 +23,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
     public final Property<Boolean> preventPlayedOwnedHouseProperty;
     public final Property<Boolean> restrictPlayerVersusPlayerLootProperty;
     public final Property<Boolean> restrictFaladorPartyRoomBalloonsProperty;
+    public final Property<Boolean> enableRecipeDerivedUnlocksProperty;
     public final Property<Boolean> shareAchievementNotificationsProperty;
     public final Property<Integer> valuableLootNotificationThresholdProperty;
     public final Property<String> partyPasswordProperty;
@@ -53,6 +54,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         preventPlayedOwnedHouseProperty = new Property<>(gameRules.isPreventPlayerOwnedHouse());
         restrictPlayerVersusPlayerLootProperty = new Property<>(gameRules.isRestrictPlayerVersusPlayerLoot());
         restrictFaladorPartyRoomBalloonsProperty = new Property<>(gameRules.isRestrictFaladorPartyRoomBalloons());
+        enableRecipeDerivedUnlocksProperty = new Property<>(gameRules.isEnableRecipeDerivedUnlocks());
         shareAchievementNotificationsProperty = new Property<>(gameRules.isShareAchievementNotifications());
         valuableLootNotificationThresholdProperty = new Property<>(gameRules.getValuableLootNotificationThreshold());
         partyPasswordProperty = new Property<>(gameRules.getPartyPassword());
@@ -87,6 +89,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         addListener(preventPlayedOwnedHouseProperty, updateListener);
         addListener(restrictPlayerVersusPlayerLootProperty, updateListener);
         addListener(restrictFaladorPartyRoomBalloonsProperty, updateListener);
+        addListener(enableRecipeDerivedUnlocksProperty, updateListener);
         addListener(shareAchievementNotificationsProperty, updateListener);
         addListener(valuableLootNotificationThresholdProperty, updateListener);
         if (setGameRules) {
@@ -112,6 +115,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         preventPlayedOwnedHouseProperty.set(gameRules.isPreventPlayerOwnedHouse());
         restrictPlayerVersusPlayerLootProperty.set(gameRules.isRestrictPlayerVersusPlayerLoot());
         restrictFaladorPartyRoomBalloonsProperty.set(gameRules.isRestrictFaladorPartyRoomBalloons());
+        enableRecipeDerivedUnlocksProperty.set(gameRules.isEnableRecipeDerivedUnlocks());
         shareAchievementNotificationsProperty.set(gameRules.isShareAchievementNotifications());
         partyPasswordProperty.set(gameRules.getPartyPassword());
         valuableLootNotificationThresholdProperty.set(gameRules.getValuableLootNotificationThreshold());
@@ -148,6 +152,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
             .preventPlayerOwnedHouse(preventPlayedOwnedHouseProperty.get())
             .restrictPlayerVersusPlayerLoot(restrictPlayerVersusPlayerLootProperty.get())
             .restrictFaladorPartyRoomBalloons(restrictFaladorPartyRoomBalloonsProperty.get())
+            .enableRecipeDerivedUnlocks(enableRecipeDerivedUnlocksProperty.get())
             .shareAchievementNotifications(shareAchievementNotificationsProperty.get())
             .valuableLootNotificationThreshold(valuableLootNotificationThresholdProperty.get())
             .partyPassword(partyPassword)

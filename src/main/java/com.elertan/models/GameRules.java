@@ -23,6 +23,7 @@ public class GameRules {
     boolean preventPlayerOwnedHouse;
     boolean restrictPlayerVersusPlayerLoot;
     boolean restrictFaladorPartyRoomBalloons;
+    boolean enableRecipeDerivedUnlocks;
     boolean shareAchievementNotifications;
     Integer valuableLootNotificationThreshold;
     String partyPassword;
@@ -40,6 +41,7 @@ public class GameRules {
             .preventPlayerOwnedHouse(true)
             .restrictPlayerVersusPlayerLoot(false)
             .restrictFaladorPartyRoomBalloons(true)
+            .enableRecipeDerivedUnlocks(false)
             .shareAchievementNotifications(true)
             .valuableLootNotificationThreshold(100_000)
             .partyPassword(null)

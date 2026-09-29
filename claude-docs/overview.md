@@ -75,3 +75,10 @@ Service/Policy handler
 - Gson (JSON serialization)
 - OkHttp (HTTP client for Firebase)
 - Firebase Realtime Database (real-time sync)
+
+## Game rule: Recipe-derived unlocks
+
+When `enableRecipeDerivedUnlocks` is enabled in `GameRules`, `ItemUnlockService` will unlock configured recipe results when all prerequisite items are already unlocked (explicit mappings in `RelatedItemsRegistry`).
+
+Interaction with `onlyForTradeableItems`:
+- When `onlyForTradeableItems` is enabled, recipe-derived unlocks are only applied for **tradeable recipe results**.

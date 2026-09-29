@@ -222,6 +222,24 @@ public class GameRulesEditor extends JPanel implements AutoCloseable {
         );
         gbc.gridy++;
 
+        JCheckBox recipeDerivedUnlocksCheckBox = new JCheckBox();
+        Bindings.bindSelected(
+            recipeDerivedUnlocksCheckBox,
+            viewModel.enableRecipeDerivedUnlocksProperty
+        );
+        Bindings.bindEnabled(
+            recipeDerivedUnlocksCheckBox,
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
+        );
+        panel.add(
+            createCheckboxInput(
+                "Enable recipe-derived unlocks",
+                "Derive unlocks for certain items when all prerequisite items are unlocked (e.g. Araxyte fang + Amulet of torture → Amulet of rancour).",
+                recipeDerivedUnlocksCheckBox
+            ), gbc
+        );
+        gbc.gridy++;
+
         return panel;
     }
 

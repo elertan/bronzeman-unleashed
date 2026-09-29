@@ -36,11 +36,19 @@ Every unlock gets celebrated.
 
 Configure your own restrictions:
 - Track only tradeable items
+- Enable recipe-derived unlocks (optional)
 - Restrict ground item pickups
 - Block GE buy offers for locked items
 - Prevent trades outside your group
 - Restrict POH access
 - Limit PvP loot
+
+**Recipe-derived unlocks**
+
+When enabled, the plugin can treat certain items as unlocked if all of their prerequisite items are already unlocked (for example, `Araxyte fang` + `Amulet of torture` ⇒ `Amulet of rancour`).
+
+Interaction with **Track only tradeable items**:
+- If **Track only tradeable items** is enabled, recipe-derived unlocks will **only** be applied for **tradeable result items**.
 
 ---
 
