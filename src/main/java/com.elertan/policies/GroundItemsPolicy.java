@@ -215,8 +215,8 @@ public class GroundItemsPolicy extends PolicyBase implements BUPluginLifecycle {
             return;
         }
 
-        // In last man standing we want to allow taking any items
-        if (minigameService.isPlayingLastManStanding()) {
+        // In last man standing and Pete Kayer's Challenges we want to allow taking any items
+        if (minigameService.isPlayingLastManStanding() || minigameService.isPlayingPeteKayerChallenge()) {
             return;
         }
 

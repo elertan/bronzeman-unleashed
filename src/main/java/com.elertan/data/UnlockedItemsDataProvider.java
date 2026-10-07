@@ -1,5 +1,6 @@
 package com.elertan.data;
 
+import com.elertan.ExcludedItemIds;
 import com.elertan.models.UnlockedItem;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.StorageService;
@@ -39,6 +40,7 @@ public class UnlockedItemsDataProvider extends AbstractDataProvider {
                     return;
                 }
                 unlockedItemsMap = new ConcurrentHashMap<>(map);
+                unlockedItemsMap.keySet().removeAll(ExcludedItemIds.IDS);
             }
 
             @Override
@@ -62,8 +64,11 @@ public class UnlockedItemsDataProvider extends AbstractDataProvider {
                 if (unlockedItemsMap == null) {
                     return;
                 }
-                UnlockedItem unlockedItem = unlockedItemsMap.get(key);
-                unlockedItemsMap.remove(key);
+                UnlockedItem unlockedItem = unlockedItemsMap.remove(key);
+                // Already removed locally, e.g. by removeExcludedItems()
+                if (unlockedItem == null) {
+                    return;
+                }
 
                 for (UnlockedItemsMapListener listener : unlockedItemsMapListeners) {
                     try {
@@ -88,6 +93,7 @@ public class UnlockedItemsDataProvider extends AbstractDataProvider {
                 return;
             }
             unlockedItemsMap = new ConcurrentHashMap<>(map);
+            removeExcludedItems();
             log.debug("UnlockedItemDataProvider initialized with {} items", unlockedItemsMap.size());
             setState(State.Ready);
         });
@@ -99,6 +105,21 @@ public class UnlockedItemsDataProvider extends AbstractDataProvider {
         if (keyValueStoragePort != null) {
             keyValueStoragePort.removeListener(storagePortListener);
             keyValueStoragePort = null;
+        }
+    }
+
+    // Excluded items could be unlocked by older plugin versions
+    private void removeExcludedItems() {
+        for (Integer itemId : ExcludedItemIds.IDS) {
+            if (unlockedItemsMap.remove(itemId) == null) {
+                continue;
+            }
+            log.debug("Removing excluded unlocked item with id {}", itemId);
+            keyValueStoragePort.delete(itemId).whenComplete((__, throwable) -> {
+                if (throwable != null) {
+                    log.error("Failed to remove excluded unlocked item with id {}", itemId, throwable);
+                }
+            });
         }
     }
 
