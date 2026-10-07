@@ -15,6 +15,9 @@ public class MinigameService {
     private static final int TOB_VARBIT = 6440;      // ToB
     private static final int BA_VARBIT = 3923;       // Barbarian Assault
 
+    // VarPlayers - https://github.com/runelite/runelite/blob/master/runelite-api/src/main/java/net/runelite/api/gameval/VarPlayerID.java
+    private static final int PETE_KAYER_ACTIVE_CHALLENGE_VARP = 5850; // PVPTUT_ACTIVE_TUTORIAL
+
     // Inferno - https://github.com/JourneyDeprecated/OpenOSRS/blob/master/runelite-client/src/main/java/net/runelite/client/plugins/inferno/InfernoPlugin.java
     private static final int INFERNO_REGION = 9043;
     // Gauntlet - https://github.com/runelite/runelite/blob/master/runelite-client/src/main/java/net/runelite/client/plugins/screenshot/ScreenshotPlugin.java
@@ -52,8 +55,13 @@ public class MinigameService {
         return client.getVarbitValue(LAST_MAN_STANDING_VARBIT_ID) == 1;
     }
 
+    // Pete Kayer's Challenges (Ferox Enclave) hand out loadouts of minigame-only item copies
+    public boolean isPlayingPeteKayerChallenge() {
+        return client.getVarpValue(PETE_KAYER_ACTIVE_CHALLENGE_VARP) != 0;
+    }
+
     public boolean isInMinigameOrInstance() {
-        if (isPlayingLastManStanding()) {
+        if (isPlayingLastManStanding() || isPlayingPeteKayerChallenge()) {
             return true;
         }
 
