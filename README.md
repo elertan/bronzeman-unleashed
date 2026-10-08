@@ -68,6 +68,12 @@ The plugin walks you through setup. For Firebase configuration, see the [setup g
 
 ---
 
+## Support
+
+Bronzeman Unleashed is free. If you like what I do, you can [buy me a coffee](https://buymeacoffee.com/elertan) ☕
+
+---
+
 ## Feedback
 
 Found a bug? Have a suggestion? [Open an issue](https://github.com/elertan/bronzeman-unleashed/issues).
