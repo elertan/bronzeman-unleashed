@@ -221,7 +221,6 @@ public class SetupScreen extends JPanel implements AutoCloseable {
             );
             AccountTypeStepViewModel accountTypeStepViewModel = accountTypeStepViewModelFactory.create(
                 viewModel.isExistingAccountSaved,
-                viewModel.isItemLockRequired,
                 new AccountTypeStepViewModel.Listener() {
                     @Override
                     public void onBack() {

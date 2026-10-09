@@ -35,7 +35,6 @@ public class GameRulesEditor extends JPanel implements AutoCloseable {
 
     private final GameRulesEditorViewModel viewModel;
     private final AutoCloseable notificationsSectionVisibleBinding;
-    private final AutoCloseable itemLockSectionVisibleBinding;
 
     private GameRulesEditor(GameRulesEditorViewModel viewModel) {
         this.viewModel = viewModel;
@@ -128,19 +127,6 @@ public class GameRulesEditor extends JPanel implements AutoCloseable {
         add(createSection("Party", "Controls the party settings", createPartyPanel(), true), gbc);
         gbc.gridy++;
 
-        JPanel itemLockSection = createSection(
-            "Item locking",
-            "Rules for players who start Bronzeman on an existing account",
-            createItemLockPanel(),
-            true
-        );
-        itemLockSectionVisibleBinding = Bindings.bindVisible(
-            itemLockSection,
-            viewModel.isLocalModeProperty.derive(isLocalMode -> !Boolean.TRUE.equals(isLocalMode))
-        );
-        add(itemLockSection, gbc);
-        gbc.gridy++;
-
         add(Box.createVerticalStrut(20), gbc);
         gbc.gridy++;
     }
@@ -148,7 +134,6 @@ public class GameRulesEditor extends JPanel implements AutoCloseable {
     @Override
     public void close() throws Exception {
         notificationsSectionVisibleBinding.close();
-        itemLockSectionVisibleBinding.close();
     }
 
     private JPanel createSection(String title, String description, JComponent content,
@@ -446,38 +431,6 @@ public class GameRulesEditor extends JPanel implements AutoCloseable {
                 "Restrict balloons",
                 "Restricts bursting the balloons in the Falador Party Room",
                 restrictBalloonsCheckbox
-            ), gbc
-        );
-
-        return panel;
-    }
-
-    private JPanel createItemLockPanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setOpaque(false);
-
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.weightx = 1.0;
-        gbc.insets = new Insets(0, 0, 5, 0);
-
-        JCheckBox requireItemLockCheckbox = new JCheckBox();
-        Bindings.bindSelected(
-            requireItemLockCheckbox,
-            viewModel.requireItemLockProperty
-        );
-        Bindings.bindEnabled(
-            requireItemLockCheckbox,
-            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
-        );
-        panel.add(
-            createCheckboxInput(
-                "New members must lock their items",
-                "New members must choose Existing account, so the items they already own are locked. Current members do not change.",
-                requireItemLockCheckbox
             ), gbc
         );
 

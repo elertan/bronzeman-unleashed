@@ -33,7 +33,6 @@ public final class SetupScreenViewModel implements AutoCloseable {
     public final Property<Boolean> gameRulesAreViewOnly = new Property<>(null);
     public final Property<GameRules> gameRules = new Property<>(null);
     public final Property<Boolean> isExistingAccountSaved = new Property<>(false);
-    public final Property<Boolean> isItemLockRequired = new Property<>(false);
     private final Client client;
     private final BUPanelService buPanelService;
     private final AccountConfigurationService accountConfigurationService;
@@ -175,11 +174,9 @@ public final class SetupScreenViewModel implements AutoCloseable {
     }
 
     public CompletableFuture<Void> onGameRulesStepFinish() {
-        GameRules gameRulesValue = gameRules.get();
-        if (gameRulesValue == null) {
+        if (gameRules.get() == null) {
             return CompletableFuture.failedFuture(new IllegalStateException("Game rules are not set"));
         }
-        isItemLockRequired.set(chosenStorageMode != StorageMode.LOCAL && gameRulesValue.isRequireItemLock());
         step.set(Step.ACCOUNT_TYPE);
         return CompletableFuture.completedFuture(null);
     }
@@ -379,7 +376,6 @@ public final class SetupScreenViewModel implements AutoCloseable {
         gameRulesAreViewOnly.set(null);
         gameRules.set(null);
         isExistingAccountSaved.set(false);
-        isItemLockRequired.set(false);
         chosenStorageMode = null;
         shouldDeleteExistingLocalProgressOnFinish = false;
     }
