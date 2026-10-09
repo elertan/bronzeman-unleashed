@@ -24,8 +24,10 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.components.IconTextField;
 
 @Slf4j
@@ -35,6 +37,7 @@ public class HeaderView extends JPanel implements AutoCloseable {
     private final AutoCloseable sortedByComboBoxBinding;
     private final AutoCloseable unlockedByComboBoxBinding;
     private final AutoCloseable unlockedByRowVisibleBinding;
+    private final AutoCloseable manualUnlockButtonVisibleBinding;
 
     private HeaderView(HeaderViewViewModel viewModel, BUResourceService buResourceService) {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -48,30 +51,29 @@ public class HeaderView extends JPanel implements AutoCloseable {
         searchField.setMinimumSize(new Dimension(0, 30));
         searchFieldBinding = Bindings.bindIconTextFieldText(searchField, viewModel.searchText);
 
-        JButton configButton = new JButton();
+        JButton configButton = createHeaderButton();
         configButton.setIcon(new ImageIcon(buResourceService.getConfigureIconBufferedImage()));
         configButton.setToolTipText("Open configuration");
-        configButton.setPreferredSize(new Dimension(30, 30));
-        configButton.setFocusable(false);
-        configButton.setBorderPainted(false);
-        configButton.setContentAreaFilled(true);
-        configButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        configButton.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                configButton.setBackground(ColorScheme.DARK_GRAY_HOVER_COLOR);
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                configButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            }
-        });
         configButton.addActionListener(e -> viewModel.onOpenConfigurationClick());
+
+        JButton manualUnlockButton = createHeaderButton();
+        manualUnlockButton.setText("+");
+        manualUnlockButton.setFont(FontManager.getRunescapeBoldFont());
+        manualUnlockButton.setToolTipText("Unlock an item by hand");
+        manualUnlockButton.addActionListener(e ->
+            viewModel.onManualUnlockClick(SwingUtilities.getWindowAncestor(this)));
+        manualUnlockButtonVisibleBinding = Bindings.bindVisible(
+            manualUnlockButton,
+            viewModel.showManualUnlockButton
+        );
+
+        JPanel headerButtons = new JPanel(new BorderLayout(5, 0));
+        headerButtons.add(manualUnlockButton, BorderLayout.WEST);
+        headerButtons.add(configButton, BorderLayout.EAST);
 
         JPanel searchbarHeader = new JPanel(new BorderLayout(5, 0));
         searchbarHeader.add(searchField, BorderLayout.CENTER);
-        searchbarHeader.add(configButton, BorderLayout.EAST);
+        searchbarHeader.add(headerButtons, BorderLayout.EAST);
 
         add(searchbarHeader);
 
@@ -168,8 +170,30 @@ public class HeaderView extends JPanel implements AutoCloseable {
         add(filterAndSortPanel);
     }
 
+    private static JButton createHeaderButton() {
+        JButton button = new JButton();
+        button.setPreferredSize(new Dimension(30, 30));
+        button.setFocusable(false);
+        button.setBorderPainted(false);
+        button.setContentAreaFilled(true);
+        button.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        button.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(ColorScheme.DARK_GRAY_HOVER_COLOR);
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            }
+        });
+        return button;
+    }
+
     @Override
     public void close() throws Exception {
+        manualUnlockButtonVisibleBinding.close();
         unlockedByRowVisibleBinding.close();
         unlockedByComboBoxBinding.close();
         sortedByComboBoxBinding.close();

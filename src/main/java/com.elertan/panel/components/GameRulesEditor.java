@@ -222,6 +222,24 @@ public class GameRulesEditor extends JPanel implements AutoCloseable {
         );
         gbc.gridy++;
 
+        JCheckBox allowManualUnlocksCheckBox = new JCheckBox();
+        Bindings.bindSelected(
+            allowManualUnlocksCheckBox,
+            viewModel.allowManualUnlocksProperty
+        );
+        Bindings.bindEnabled(
+            allowManualUnlocksCheckBox,
+            viewModel.isViewOnlyModeProperty.derive(isViewOnlyMode -> !isViewOnlyMode)
+        );
+        panel.add(
+            createCheckboxInput(
+                "Allow manual unlocks",
+                "Whether members can unlock items by hand from the unlocked items panel",
+                allowManualUnlocksCheckBox
+            ), gbc
+        );
+        gbc.gridy++;
+
         return panel;
     }
 

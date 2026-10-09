@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 public class GameRulesEditorViewModel extends BaseViewModel {
 
     public final Property<Boolean> onlyForTradeableItemsProperty;
+    public final Property<Boolean> allowManualUnlocksProperty;
     public final Property<Boolean> restrictGroundItemsProperty;
     public final Property<Boolean> preventTradeOutsideGroupProperty;
     public final Property<Boolean> preventTradeLockedItemsProperty;
@@ -46,6 +47,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         }
 
         onlyForTradeableItemsProperty = new Property<>(gameRules.isOnlyForTradeableItems());
+        allowManualUnlocksProperty = new Property<>(gameRules.isAllowManualUnlocks());
         restrictGroundItemsProperty = new Property<>(gameRules.isRestrictGroundItems());
         preventTradeOutsideGroupProperty = new Property<>(gameRules.isPreventTradeOutsideGroup());
         preventTradeLockedItemsProperty = new Property<>(gameRules.isPreventTradeLockedItems());
@@ -80,6 +82,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
 //        isValid = partyPassword.derive((partyPasswordValue) -> partyPasswordValue == null || partyPasswordValue.length() <= 20);
 
         addListener(onlyForTradeableItemsProperty, updateListener);
+        addListener(allowManualUnlocksProperty, updateListener);
         addListener(restrictGroundItemsProperty, updateListener);
         addListener(preventTradeOutsideGroupProperty, updateListener);
         addListener(preventTradeLockedItemsProperty, updateListener);
@@ -105,6 +108,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
         }
 
         onlyForTradeableItemsProperty.set(gameRules.isOnlyForTradeableItems());
+        allowManualUnlocksProperty.set(gameRules.isAllowManualUnlocks());
         restrictGroundItemsProperty.set(gameRules.isRestrictGroundItems());
         preventTradeOutsideGroupProperty.set(gameRules.isPreventTradeOutsideGroup());
         preventTradeLockedItemsProperty.set(gameRules.isPreventTradeLockedItems());
@@ -141,6 +145,7 @@ public class GameRulesEditorViewModel extends BaseViewModel {
             .lastUpdatedByAccountHash(props.getAccountHash())
             .lastUpdatedAt(new ISOOffsetDateTime(OffsetDateTime.now()))
             .onlyForTradeableItems(onlyForTradeableItemsProperty.get())
+            .allowManualUnlocks(allowManualUnlocksProperty.get())
             .restrictGroundItems(restrictGroundItemsProperty.get())
             .preventTradeOutsideGroup(preventTradeOutsideGroupProperty.get())
             .preventTradeLockedItems(preventTradeLockedItemsProperty.get())

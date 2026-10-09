@@ -117,6 +117,12 @@ public class GameRulesService implements BUPluginLifecycle {
                 booleanFormatter.apply(newGameRules.isOnlyForTradeableItems())
             );
         }
+        if (oldGameRules.isAllowManualUnlocks() != newGameRules.isAllowManualUnlocks()) {
+            differences.put(
+                "Allow manual unlocks",
+                booleanFormatter.apply(newGameRules.isAllowManualUnlocks())
+            );
+        }
         if (oldGameRules.isRestrictGroundItems() != newGameRules.isRestrictGroundItems()) {
             differences.put(
                 "Restrict ground items",

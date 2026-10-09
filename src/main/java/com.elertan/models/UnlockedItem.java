@@ -13,4 +13,7 @@ public class UnlockedItem {
     long acquiredByAccountHash;
     ISOOffsetDateTime acquiredAt;
     Integer droppedByNPCId;
+    // Unlocked by hand, with an optional reason
+    boolean manual;
+    String note;
 }

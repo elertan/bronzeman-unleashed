@@ -186,6 +186,16 @@ public class MainView extends JPanel implements AutoCloseable {
                     droppedByNPCName
                 ));
             }
+            if (item.isManual()) {
+                tooltipBuilder.append("<p><font color='gray'>manual unlock</font></p>");
+                String note = item.getNote();
+                if (note != null && !note.isEmpty()) {
+                    tooltipBuilder.append(String.format(
+                        "<p><i>%s</i></p>",
+                        note.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    ));
+                }
+            }
             if (acquiredAt != null) {
                 tooltipBuilder.append(String.format("<font color='gray'>%s</font>", acquiredAt));
             }
