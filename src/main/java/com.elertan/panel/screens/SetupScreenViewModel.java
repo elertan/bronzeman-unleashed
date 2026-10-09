@@ -5,11 +5,13 @@ import com.elertan.BUPanelService;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.models.GameRules;
 import com.elertan.models.ISOOffsetDateTime;
+import com.elertan.models.StartMode;
 import com.elertan.models.AccountConfiguration.StorageMode;
 import com.elertan.remote.local.LocalStorageSession;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabase;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.remote.firebase.storageAdapters.GameRulesFirebaseObjectStorageAdapter;
+import com.elertan.remote.firebase.storageAdapters.MembersFirebaseKeyValueStorageAdapter;
 import com.elertan.ui.Property;
 import com.google.gson.Gson;
 import java.io.IOException;
@@ -30,6 +32,8 @@ public final class SetupScreenViewModel implements AutoCloseable {
     public final Property<Boolean> isLocalMode = new Property<>(false);
     public final Property<Boolean> gameRulesAreViewOnly = new Property<>(null);
     public final Property<GameRules> gameRules = new Property<>(null);
+    public final Property<Boolean> isExistingAccountSaved = new Property<>(false);
+    public final Property<Boolean> isItemLockRequired = new Property<>(false);
     private final Client client;
     private final BUPanelService buPanelService;
     private final AccountConfigurationService accountConfigurationService;
@@ -106,7 +110,12 @@ public final class SetupScreenViewModel implements AutoCloseable {
             firebaseRealtimeDatabase,
             gson
         );
-        gameRulesStoragePort.read().whenComplete((gameRules, throwable) -> {
+        long accountHash = client.getAccountHash();
+        CompletableFuture<Boolean> isExistingAccountSavedFuture = readIsExistingAccountSaved(accountHash);
+        gameRulesStoragePort.read().thenCombine(isExistingAccountSavedFuture, (gameRules, isSaved) -> {
+            isExistingAccountSaved.set(isSaved);
+            return gameRules;
+        }).whenComplete((gameRules, throwable) -> {
             if (throwable != null) {
                 future.completeExceptionally(throwable);
                 return;
@@ -128,6 +137,25 @@ public final class SetupScreenViewModel implements AutoCloseable {
         return future;
     }
 
+    private CompletableFuture<Boolean> readIsExistingAccountSaved(long accountHash) {
+        MembersFirebaseKeyValueStorageAdapter membersStoragePort =
+            new MembersFirebaseKeyValueStorageAdapter(firebaseRealtimeDatabase, gson);
+        return membersStoragePort.read(accountHash).handle((member, throwable) -> {
+            try {
+                membersStoragePort.close();
+            } catch (Exception e) {
+                log.warn("Failed to close members storage port", e);
+            }
+            if (throwable != null) {
+                // Not critical: without the member record the player just gets a free choice.
+                log.warn("Failed to read member record during setup", throwable);
+                return false;
+            }
+            // Locked so that a reinstall cannot skip it. Leaving Bronzeman clears it.
+            return member != null && member.getStartMode() == StartMode.EXISTING_ACCOUNT;
+        });
+    }
+
     public void onRemoteStepBack() {
         chosenStorageMode = null;
         isLocalMode.set(false);
@@ -147,10 +175,24 @@ public final class SetupScreenViewModel implements AutoCloseable {
     }
 
     public CompletableFuture<Void> onGameRulesStepFinish() {
+        GameRules gameRulesValue = gameRules.get();
+        if (gameRulesValue == null) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Game rules are not set"));
+        }
+        isItemLockRequired.set(chosenStorageMode != StorageMode.LOCAL && gameRulesValue.isRequireItemLock());
+        step.set(Step.ACCOUNT_TYPE);
+        return CompletableFuture.completedFuture(null);
+    }
+
+    public void onAccountTypeStepBack() {
+        step.set(Step.GAME_RULES);
+    }
+
+    public CompletableFuture<Void> onAccountTypeStepFinish(StartMode startMode) {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         if (chosenStorageMode == StorageMode.LOCAL) {
-            return finishLocalMode();
+            return finishLocalMode(startMode);
         }
 
         if (gameRulesStoragePort == null) {
@@ -170,7 +212,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
             long accountHash = client.getAccountHash();
             AccountConfiguration accountConfiguration = AccountConfiguration.forFirebase(
                 firebaseRealtimeDatabase.getDatabaseURL()
-            );
+            ).withStartMode(startMode);
             accountConfigurationService.setAccountConfiguration(accountConfiguration, accountHash);
 
             try {
@@ -217,7 +259,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
         return future;
     }
 
-    private CompletableFuture<Void> finishLocalMode() {
+    private CompletableFuture<Void> finishLocalMode(StartMode startMode) {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         GameRules gameRulesValue = gameRules.get();
@@ -254,7 +296,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 }
 
                 accountConfigurationService.setAccountConfiguration(
-                    AccountConfiguration.forLocal(accountHash),
+                    AccountConfiguration.forLocal(accountHash).withStartMode(startMode),
                     accountHash
                 );
                 resetSetupState();
@@ -336,6 +378,8 @@ public final class SetupScreenViewModel implements AutoCloseable {
         isLocalMode.set(false);
         gameRulesAreViewOnly.set(null);
         gameRules.set(null);
+        isExistingAccountSaved.set(false);
+        isItemLockRequired.set(false);
         chosenStorageMode = null;
         shouldDeleteExistingLocalProgressOnFinish = false;
     }
@@ -369,8 +413,12 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 return;
             }
 
+            // Local mode has no member records: saved starting items mean an existing account.
+            StartMode startMode = LocalStorageSession.hasStartingItems(accountHash)
+                ? StartMode.EXISTING_ACCOUNT
+                : StartMode.NEW_ACCOUNT;
             accountConfigurationService.setAccountConfiguration(
-                AccountConfiguration.forLocal(accountHash),
+                AccountConfiguration.forLocal(accountHash).withStartMode(startMode),
                 accountHash
             );
             resetSetupState();
@@ -381,6 +429,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
         STORAGE_MODE_CHOICE,
         ONLINE_CONFIG,
         GAME_RULES,
+        ACCOUNT_TYPE,
     }
 
     private enum ExistingLocalProgressChoice {

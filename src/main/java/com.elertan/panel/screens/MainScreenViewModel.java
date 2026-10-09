@@ -7,6 +7,7 @@ import com.google.inject.Singleton;
 public class MainScreenViewModel {
 
     public final Property<MainScreen> mainScreen = new Property<>(MainScreen.UNLOCKED_ITEMS);
+    private volatile boolean isNotCounted;
 
     private MainScreenViewModel() {
     }
@@ -16,12 +17,24 @@ public class MainScreenViewModel {
     }
 
     public void navigateToUnlockedItems() {
-        mainScreen.set(MainScreen.UNLOCKED_ITEMS);
+        mainScreen.set(isNotCounted ? MainScreen.COUNT_ITEMS : MainScreen.UNLOCKED_ITEMS);
+    }
+
+    /** An existing account that is not counted sees the count card instead of the unlocks. */
+    public void setNotCounted(boolean notCounted) {
+        isNotCounted = notCounted;
+        MainScreen current = mainScreen.get();
+        if (notCounted && current == MainScreen.UNLOCKED_ITEMS) {
+            mainScreen.set(MainScreen.COUNT_ITEMS);
+        } else if (!notCounted && current == MainScreen.COUNT_ITEMS) {
+            mainScreen.set(MainScreen.UNLOCKED_ITEMS);
+        }
     }
 
     public enum MainScreen {
         UNLOCKED_ITEMS,
-        CONFIG
+        CONFIG,
+        COUNT_ITEMS
     }
 
     @ImplementedBy(FactoryImpl.class)

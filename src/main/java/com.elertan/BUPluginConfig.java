@@ -23,6 +23,8 @@ public interface BUPluginConfig extends Config {
     String partySection = "partySection";
     @ConfigSection(name = "Minigames", description = "Controls minigame behavior", position = 5)
     String minigameSection = "minigameSection";
+    @ConfigSection(name = "Existing accounts", description = "Settings for accounts that started Bronzeman with existing items", position = 6)
+    String existingAccountSection = "existingAccountSection";
     @ConfigSection(name = "Debug", description = "Debug settings for testing", position = 99)
     String debugSection = "debugSection";
     String SHOULD_CHANGE_TO_PARTY_EVEN_IF_ALREADY_IN_PARTY = "shouldChangeToPartyEvenIfAlreadyInParty";
@@ -146,6 +148,16 @@ public interface BUPluginConfig extends Config {
     @ConfigItem(keyName = "hideUnlockChatInMinigames", name = "Hide unlock chat", description = "Hides the item unlock chat message in minigames/instances", section = minigameSection)
     default boolean hideUnlockChatInMinigames() {
         return false;
+    }
+
+    @ConfigItem(keyName = "showLockedItemPadlock", name = "Show padlock", description = "Shows a padlock on bank items that hold locked items", section = existingAccountSection, position = 1)
+    default boolean showLockedItemPadlock() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "showUsableAmount", name = "Show usable amount", description = "Shows how many of a bank item you can withdraw, below the padlock", section = existingAccountSection, position = 2)
+    default boolean showUsableAmount() {
+        return true;
     }
 
     @ConfigItem(keyName = SHOULD_CHANGE_TO_PARTY_EVEN_IF_ALREADY_IN_PARTY, name = "Auto-join even if already in party", description = "Whether to change to the party even if you are already in a party", section = partySection, hidden = true)

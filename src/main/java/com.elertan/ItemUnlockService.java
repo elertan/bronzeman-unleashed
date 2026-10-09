@@ -121,8 +121,16 @@ public class ItemUnlockService implements BUPluginLifecycle {
         InventoryID.LOOTING_BAG, // Looting bag
         InventoryID.PMOON_REWARDINV // Moons of Peril reward
     );
+    // For an existing account, locked items only exist in the bank, and uncounted storage may
+    // hold items from before counting, so these are not unlock sources (see ItemLockService).
+    private static final Set<Integer> ITEM_LOCK_EXCLUDED_CONTAINER_IDS = ImmutableSet.of(
+        InventoryID.BANK,
+        InventoryID.SEED_VAULT,
+        InventoryID.LOOTING_BAG
+    );
     private Subscription stateSubscription;
     private Subscription accountConfigSubscription;
+    private Subscription itemLockStatusSubscription;
     @Inject
     private Client client;
     @Inject
@@ -151,6 +159,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private CollectionLogService collectionLogService;
     @Inject
     private WorldTypeService worldTypeService;
+    @Inject
+    private ItemLockService itemLockService;
     private UnlockedItemsDataProvider.UnlockedItemsMapListener unlockedItemsMapListener;
     private volatile boolean hasNotifiedPlayerOfNonSupportedWorldType = false;
 
@@ -258,12 +268,22 @@ public class ItemUnlockService implements BUPluginLifecycle {
             .subscribe(state -> unlockedItemDataProviderStateListener(state));
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
+        // Unlocks were paused until counting. Not the reward containers: they may hold older loot.
+        itemLockStatusSubscription = itemLockService.getStatus().subscribe((status, oldStatus) -> {
+            if (status == ItemLockService.Status.COUNTED && oldStatus != ItemLockService.Status.COUNTED) {
+                clientThread.invokeLater(() -> {
+                    unlockItemsFromItemContainer(client.getItemContainer(InventoryID.INV));
+                    unlockItemsFromItemContainer(client.getItemContainer(InventoryID.WORN));
+                });
+            }
+        });
     }
 
     @Override
     public void shutDown() throws Exception {
         stateSubscription.dispose();
         accountConfigSubscription.dispose();
+        itemLockStatusSubscription.dispose();
         unlockedItemsDataProvider.removeUnlockedItemsMapListener(unlockedItemsMapListener);
     }
 
@@ -367,6 +387,10 @@ public class ItemUnlockService implements BUPluginLifecycle {
         if (preFired.getScriptId() != 4100) {
             return;
         }
+        // For an existing account, the collection log shows history, not new gains.
+        if (itemLockService.isLockingItems()) {
+            return;
+        }
 
         // prevent reacting to scripts fired when opened from adventure log
         // e.g. other plugins might fire the collection log script when viewing other players' collection logs
@@ -449,6 +473,11 @@ public class ItemUnlockService implements BUPluginLifecycle {
     private CompletableFuture<Void> unlockItem(int initialItemId, Integer droppedByNPCId) {
         if (initialItemId <= 1) {
             return CompletableFuture.failedFuture(new IllegalArgumentException("Item id must be greater than 1"));
+        }
+
+        // An existing account gets no unlocks until its starting items are counted.
+        if (!itemLockService.canUnlock()) {
+            return CompletableFuture.completedFuture(null);
         }
 
         // We don't support all world types, for example we don't want unlocks on seasonal modes
@@ -576,6 +605,10 @@ public class ItemUnlockService implements BUPluginLifecycle {
         }
 
         if (itemContainer == null) {
+            return;
+        }
+
+        if (ITEM_LOCK_EXCLUDED_CONTAINER_IDS.contains(itemContainer.getId()) && itemLockService.isLockingItems()) {
             return;
         }
 

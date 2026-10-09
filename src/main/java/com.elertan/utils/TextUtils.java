@@ -18,4 +18,15 @@ public class TextUtils {
         sanitized = sanitized.replace('\u00A0', ' ').trim();
         return sanitized.replaceAll("\\s*\\(Members\\)$", "");
     }
+
+    /** Like the game's item stack numbers: 99999, then 100K, then 10M. */
+    public static String formatStackSize(long amount) {
+        if (amount < 100_000) {
+            return Long.toString(amount);
+        }
+        if (amount < 10_000_000) {
+            return amount / 1_000 + "K";
+        }
+        return amount / 1_000_000 + "M";
+    }
 }

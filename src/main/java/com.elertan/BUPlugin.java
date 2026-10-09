@@ -5,9 +5,12 @@ import com.elertan.data.GameRulesDataProvider;
 import com.elertan.data.GroundItemOwnedByDataProvider;
 import com.elertan.data.LastEventDataProvider;
 import com.elertan.data.MembersDataProvider;
+import com.elertan.data.StartingItemsDataProvider;
 import com.elertan.data.UnlockedItemsDataProvider;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.policies.FaladorPartyRoomPolicy;
+import com.elertan.policies.ItemLockPolicy;
+import com.elertan.overlays.LockedItemsOverlay;
 import com.elertan.policies.GrandExchangePolicy;
 import com.elertan.policies.GroundItemsPolicy;
 import com.elertan.policies.PlayerOwnedHousePolicy;
@@ -27,6 +30,7 @@ import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GrandExchangeOfferChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ItemDespawned;
 import net.runelite.api.events.ItemSpawned;
@@ -78,6 +82,8 @@ public final class BUPlugin extends Plugin {
     @Inject
     private GroundItemOwnedByDataProvider groundItemOwnedByDataProvider;
     @Inject
+    private StartingItemsDataProvider startingItemsDataProvider;
+    @Inject
     private BUPanelService buPanelService;
     @Inject
     private BUOverlayService buOverlayService;
@@ -91,6 +97,8 @@ public final class BUPlugin extends Plugin {
     private BUPartyService buPartyService;
     @Inject
     private BUEventService buEventService;
+    @Inject
+    private ItemLockService itemLockService;
     @Inject
     private ItemUnlockService itemUnlockService;
     @Inject
@@ -115,6 +123,10 @@ public final class BUPlugin extends Plugin {
     private PlayerVersusPlayerPolicy playerVersusPlayerPolicy;
     @Inject
     private FaladorPartyRoomPolicy faladorPartyRoomPolicy;
+    @Inject
+    private ItemLockPolicy itemLockPolicy;
+    @Inject
+    private LockedItemsOverlay lockedItemsOverlay;
     @Inject
     private PetDropService petDropService;
     @Inject
@@ -151,12 +163,14 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(unlockedItemsDataProvider);
         lifecycleDependencies.add(lastEventDataProvider);
         lifecycleDependencies.add(groundItemOwnedByDataProvider);
+        lifecycleDependencies.add(startingItemsDataProvider);
         // Services
         lifecycleDependencies.add(buPanelService);
         lifecycleDependencies.add(buOverlayService);
         lifecycleDependencies.add(buChatService);
         lifecycleDependencies.add(memberService);
         lifecycleDependencies.add(gameRulesService);
+        lifecycleDependencies.add(itemLockService);
         lifecycleDependencies.add(itemUnlockService);
         lifecycleDependencies.add(buPartyService);
         lifecycleDependencies.add(buEventService);
@@ -172,6 +186,7 @@ public final class BUPlugin extends Plugin {
         lifecycleDependencies.add(playerOwnedHousePolicy);
         lifecycleDependencies.add(playerVersusPlayerPolicy);
         lifecycleDependencies.add(faladorPartyRoomPolicy);
+        lifecycleDependencies.add(itemLockPolicy);
         lifecycleDependencies.add(petDropService);
         lifecycleDependencies.add(buCommandService);
 
@@ -259,6 +274,7 @@ public final class BUPlugin extends Plugin {
         buChatService.onGameStateChanged(event);
         buPartyService.onGameStateChanged(event);
         achievementDiaryService.onGameStateChanged(event);
+        itemLockService.onGameStateChanged(event);
         itemUnlockService.onGameStateChanged(event);
         petDropService.onGameStateChanged(event);
         collectionLogService.onGameStateChanged(event);
@@ -269,6 +285,7 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onGameTick(GameTick event) {
         buChatService.onGameTick(event);
+        itemLockService.onGameTick();
         petDropService.onGameTick(event);
         collectionLogService.onGameTick(event);
     }
@@ -280,7 +297,13 @@ public final class BUPlugin extends Plugin {
 
     @Subscribe
     public void onItemContainerChanged(ItemContainerChanged event) {
+        itemLockService.onItemContainerChanged(event);
         itemUnlockService.onItemContainerChanged(event);
+    }
+
+    @Subscribe
+    public void onGrandExchangeOfferChanged(GrandExchangeOfferChanged event) {
+        itemLockService.onGrandExchangeOfferChanged(event);
     }
 
     @Subscribe
@@ -308,6 +331,7 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onScriptPostFired(ScriptPostFired event) {
         grandExchangePolicy.onScriptPostFired(event);
+        lockedItemsOverlay.onScriptPostFired(event);
     }
 
     @Subscribe
@@ -317,6 +341,8 @@ public final class BUPlugin extends Plugin {
         playerOwnedHousePolicy.onMenuOptionClicked(event);
         playerVersusPlayerPolicy.onMenuOptionClicked(event);
         faladorPartyRoomPolicy.onMenuOptionClicked(event);
+        itemLockService.onMenuOptionClicked(event);
+        itemLockPolicy.onMenuOptionClicked(event);
     }
 
     @Subscribe
@@ -334,6 +360,8 @@ public final class BUPlugin extends Plugin {
     public void onWidgetClosed(WidgetClosed event) {
         grandExchangePolicy.onWidgetClosed(event);
         shopPolicy.onWidgetClosed(event);
+        itemLockService.onWidgetClosed(event);
+        itemLockPolicy.onWidgetClosed(event);
     }
 
     @Subscribe
@@ -351,6 +379,7 @@ public final class BUPlugin extends Plugin {
     public void onScriptPreFired(ScriptPreFired event) {
         itemUnlockService.onScriptPreFired(event);
         playerOwnedHousePolicy.onScriptPreFired(event);
+        itemLockPolicy.onScriptPreFired(event);
     }
 
     @Subscribe

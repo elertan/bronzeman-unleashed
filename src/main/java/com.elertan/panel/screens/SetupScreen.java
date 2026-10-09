@@ -8,6 +8,9 @@ import com.elertan.panel.screens.setup.RemoteStepView;
 import com.elertan.panel.screens.setup.RemoteStepViewViewModel;
 import com.elertan.panel.screens.setup.StorageModeStepView;
 import com.elertan.panel.screens.setup.StorageModeStepViewModel;
+import com.elertan.panel.screens.setup.AccountTypeStepView;
+import com.elertan.panel.screens.setup.AccountTypeStepViewModel;
+import com.elertan.models.StartMode;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.ui.Bindings;
 import com.google.inject.ImplementedBy;
@@ -37,6 +40,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
     private final RemoteStepViewViewModel remoteStepViewViewModel;
     private final GameRulesStepView.Factory gameRulesStepViewFactory;
     private final GameRulesStepViewViewModel gameRulesStepViewViewModel;
+    private final AccountTypeStepViewModel accountTypeStepViewModel;
     private final AutoCloseable contentCardLayoutBinding;
     private final AutoCloseable skipSetupButtonVisibleBinding;
 
@@ -47,7 +51,8 @@ public class SetupScreen extends JPanel implements AutoCloseable {
         RemoteStepView.Factory remoteStepViewFactory,
         RemoteStepViewViewModel remoteStepViewViewModel,
         GameRulesStepView.Factory gameRulesStepViewFactory,
-        GameRulesStepViewViewModel gameRulesStepViewViewModel
+        GameRulesStepViewViewModel gameRulesStepViewViewModel,
+        AccountTypeStepViewModel accountTypeStepViewModel
     ) {
         this.viewModel = viewModel;
         this.storageModeStepViewModel = storageModeStepViewModel;
@@ -56,6 +61,7 @@ public class SetupScreen extends JPanel implements AutoCloseable {
         this.remoteStepViewViewModel = remoteStepViewViewModel;
         this.gameRulesStepViewFactory = gameRulesStepViewFactory;
         this.gameRulesStepViewViewModel = gameRulesStepViewViewModel;
+        this.accountTypeStepViewModel = accountTypeStepViewModel;
 
         setLayout(new BorderLayout());
 
@@ -149,6 +155,8 @@ public class SetupScreen extends JPanel implements AutoCloseable {
                     gameRulesStepViewViewModel,
                     viewModel.gameRulesAreViewOnly
                 );
+            case ACCOUNT_TYPE:
+                return new AccountTypeStepView(accountTypeStepViewModel);
         }
 
         throw new IllegalStateException("Unknown step: " + step);
@@ -176,6 +184,8 @@ public class SetupScreen extends JPanel implements AutoCloseable {
         GameRulesStepView.Factory gameRulesStepViewFactory;
         @Inject
         GameRulesStepViewViewModel.Factory gameRulesStepViewViewModelFactory;
+        @Inject
+        AccountTypeStepViewModel.Factory accountTypeStepViewModelFactory;
 
         @Override
         public SetupScreen create(SetupScreenViewModel viewModel) {
@@ -209,6 +219,21 @@ public class SetupScreen extends JPanel implements AutoCloseable {
                     }
                 }
             );
+            AccountTypeStepViewModel accountTypeStepViewModel = accountTypeStepViewModelFactory.create(
+                viewModel.isExistingAccountSaved,
+                viewModel.isItemLockRequired,
+                new AccountTypeStepViewModel.Listener() {
+                    @Override
+                    public void onBack() {
+                        viewModel.onAccountTypeStepBack();
+                    }
+
+                    @Override
+                    public CompletableFuture<Void> onFinish(StartMode startMode) {
+                        return viewModel.onAccountTypeStepFinish(startMode);
+                    }
+                }
+            );
             return new SetupScreen(
                 viewModel,
                 storageModeStepViewModel,
@@ -216,7 +241,8 @@ public class SetupScreen extends JPanel implements AutoCloseable {
                 remoteStepViewFactory,
                 remoteStepViewViewModel,
                 gameRulesStepViewFactory,
-                gameRulesStepViewViewModel
+                gameRulesStepViewViewModel,
+                accountTypeStepViewModel
             );
         }
     }

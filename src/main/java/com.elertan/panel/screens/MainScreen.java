@@ -1,5 +1,9 @@
 package com.elertan.panel.screens;
 
+import com.elertan.ItemLockService;
+import com.elertan.panel.screens.main.CountItemsView;
+import com.elertan.panel.screens.main.CountItemsViewModel;
+import com.elertan.utils.Subscription;
 import com.elertan.panel.screens.main.ConfigScreen;
 import com.elertan.panel.screens.main.ConfigScreenViewModel;
 import com.elertan.panel.screens.main.UnlockedItemsScreen;
@@ -18,18 +22,26 @@ public class MainScreen extends JPanel implements AutoCloseable {
     private final UnlockedItemsScreen.Factory unlockedItemsScreenFactory;
     private final ConfigScreenViewModel configScreenViewModel;
     private final ConfigScreen.Factory configScreenFactory;
+    private final CountItemsViewModel countItemsViewModel;
+    private final Subscription itemLockStatusSubscription;
     private final AutoCloseable cardLayoutBinding;
 
     private MainScreen(MainScreenViewModel viewModel,
         UnlockedItemsScreenViewModel unlockedItemsScreenViewModel,
         UnlockedItemsScreen.Factory unlockedItemsScreenFactory,
         ConfigScreenViewModel configScreenViewModel,
-        ConfigScreen.Factory configScreenFactory) {
+        ConfigScreen.Factory configScreenFactory,
+        CountItemsViewModel countItemsViewModel,
+        ItemLockService itemLockService) {
         this.viewModel = viewModel;
         this.unlockedItemsScreenViewModel = unlockedItemsScreenViewModel;
         this.unlockedItemsScreenFactory = unlockedItemsScreenFactory;
         this.configScreenViewModel = configScreenViewModel;
         this.configScreenFactory = configScreenFactory;
+        this.countItemsViewModel = countItemsViewModel;
+
+        itemLockStatusSubscription = itemLockService.getStatus().subscribeImmediate((status, old) ->
+            viewModel.setNotCounted(status == ItemLockService.Status.NOT_COUNTED));
 
         CardLayout cardLayout = new CardLayout();
         setLayout(cardLayout);
@@ -44,7 +56,9 @@ public class MainScreen extends JPanel implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        itemLockStatusSubscription.dispose();
         cardLayoutBinding.close();
+        countItemsViewModel.close();
         configScreenViewModel.close();
         unlockedItemsScreenViewModel.close();
     }
@@ -58,6 +72,8 @@ public class MainScreen extends JPanel implements AutoCloseable {
                 );
             case CONFIG:
                 return configScreenFactory.create(configScreenViewModel);
+            case COUNT_ITEMS:
+                return new CountItemsView(countItemsViewModel);
         }
 
         throw new IllegalStateException("Unknown main screen: " + screen);
@@ -80,6 +96,10 @@ public class MainScreen extends JPanel implements AutoCloseable {
         private ConfigScreenViewModel.Factory configScreenViewModelFactory;
         @Inject
         private ConfigScreen.Factory configScreenFactory;
+        @Inject
+        private CountItemsViewModel.Factory countItemsViewModelFactory;
+        @Inject
+        private ItemLockService itemLockService;
 
         @Override
         public MainScreen create(MainScreenViewModel viewModel) {
@@ -87,12 +107,16 @@ public class MainScreen extends JPanel implements AutoCloseable {
             ConfigScreenViewModel configScreenViewModel = configScreenViewModelFactory.create(
                 viewModel::navigateToUnlockedItems);
 
+            CountItemsViewModel countItemsViewModel = countItemsViewModelFactory.create(viewModel::navigateToConfig);
+
             return new MainScreen(
                 viewModel,
                 unlockedItemsScreenViewModel,
                 unlockedItemsScreenFactory,
                 configScreenViewModel,
-                configScreenFactory
+                configScreenFactory,
+                countItemsViewModel,
+                itemLockService
             );
         }
     }

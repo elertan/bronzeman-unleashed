@@ -5,6 +5,7 @@ import com.elertan.models.GameRules;
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.Member;
+import com.elertan.models.StartingItems;
 import com.elertan.models.UnlockedItem;
 
 public interface StorageSession extends AutoCloseable {
@@ -18,4 +19,6 @@ public interface StorageSession extends AutoCloseable {
     ObjectListStoragePort<BUEvent> getLastEventStoragePort();
 
     KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> getGroundItemOwnedByStoragePort();
+
+    KeyValueStoragePort<Long, StartingItems> getStartingItemsStoragePort();
 }

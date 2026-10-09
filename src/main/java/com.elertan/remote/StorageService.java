@@ -9,6 +9,7 @@ import com.elertan.models.GameRules;
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.Member;
+import com.elertan.models.StartingItems;
 import com.elertan.models.UnlockedItem;
 import com.elertan.remote.firebase.FirebaseStorageSession;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
@@ -57,6 +58,8 @@ public class StorageService implements BUPluginLifecycle {
     private ObjectListStoragePort<BUEvent> lastEventStoragePort;
     @Getter
     private KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
+    @Getter
+    private KeyValueStoragePort<Long, StartingItems> startingItemsStoragePort;
 
     @Inject
     public StorageService(
@@ -173,6 +176,7 @@ public class StorageService implements BUPluginLifecycle {
             gameRulesStoragePort = newStorageSession.getGameRulesStoragePort();
             lastEventStoragePort = newStorageSession.getLastEventStoragePort();
             groundItemOwnedByStoragePort = newStorageSession.getGroundItemOwnedByStoragePort();
+            startingItemsStoragePort = newStorageSession.getStartingItemsStoragePort();
             state.set(State.Ready);
         });
     }
@@ -275,6 +279,7 @@ public class StorageService implements BUPluginLifecycle {
         }
 
         groundItemOwnedByStoragePort = null;
+        startingItemsStoragePort = null;
         lastEventStoragePort = null;
         membersStoragePort = null;
         unlockedItemsStoragePort = null;

@@ -1,0 +1,199 @@
+package com.elertan.overlays;
+
+import com.elertan.BUPluginConfig;
+import com.elertan.BUResourceService;
+import com.elertan.ItemLockService;
+import com.elertan.utils.TextUtils;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.RenderingHints;
+import java.awt.Shape;
+import java.awt.image.BufferedImage;
+import java.text.NumberFormat;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import net.runelite.api.Client;
+import net.runelite.api.Point;
+import net.runelite.api.ScriptID;
+import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.widgets.Widget;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.ui.FontManager;
+import net.runelite.client.ui.overlay.Overlay;
+import net.runelite.client.ui.overlay.OverlayLayer;
+import net.runelite.client.ui.overlay.OverlayPosition;
+import net.runelite.client.ui.overlay.tooltip.Tooltip;
+import net.runelite.client.ui.overlay.tooltip.TooltipManager;
+
+/**
+ * Marks locked items in the bank: a padlock, a placeholder-like fade when nothing can be withdrawn,
+ * and otherwise the amount that can be withdrawn.
+ */
+@Singleton
+public class LockedItemsOverlay extends Overlay {
+
+    // Widget opacity: 0 is opaque, 255 is invisible. An unusual value, so we only ever reset
+    // the opacity that this overlay set.
+    private static final int LOCKED_OPACITY = 131;
+    private static final Color USABLE_COLOR = new Color(205, 140, 82);
+
+    private final Client client;
+    private final ItemLockService itemLockService;
+    private final TooltipManager tooltipManager;
+    private final BUPluginConfig config;
+    private final ClientThread clientThread;
+    private final BufferedImage padlock;
+    private final Font amountFont = FontManager.getRunescapeSmallFont().deriveFont(13f);
+    private boolean hasFadedItems;
+
+    @Inject
+    public LockedItemsOverlay(Client client, ItemLockService itemLockService,
+        TooltipManager tooltipManager, ClientThread clientThread, BUResourceService buResourceService,
+        BUPluginConfig config) {
+        this.client = client;
+        this.itemLockService = itemLockService;
+        this.tooltipManager = tooltipManager;
+        this.config = config;
+        this.clientThread = clientThread;
+        this.padlock = buResourceService.getPadlockIconBufferedImage();
+        setPosition(OverlayPosition.DYNAMIC);
+        // Draw right after the bank items, so popups on top of the bank (like the incinerator
+        // confirmation) cover the padlocks.
+        setLayer(OverlayLayer.MANUAL);
+        drawAfterLayer(InterfaceID.Bankmain.ITEMS);
+    }
+
+    /**
+     * The bank resets item opacity when it rebuilds (tab switch, search). Fading right after the
+     * rebuild, before the frame is drawn, prevents a flicker.
+     */
+    public void onScriptPostFired(ScriptPostFired event) {
+        int scriptId = event.getScriptId();
+        if (scriptId == ScriptID.BANKMAIN_FINISHBUILDING || scriptId == ScriptID.BANKMAIN_SEARCH_REFRESH) {
+            applyFade();
+        }
+    }
+
+    /** The bank does not rebuild when the item lock status changes, so fade again. */
+    public void refreshFade() {
+        clientThread.invokeLater(() -> applyFade());
+    }
+
+    @Override
+    public Dimension render(Graphics2D graphics) {
+        Widget bankItems = getBankItems();
+        if (bankItems == null || !isActive()) {
+            return null;
+        }
+
+        // Draw only inside the bank viewport, so half-scrolled items are marked too.
+        Rectangle viewport = bankItems.getBounds();
+        Shape oldClip = graphics.getClip();
+        graphics.clip(viewport);
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+        Point mouse = client.getMouseCanvasPosition();
+
+        for (Widget item : bankItems.getDynamicChildren()) {
+            // Check the bounds first: only the visible items need a lookup.
+            Rectangle bounds = item == null ? null : item.getBounds();
+            if (bounds == null || !bounds.intersects(viewport)) {
+                continue;
+            }
+            int starting = startingQuantity(item);
+            if (starting <= 0) {
+                continue;
+            }
+            int itemId = item.getItemId();
+            int room = itemLockService.withdrawRoom(itemId);
+            int lockX = bounds.x + bounds.width - padlock.getWidth() - 1;
+            int lockY = bounds.y + 1;
+            if (config.showLockedItemPadlock()) {
+                graphics.drawImage(padlock, lockX, lockY, null);
+            }
+            if (room > 0 && config.showUsableAmount()) {
+                drawUsableAmount(graphics, room, lockX + padlock.getWidth() / 2, lockY + padlock.getHeight(),
+                    bounds.x + bounds.width);
+            }
+
+            if (mouse != null && viewport.contains(mouse.getX(), mouse.getY())
+                && bounds.contains(mouse.getX(), mouse.getY())) {
+                NumberFormat format = NumberFormat.getIntegerInstance();
+                tooltipManager.add(new Tooltip(
+                    "Locked: " + format.format(starting)
+                        + "</br>Usable: " + format.format(room)
+                ));
+            }
+        }
+
+        graphics.setClip(oldClip);
+        return null;
+    }
+
+    /** Puts back the opacity this overlay changed. */
+    public void resetFade() {
+        clientThread.invokeLater(() -> applyFade(false));
+    }
+
+    private void applyFade() {
+        applyFade(isActive());
+    }
+
+    private void applyFade(boolean isActive) {
+        Widget bankItems = getBankItems();
+        if (bankItems == null || !isActive && !hasFadedItems) {
+            return;
+        }
+        hasFadedItems = isActive;
+        for (Widget item : bankItems.getDynamicChildren()) {
+            if (item == null) {
+                continue;
+            }
+            boolean isLocked = isActive && startingQuantity(item) > 0
+                && itemLockService.withdrawRoom(item.getItemId()) <= 0;
+            if (isLocked && item.getOpacity() != LOCKED_OPACITY) {
+                item.setOpacity(LOCKED_OPACITY);
+            } else if (!isLocked && item.getOpacity() == LOCKED_OPACITY) {
+                item.setOpacity(0);
+            }
+        }
+    }
+
+    private Widget getBankItems() {
+        Widget bankItems = client.getWidget(InterfaceID.Bankmain.ITEMS);
+        if (bankItems == null || bankItems.isHidden() || bankItems.getDynamicChildren() == null) {
+            return null;
+        }
+        return bankItems;
+    }
+
+    private boolean isActive() {
+        return itemLockService.getStatus().get() == ItemLockService.Status.COUNTED;
+    }
+
+    private int startingQuantity(Widget item) {
+        if (item == null || item.isHidden() || item.getItemId() <= 0 || item.getItemQuantity() <= 0) {
+            return 0;
+        }
+        return itemLockService.startingQuantity(item.getItemId());
+    }
+
+    private void drawUsableAmount(Graphics2D graphics, int amount, int centerX, int top, int maxRight) {
+        String text = TextUtils.formatStackSize(amount);
+        graphics.setFont(amountFont);
+        FontMetrics metrics = graphics.getFontMetrics();
+        int width = metrics.stringWidth(text);
+        // Centered, but never past the right edge of the item.
+        int x = Math.min(centerX - width / 2, maxRight - width);
+        // Digits are about 8/11 of the ascent in this font; leave a 3px gap above.
+        int y = top + 3 + (int) Math.ceil(metrics.getAscent() * 8 / 11.0);
+        graphics.setColor(Color.BLACK);
+        graphics.drawString(text, x + 1, y + 1);
+        graphics.setColor(USABLE_COLOR);
+        graphics.drawString(text, x, y);
+    }
+}
