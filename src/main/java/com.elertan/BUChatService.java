@@ -179,6 +179,32 @@ public class BUChatService implements BUPluginLifecycle {
         buSoundHelper.playDisabledSound();
     }
 
+    /** Like {@link #sendRestrictionMessage}, with the item icon in front of the item name. */
+    public void sendItemRestrictionMessage(int itemId, String before, String itemName, String after) {
+        buSoundHelper.playDisabledSound();
+        getItemIconTagIfEnabled(itemId).whenComplete((itemIconTag, throwable) -> {
+            if (throwable != null) {
+                log.error("Failed to get item icon tag", throwable);
+            }
+            ChatMessageBuilder builder = new ChatMessageBuilder();
+            builder.append(config.chatRestrictionColor(), before);
+            if (throwable == null && itemIconTag != null) {
+                builder.append(config.chatHighlightColor(), itemIconTag);
+                builder.append(" ");
+            }
+            builder.append(config.chatItemNameColor(), itemName);
+            builder.append(config.chatRestrictionColor(), after);
+            sendMessage(builder.build());
+        });
+    }
+
+    public void sendHighlightedMessage(String headline, String detail) {
+        ChatMessageBuilder builder = new ChatMessageBuilder();
+        builder.append(config.chatHighlightColor(), headline);
+        builder.append(detail);
+        sendMessage(builder.build());
+    }
+
     public void sendErrorMessage(String message) {
         ChatMessageBuilder builder = new ChatMessageBuilder();
         builder.append(config.chatErrorColor(), message);

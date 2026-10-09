@@ -1,5 +1,6 @@
 package com.elertan.panel.screens.main;
 
+import com.elertan.ItemLockService;
 import com.elertan.AccountConfigurationService;
 import com.elertan.GameRulesService;
 import com.elertan.MemberService;
@@ -34,6 +35,7 @@ public class ConfigScreenViewModel implements AutoCloseable {
     private final MembersDataProvider membersDataProvider;
     private final Runnable navigateToMainScreen;
     private final MembersDataProvider.MemberMapListener memberMapListener;
+    private final ItemLockService itemLockService;
 
     private GameRules gameRules;
     private Supplier<GameRulesEditorViewModel.Props> propsSupplier;
@@ -43,8 +45,10 @@ public class ConfigScreenViewModel implements AutoCloseable {
         AccountConfigurationService accountConfigurationService, GameRulesService gameRulesService,
         GameRulesDataProvider gameRulesDataProvider, MembersDataProvider membersDataProvider,
         MemberService memberService,
+        ItemLockService itemLockService,
         Runnable navigateToMainScreen) {
         this.accountConfigurationService = accountConfigurationService;
+        this.itemLockService = itemLockService;
         this.memberService = memberService;
         this.gameRulesDataProvider = gameRulesDataProvider;
         this.membersDataProvider = membersDataProvider;
@@ -182,19 +186,10 @@ public class ConfigScreenViewModel implements AutoCloseable {
 
         isSubmittingProperty.set(true);
 
-        CompletableFuture<Void> future = new CompletableFuture<>();
-
-        if (!isPlayingAlone) {
-            memberService.leaveGroupAndPromoteOldestMember().whenComplete((__, throwable) -> {
-                if (throwable != null) {
-                    future.completeExceptionally(throwable);
-                    return;
-                }
-                future.complete(null);
-            });
-        } else {
-            future.complete(null);
-        }
+        // End item locking first, while this player is still a member.
+        CompletableFuture<Void> future = itemLockService.endItemLock().thenCompose(__ -> isPlayingAlone
+            ? CompletableFuture.completedFuture(null)
+            : memberService.leaveGroupAndPromoteOldestMember());
 
         future.whenComplete((__, throwable) -> {
             if (throwable != null) {
@@ -237,6 +232,11 @@ public class ConfigScreenViewModel implements AutoCloseable {
             messageBuilder.append("Your saved progress will not be deleted.\n");
         }
 
+        if (itemLockService.isLockingItems() && storageMode != StorageMode.LOCAL) {
+            messageBuilder.append("Your locked items are unlocked for this account.\n");
+            messageBuilder.append("When you set up again, you can choose New account or Existing account.\n");
+        }
+
         messageBuilder.append("You can set Bronzeman up again later from this panel.");
         return messageBuilder.toString();
     }
@@ -262,6 +262,8 @@ public class ConfigScreenViewModel implements AutoCloseable {
         private MembersDataProvider membersDataProvider;
         @Inject
         private MemberService memberService;
+        @Inject
+        private ItemLockService itemLockService;
 
         @Override
         public ConfigScreenViewModel create(Runnable navigateToMainScreen) {
@@ -272,6 +274,7 @@ public class ConfigScreenViewModel implements AutoCloseable {
                 gameRulesDataProvider,
                 membersDataProvider,
                 memberService,
+                itemLockService,
                 navigateToMainScreen
             );
         }

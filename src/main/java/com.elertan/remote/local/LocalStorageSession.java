@@ -5,6 +5,7 @@ import com.elertan.models.GameRules;
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.Member;
+import com.elertan.models.StartingItems;
 import com.elertan.models.UnlockedItem;
 import com.elertan.remote.KeyListStoragePort;
 import com.elertan.remote.KeyValueStoragePort;
@@ -12,7 +13,10 @@ import com.elertan.remote.ObjectListStoragePort;
 import com.elertan.remote.ObjectStoragePort;
 import com.elertan.remote.StorageSession;
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -25,12 +29,14 @@ import net.runelite.client.RuneLite;
 public class LocalStorageSession implements StorageSession {
 
     private static final String PLUGIN_DIRECTORY = "bronzeman-unleashed";
+    private static final String STARTING_ITEMS_FILE = "StartingItems.json";
 
     private final KeyValueStoragePort<Long, Member> membersStoragePort;
     private final KeyValueStoragePort<Integer, UnlockedItem> unlockedItemsStoragePort;
     private final ObjectStoragePort<GameRules> gameRulesStoragePort;
     private final ObjectListStoragePort<BUEvent> lastEventStoragePort;
     private final KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
+    private final KeyValueStoragePort<Long, StartingItems> startingItemsStoragePort;
 
     public LocalStorageSession(Gson gson, long accountHash) {
         Path accountStorageDirectory = getAccountStorageDir(accountHash);
@@ -49,6 +55,13 @@ public class LocalStorageSession implements StorageSession {
             gson,
             GameRules.class
         );
+        startingItemsStoragePort = new LocalStorageAdapters.JsonFileKeyValueStorageAdapter<>(
+            accountStorageDirectory.resolve(STARTING_ITEMS_FILE),
+            gson,
+            Object::toString,
+            Long::valueOf,
+            StartingItems.class
+        );
         membersStoragePort = new LocalStorageAdapters.InMemoryKeyValueStorageAdapter<>();
         groundItemOwnedByStoragePort = new LocalStorageAdapters.InMemoryKeyListStorageAdapter<>();
         lastEventStoragePort = new NoOpAdapters.NoOpObjectListStorageAdapter<>();
@@ -64,6 +77,22 @@ public class LocalStorageSession implements StorageSession {
         Path accountStorageDirectory = getAccountStorageDir(accountHash);
         return Files.exists(accountStorageDirectory.resolve("UnlockedItems.json"))
             || Files.exists(accountStorageDirectory.resolve("GameRules.json"));
+    }
+
+    // Local mode has no member records, so a saved starting items file is how a later setup
+    // knows this is an existing account.
+    public static boolean hasStartingItems(long accountHash) {
+        Path file = getAccountStorageDir(accountHash).resolve(STARTING_ITEMS_FILE);
+        if (!Files.exists(file)) {
+            return false;
+        }
+        // Deleting a key keeps the file ("{}"), so check that a record is still in it.
+        try {
+            JsonElement json = new JsonParser().parse(new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
+            return json.isJsonObject() && json.getAsJsonObject().size() > 0;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public static void deleteExistingProgress(long accountHash) throws IOException {
@@ -111,7 +140,13 @@ public class LocalStorageSession implements StorageSession {
     }
 
     @Override
+    public KeyValueStoragePort<Long, StartingItems> getStartingItemsStoragePort() {
+        return startingItemsStoragePort;
+    }
+
+    @Override
     public void close() throws Exception {
+        startingItemsStoragePort.close();
         groundItemOwnedByStoragePort.close();
         lastEventStoragePort.close();
         membersStoragePort.close();

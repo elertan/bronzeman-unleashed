@@ -91,7 +91,7 @@ public class GameRulesStepView extends JPanel implements AutoCloseable {
 
         buttonRow.add(Box.createHorizontalGlue());
 
-        JButton finishButton = new JButton("Finish");
+        JButton finishButton = new JButton("Next");
         finishButton.addActionListener(e -> viewModel.onFinishButtonClicked());
         finishButtonEnabledBinding = Bindings.bindEnabled(
             finishButton,

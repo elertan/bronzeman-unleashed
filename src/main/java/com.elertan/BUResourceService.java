@@ -28,6 +28,7 @@ public class BUResourceService implements BUPluginLifecycle {
     private static final String CONFIGURE_ICON_FILE_PATH = "/icons/bu-configure-icon.png";
     private static final String LOGIN_ICON_FILE_PATH = "/icons/bu-login-icon.png";
     private static final String CLOUD_SYNC_ICON_FILE_PATH = "/icons/bu-cloud-sync-icon.png";
+    private static final String PADLOCK_ICON_FILE_PATH = "/icons/bu-padlock-icon.png";
     private static final String LOADING_SPINNER_FILE_PATH = "/icons/bu-loading-spinner.gif";
 
 //    static {
@@ -66,6 +67,11 @@ public class BUResourceService implements BUPluginLifecycle {
     private final BufferedImage cloudSyncIconBufferedImage = ImageUtil.loadImageResource(
         BUPlugin.class,
         CLOUD_SYNC_ICON_FILE_PATH
+    );
+    @Getter
+    private final BufferedImage padlockIconBufferedImage = ImageUtil.loadImageResource(
+        BUPlugin.class,
+        PADLOCK_ICON_FILE_PATH
     );
     @Getter
     private final ImageIcon loadingSpinnerImageIcon = new ImageIcon(Objects.requireNonNull(
