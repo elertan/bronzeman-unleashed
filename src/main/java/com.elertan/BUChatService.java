@@ -179,10 +179,7 @@ public class BUChatService implements BUPluginLifecycle {
         buSoundHelper.playDisabledSound();
     }
 
-    /**
-     * Sends a restriction message about an item and plays the disabled sound. The item icon is
-     * shown in front of the item name, like in the unlock messages.
-     */
+    /** Like {@link #sendRestrictionMessage}, with the item icon in front of the item name. */
     public void sendItemRestrictionMessage(int itemId, String before, String itemName, String after) {
         buSoundHelper.playDisabledSound();
         getItemIconTagIfEnabled(itemId).whenComplete((itemIconTag, throwable) -> {
@@ -201,7 +198,6 @@ public class BUChatService implements BUPluginLifecycle {
         });
     }
 
-    /** Sends a message that starts with a highlighted headline, for example "Almost there! ..." */
     public void sendHighlightedMessage(String headline, String detail) {
         ChatMessageBuilder builder = new ChatMessageBuilder();
         builder.append(config.chatHighlightColor(), headline);

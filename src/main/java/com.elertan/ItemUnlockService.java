@@ -268,8 +268,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
             .subscribe(state -> unlockedItemDataProviderStateListener(state));
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
-        // Unlocks are paused until an existing account is counted, so check what the player
-        // carries once they are. Not the reward containers: they may still hold loot from before.
+        // Unlocks were paused until counting. Not the reward containers: they may hold older loot.
         itemLockStatusSubscription = itemLockService.getStatus().subscribe((status, oldStatus) -> {
             if (status == ItemLockService.Status.COUNTED && oldStatus != ItemLockService.Status.COUNTED) {
                 clientThread.invokeLater(() -> {
@@ -489,8 +488,7 @@ public class ItemUnlockService implements BUPluginLifecycle {
             return CompletableFuture.failedFuture(new IllegalArgumentException("Item id must be greater than 1"));
         }
 
-        // An existing account gets no unlocks until its starting items are counted. Fail closed: a
-        // wrong unlock goes to the whole group.
+        // An existing account gets no unlocks until its starting items are counted.
         if (!itemLockService.canUnlock()) {
             return CompletableFuture.completedFuture(null);
         }

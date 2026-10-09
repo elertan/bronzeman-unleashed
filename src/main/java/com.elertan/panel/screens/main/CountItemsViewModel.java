@@ -2,7 +2,6 @@ package com.elertan.panel.screens.main;
 
 import com.elertan.ItemLockService;
 import com.elertan.ItemLockService.Checklist;
-import com.elertan.ItemLockService.CountSummary;
 import com.elertan.ui.Property;
 import com.elertan.utils.Subscription;
 import com.google.inject.ImplementedBy;
@@ -11,12 +10,8 @@ import com.google.inject.Singleton;
 import java.text.NumberFormat;
 import java.util.concurrent.CompletionException;
 import javax.swing.JOptionPane;
-import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * The count card for an existing account that is not counted yet.
- */
 @Slf4j
 public class CountItemsViewModel implements AutoCloseable {
 
@@ -44,23 +39,15 @@ public class CountItemsViewModel implements AutoCloseable {
     }
 
     public void onCountClicked() {
-        isSubmitting.set(true);
-        errorMessage.set(null);
-        itemLockService.previewCount().whenComplete((summary, throwable) -> {
-            if (throwable != null) {
-                fail(throwable);
-                return;
-            }
-            SwingUtilities.invokeLater(() -> confirm(summary));
-        });
-    }
-
-    private void confirm(CountSummary summary) {
+        Checklist current = checklist.get();
+        if (current == null || !current.isComplete()) {
+            return;
+        }
         NumberFormat format = NumberFormat.getIntegerInstance();
         int result = JOptionPane.showConfirmDialog(
             null,
-            "Your bank holds " + format.format(summary.getBankItems()) + " different items"
-                + " and " + format.format(summary.getCoins()) + " coins.\n\n"
+            "Your bank holds " + format.format(current.getBankItems()) + " different items"
+                + " and " + format.format(current.getCoins()) + " coins.\n\n"
                 + "All of it gets locked and stays in your bank.\n"
                 + "Only what you get from now on counts. This cannot be undone.",
             "Count your items",
@@ -68,10 +55,11 @@ public class CountItemsViewModel implements AutoCloseable {
             JOptionPane.QUESTION_MESSAGE
         );
         if (result != JOptionPane.OK_OPTION) {
-            isSubmitting.set(false);
             return;
         }
-        itemLockService.confirmCount().whenComplete((count, throwable) -> {
+        isSubmitting.set(true);
+        errorMessage.set(null);
+        itemLockService.confirmCount().whenComplete((__, throwable) -> {
             if (throwable != null) {
                 fail(throwable);
                 return;

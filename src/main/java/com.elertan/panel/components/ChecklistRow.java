@@ -12,7 +12,7 @@ import javax.swing.JTextPane;
 import javax.swing.SwingConstants;
 
 /**
- * One checklist line: a status icon, a title and, while not done, a short hint.
+ * A status icon and a title, with a hint while the item is still to do.
  */
 public final class ChecklistRow extends JPanel {
 
@@ -24,7 +24,6 @@ public final class ChecklistRow extends JPanel {
     private final JTextPane hintText;
     private final int hintWidth;
 
-    /** @param width the full width of the row */
     public ChecklistRow(int width) {
         hintWidth = width - icon.getIconWidth() - ICON_GAP;
         hintText = WrappedText.create("", MUTED_TEXT, hintWidth, SwingConstants.LEFT);
@@ -46,7 +45,7 @@ public final class ChecklistRow extends JPanel {
         add(text, BorderLayout.CENTER);
     }
 
-    /** @param hint shown only while the status is TODO; may be null */
+    /** @param hint may be null */
     public void update(StatusIcon.Status status, String title, String hint) {
         icon.setStatus(status);
         titleLabel.setText(title);

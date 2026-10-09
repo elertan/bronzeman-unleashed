@@ -1,5 +1,6 @@
 package com.elertan.overlays;
 
+import com.elertan.BUPluginConfig;
 import com.elertan.BUResourceService;
 import com.elertan.ItemLockService;
 import java.awt.Color;
@@ -30,9 +31,8 @@ import net.runelite.client.ui.overlay.tooltip.TooltipManager;
 import net.runelite.client.util.QuantityFormatter;
 
 /**
- * Marks locked items in the bank of an existing account. Every item with a locked quantity gets a
- * bronze padlock; items that cannot be withdrawn at all also fade like placeholders, and items with
- * some usable quantity show it in bronze below the padlock.
+ * Marks locked items in the bank: a padlock, a placeholder-like fade when nothing can be withdrawn,
+ * and otherwise the amount that can be withdrawn.
  */
 @Singleton
 public class LockedItemsOverlay extends Overlay {
@@ -40,24 +40,25 @@ public class LockedItemsOverlay extends Overlay {
     // Widget opacity: 0 is opaque, 255 is invisible. An unusual value, so we only ever reset
     // the opacity that this overlay set.
     private static final int LOCKED_OPACITY = 131;
-    // Between the light and base bronze of the padlock.
-    private static final Color AMOUNT_COLOR = new Color(205, 140, 82);
+    private static final Color USABLE_COLOR = new Color(205, 140, 82);
 
     private final Client client;
     private final ItemLockService itemLockService;
     private final TooltipManager tooltipManager;
+    private final BUPluginConfig config;
     private final ClientThread clientThread;
     private final BufferedImage padlock;
-    // A bit smaller than the game's quantity font, so the amount stays secondary to the stack size.
     private final Font amountFont = FontManager.getRunescapeSmallFont().deriveFont(13f);
     private boolean hasFadedItems;
 
     @Inject
     public LockedItemsOverlay(Client client, ItemLockService itemLockService,
-        TooltipManager tooltipManager, ClientThread clientThread, BUResourceService buResourceService) {
+        TooltipManager tooltipManager, ClientThread clientThread, BUResourceService buResourceService,
+        BUPluginConfig config) {
         this.client = client;
         this.itemLockService = itemLockService;
         this.tooltipManager = tooltipManager;
+        this.config = config;
         this.clientThread = clientThread;
         this.padlock = buResourceService.getPadlockIconBufferedImage();
         setPosition(OverlayPosition.DYNAMIC);
@@ -106,12 +107,13 @@ public class LockedItemsOverlay extends Overlay {
                 continue;
             }
             int itemId = item.getItemId();
-            long room = itemLockService.withdrawRoom(itemId);
-            // The padlock marks every item with locked items; the usable amount goes below it.
+            int room = itemLockService.withdrawRoom(itemId);
             int lockX = bounds.x + bounds.width - padlock.getWidth() - 1;
             int lockY = bounds.y + 1;
-            graphics.drawImage(padlock, lockX, lockY, null);
-            if (room > 0) {
+            if (config.showLockedItemPadlock()) {
+                graphics.drawImage(padlock, lockX, lockY, null);
+            }
+            if (room > 0 && config.showUsableAmount()) {
                 drawUsableAmount(graphics, room, lockX + padlock.getWidth() / 2, lockY + padlock.getHeight(),
                     bounds.x + bounds.width);
             }
@@ -130,7 +132,7 @@ public class LockedItemsOverlay extends Overlay {
         return null;
     }
 
-    /** Puts back the opacity this overlay changed, for example when the plugin stops. */
+    /** Puts back the opacity this overlay changed. */
     public void resetFade() {
         clientThread.invokeLater(() -> applyFade(false));
     }
@@ -141,7 +143,6 @@ public class LockedItemsOverlay extends Overlay {
 
     private void applyFade(boolean isActive) {
         Widget bankItems = getBankItems();
-        // New accounts never get past this check, so they pay nothing.
         if (bankItems == null || !isActive && !hasFadedItems) {
             return;
         }
@@ -179,19 +180,18 @@ public class LockedItemsOverlay extends Overlay {
         return itemLockService.startingQuantity(item.getItemId());
     }
 
-    /** Draws the amount centered on centerX, a little below top, with a black shadow. */
-    private void drawUsableAmount(Graphics2D graphics, long room, int centerX, int top, int maxRight) {
-        String text = QuantityFormatter.quantityToStackSize(room);
+    private void drawUsableAmount(Graphics2D graphics, int amount, int centerX, int top, int maxRight) {
+        String text = QuantityFormatter.quantityToStackSize(amount);
         graphics.setFont(amountFont);
         FontMetrics metrics = graphics.getFontMetrics();
         int width = metrics.stringWidth(text);
-        // Centered below the padlock, but never past the right edge of the item.
+        // Centered, but never past the right edge of the item.
         int x = Math.min(centerX - width / 2, maxRight - width);
-        // Digits are about 8/11 of the ascent in this font; leave a 3px gap below the padlock.
+        // Digits are about 8/11 of the ascent in this font; leave a 3px gap above.
         int y = top + 3 + (int) Math.ceil(metrics.getAscent() * 8 / 11.0);
         graphics.setColor(Color.BLACK);
         graphics.drawString(text, x + 1, y + 1);
-        graphics.setColor(AMOUNT_COLOR);
+        graphics.setColor(USABLE_COLOR);
         graphics.drawString(text, x, y);
     }
 }

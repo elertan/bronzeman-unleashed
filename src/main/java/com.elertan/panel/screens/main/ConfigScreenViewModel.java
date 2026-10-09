@@ -186,26 +186,10 @@ public class ConfigScreenViewModel implements AutoCloseable {
 
         isSubmittingProperty.set(true);
 
-        CompletableFuture<Void> future = new CompletableFuture<>();
-
         // End item locking first, while this player is still a member.
-        itemLockService.endItemLock().whenComplete((itemLockResult, itemLockThrowable) -> {
-            if (itemLockThrowable != null) {
-                future.completeExceptionally(itemLockThrowable);
-                return;
-            }
-            if (isPlayingAlone) {
-                future.complete(null);
-                return;
-            }
-            memberService.leaveGroupAndPromoteOldestMember().whenComplete((__, throwable) -> {
-                if (throwable != null) {
-                    future.completeExceptionally(throwable);
-                    return;
-                }
-                future.complete(null);
-            });
-        });
+        CompletableFuture<Void> future = itemLockService.endItemLock().thenCompose(__ -> isPlayingAlone
+            ? CompletableFuture.completedFuture(null)
+            : memberService.leaveGroupAndPromoteOldestMember());
 
         future.whenComplete((__, throwable) -> {
             if (throwable != null) {

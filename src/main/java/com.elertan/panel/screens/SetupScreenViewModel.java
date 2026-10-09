@@ -32,8 +32,6 @@ public final class SetupScreenViewModel implements AutoCloseable {
     public final Property<Boolean> isLocalMode = new Property<>(false);
     public final Property<Boolean> gameRulesAreViewOnly = new Property<>(null);
     public final Property<GameRules> gameRules = new Property<>(null);
-    // The saved "Existing account" choice of a member (locked after a reinstall), and whether
-    // the group requires new members to lock their items.
     public final Property<Boolean> isExistingAccountSaved = new Property<>(false);
     public final Property<Boolean> isItemLockRequired = new Property<>(false);
     private final Client client;
@@ -153,8 +151,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 log.warn("Failed to read member record during setup", throwable);
                 return false;
             }
-            // Only a saved "Existing account" is locked, so a reinstall cannot skip it. Leaving
-            // Bronzeman clears it, and everyone else may choose freely.
+            // Locked so that a reinstall cannot skip it. Leaving Bronzeman clears it.
             return member != null && member.getStartMode() == StartMode.EXISTING_ACCOUNT;
         });
     }
@@ -180,9 +177,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
     public CompletableFuture<Void> onGameRulesStepFinish() {
         GameRules gameRulesValue = gameRules.get();
         if (gameRulesValue == null) {
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            future.completeExceptionally(new IllegalStateException("Game rules are not set"));
-            return future;
+            return CompletableFuture.failedFuture(new IllegalStateException("Game rules are not set"));
         }
         isItemLockRequired.set(chosenStorageMode != StorageMode.LOCAL && gameRulesValue.isRequireItemLock());
         step.set(Step.ACCOUNT_TYPE);
@@ -325,7 +320,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
             return;
         }
 
-        if (choice == ExistingLocalProgressChoice.START_OVER) {
+        if (choice == ExistingLocalProgressChoice.START_FRESH) {
             startFreshLocalSetup(true);
             return;
         }
@@ -343,7 +338,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
         int selectedOptionIndex = JOptionPane.showOptionDialog(
             null,
             "Local progress already exists for this account.\n"
-                + "Do you want to continue your existing local progress or start over and replace it?",
+                + "Do you want to continue your existing local progress or start fresh and replace it?",
             "Local progress found",
             JOptionPane.DEFAULT_OPTION,
             JOptionPane.QUESTION_MESSAGE,
@@ -418,8 +413,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 return;
             }
 
-            // Continue with the existing rules, but still ask how the items count. Local mode has
-            // no member records: saved starting items mean this is an existing account.
+            // Local mode has no member records: saved starting items mean an existing account.
             isLocalMode.set(true);
             gameRulesAreViewOnly.set(false);
             gameRules.set(existingGameRules);
@@ -438,7 +432,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
 
     private enum ExistingLocalProgressChoice {
         CONTINUE_EXISTING("Continue Existing"),
-        START_OVER("Start Over"),
+        START_FRESH("Start Fresh"),
         CANCEL("Cancel");
 
         private final String label;

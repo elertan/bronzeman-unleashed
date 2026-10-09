@@ -7,7 +7,7 @@ import com.elertan.GameRulesService;
 import com.elertan.ItemUnlockService;
 import com.elertan.PolicyService;
 import com.elertan.WorldTypeService;
-import com.elertan.itemlock.StartingItemsLedger;
+import com.elertan.itemlock.WithdrawAmounts;
 import com.elertan.itemlock.WithdrawAmountLimiter;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
 import com.google.common.collect.ImmutableSet;
@@ -94,14 +94,14 @@ public class ItemLockPolicy extends PolicyBase {
         }
 
         int itemId = event.getItemId();
-        long bankQuantity = widget.getItemQuantity();
-        long requested = StartingItemsLedger.requestedAmount(event.getMenuOption(), bankQuantity);
-        if (requested == StartingItemsLedger.NOT_A_WITHDRAW || itemId <= 0) {
+        int bankQuantity = widget.getItemQuantity();
+        int requested = WithdrawAmounts.requested(event.getMenuOption(), bankQuantity);
+        if (requested == WithdrawAmounts.NOT_A_WITHDRAW || itemId <= 0) {
             return;
         }
 
-        long room = itemLockService.withdrawRoom(itemId);
-        if (requested == StartingItemsLedger.WITHDRAW_X) {
+        int room = itemLockService.withdrawRoom(itemId);
+        if (requested == WithdrawAmounts.WITHDRAW_X) {
             if (room <= 0) {
                 event.consume();
                 sendBlockedMessage(itemId, room);
@@ -113,10 +113,8 @@ public class ItemLockPolicy extends PolicyBase {
             return;
         }
 
-        // Compare with what the game really takes out. For example Withdraw-All of 100 sharks
-        // with 18 free slots takes out 18, which is fine with 20 usable.
-        long actual = StartingItemsLedger.actualWithdrawAmount(
-            requested, bankQuantity, freeInventorySlots(), takesOneSlotEach(itemId));
+        // For example Withdraw-All of 100 sharks with 18 free slots takes out 18.
+        int actual = WithdrawAmounts.actual(requested, bankQuantity, freeInventorySlots(), takesOneSlotEach(itemId));
         if (actual > room) {
             event.consume();
             sendBlockedMessage(itemId, room);
@@ -156,7 +154,7 @@ public class ItemLockPolicy extends PolicyBase {
      */
     private void blockWhileLoading(MenuOptionClicked event, Widget widget) {
         boolean isWithdraw = widget.getId() == InterfaceID.Bankmain.ITEMS
-            && StartingItemsLedger.requestedAmount(event.getMenuOption(), 0) != StartingItemsLedger.NOT_A_WITHDRAW;
+            && WithdrawAmounts.requested(event.getMenuOption(), 0) != WithdrawAmounts.NOT_A_WITHDRAW;
         if (isWithdraw || isUncountedStorage(widget) && TAKE_OUT_OPTION.matcher(event.getMenuOption()).matches()) {
             event.consume();
             buChatService.sendRestrictionMessage(MessageKey.STILL_LOADING_PLEASE_WAIT);
@@ -196,7 +194,7 @@ public class ItemLockPolicy extends PolicyBase {
     }
 
     /** Tells the player why a withdraw is blocked. */
-    private void sendBlockedMessage(int itemId, long room) {
+    private void sendBlockedMessage(int itemId, int room) {
         String itemName = client.getItemDefinition(itemId).getName();
         if (room > 0) {
             String before = "You can withdraw " + NumberFormat.getIntegerInstance().format(room) + " more ";

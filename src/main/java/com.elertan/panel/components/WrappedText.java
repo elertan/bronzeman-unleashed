@@ -38,7 +38,6 @@ public final class WrappedText {
         return textPane;
     }
 
-    /** Changes the text and color, and fits the height to the new text. */
     public static void setText(JTextPane textPane, String text, Color color, int width, int horizontalAlignment) {
         textPane.setText(text);
         StyledDocument document = textPane.getStyledDocument();

@@ -17,6 +17,7 @@ import java.text.NumberFormat;
 import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.Value;
@@ -36,20 +37,19 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetUtil;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.util.Text;
 
 /**
  * Item locking for existing accounts.
  *
- * <p>The model: counting needs an empty inventory and equipment, and locked items can never be
- * withdrawn. So locked items only exist in the bank, and everything the player carries was earned.
- * The bank is therefore not an unlock source, and a withdraw may only take what is above the
- * locked quantity. Every public check returns early for new accounts, so they see no change.
+ * <p>Counting needs an empty inventory and equipment, and locked items can never be withdrawn. So
+ * locked items only exist in the bank, and everything the player carries was earned. The bank is
+ * therefore not an unlock source, and a withdraw may only take what is above the locked quantity.
  *
- * <p>Known gaps, also shown to the player during setup: storage that is not counted, item charges,
- * rune pouches and containers filled from the bank, and the POH servant fetching from the bank.
+ * <p>Known gaps, also shown during setup: storage that is not counted, item charges, rune pouches
+ * and containers filled from the bank, and the POH servant fetching from the bank.
  */
 @Slf4j
 @Singleton
@@ -80,14 +80,13 @@ public class ItemLockService implements BUPluginLifecycle {
     private Subscription providerStateSubscription;
     private Subscription accountConfigSubscription;
 
-    private volatile StartingItems ledgerSource;
-    private volatile StartingItemsLedger ledger = StartingItemsLedger.empty();
-    // Canonical item ID -> quantity, from the bank container. Only used while the bank is open.
-    private Map<Integer, Long> bankQuantities = Collections.emptyMap();
+    // Only used while the bank is open.
+    private Map<Integer, Integer> bankQuantities = Collections.emptyMap();
     private boolean bankSeenSinceOpen;
     private boolean geOffersKnown;
-    // Set by an incinerator "Destroy"; the next bank update lowers the locked quantities.
-    private boolean lowerOnNextBankUpdate;
+    private static final int NO_ITEM = -1;
+    // The item confirmed in the incinerator; lowered once its bank quantity drops.
+    private int destroyedItemId = NO_ITEM;
     private int lastReminderTick = -1;
 
     @Override
@@ -96,8 +95,7 @@ public class ItemLockService implements BUPluginLifecycle {
             .subscribe((state, old) -> recomputeStatus());
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe((config, old) -> clientThread.invokeLater(this::recomputeStatus));
-        // Started while logged in (for example when the plugin is turned on): the GE offers
-        // arrived before we were listening, but the client already has them.
+        // When started while logged in, the GE offers arrived before we were listening.
         geOffersKnown = client.getGameState() == GameState.LOGGED_IN;
     }
 
@@ -113,13 +111,9 @@ public class ItemLockService implements BUPluginLifecycle {
         }
         bankQuantities = Collections.emptyMap();
         bankSeenSinceOpen = false;
-        lowerOnNextBankUpdate = false;
-        ledgerSource = null;
-        ledger = StartingItemsLedger.empty();
+        destroyedItemId = NO_ITEM;
         status.set(Status.OFF);
     }
-
-    // ---- State ----
 
     public Observable<Status> getStatus() {
         return status;
@@ -129,14 +123,13 @@ public class ItemLockService implements BUPluginLifecycle {
         return checklist;
     }
 
-    // The checks below read the live state instead of the status observable, so they are
-    // correct before the first status update. Fail closed: a wrong unlock goes to the whole group.
+    // These read the live state, not the status observable, so they are correct before the first
+    // status update. Fail closed: a wrong unlock goes to the whole group.
 
     public boolean isLockingItems() {
         return computeStatus() != Status.OFF;
     }
 
-    /** False while an existing account is not counted or its data is loading. */
     public boolean canUnlock() {
         Status current = computeStatus();
         return current == Status.OFF || current == Status.COUNTED;
@@ -155,10 +148,9 @@ public class ItemLockService implements BUPluginLifecycle {
     }
 
     private Status computeStatus() {
-        AccountConfiguration accountConfiguration = null;
-        if (accountConfigurationService.isReady()) {
-            accountConfiguration = accountConfigurationService.getCurrentAccountConfiguration();
-        }
+        AccountConfiguration accountConfiguration = accountConfigurationService.isReady()
+            ? accountConfigurationService.getCurrentAccountConfiguration()
+            : null;
         if (accountConfiguration == null || !accountConfiguration.isExistingAccount()) {
             return Status.OFF;
         }
@@ -168,40 +160,16 @@ public class ItemLockService implements BUPluginLifecycle {
         return startingItemsDataProvider.getMyStartingItems() == null ? Status.NOT_COUNTED : Status.COUNTED;
     }
 
-    /** The ledger for the saved starting items. Rebuilt only when the saved items change. */
-    private StartingItemsLedger currentLedger() {
-        StartingItems startingItems = startingItemsDataProvider.getMyStartingItems();
-        if (startingItems != ledgerSource) {
-            ledgerSource = startingItems;
-            ledger = startingItems == null
-                ? StartingItemsLedger.empty()
-                : new StartingItemsLedger(startingItems.toQuantityMap());
-        }
-        return ledger;
-    }
-
-    // ---- Quantities (client thread, bank open) ----
-
     public int startingQuantity(int itemId) {
-        return currentLedger().starting(canonicalize(itemId));
+        return startingItemsDataProvider.getMyLedger().starting(itemManager.canonicalize(itemId));
     }
 
-    /** How many of this item the player may take out of the bank. */
-    public long withdrawRoom(int itemId) {
-        int canonicalItemId = canonicalize(itemId);
-        return currentLedger().withdrawRoom(canonicalItemId, bankQuantities.getOrDefault(canonicalItemId, 0L));
+    /** How many of this item may be taken out of the bank. Only valid while the bank is open. */
+    public int withdrawRoom(int itemId) {
+        int canonicalItemId = itemManager.canonicalize(itemId);
+        return startingItemsDataProvider.getMyLedger()
+            .withdrawRoom(canonicalItemId, bankQuantities.getOrDefault(canonicalItemId, 0));
     }
-
-    private int canonicalize(int itemId) {
-        return itemManager.canonicalize(itemId);
-    }
-
-    private boolean isBankLive() {
-        Widget bankItems = client.getWidget(InterfaceID.Bankmain.ITEMS);
-        return bankSeenSinceOpen && bankItems != null && !bankItems.isHidden();
-    }
-
-    // ---- Events ----
 
     public void onGameStateChanged(GameStateChanged event) {
         GameState gameState = event.getGameState();
@@ -212,44 +180,70 @@ public class ItemLockService implements BUPluginLifecycle {
         if (gameState == GameState.LOGIN_SCREEN || gameState == GameState.HOPPING) {
             geOffersKnown = false;
             bankSeenSinceOpen = false;
-            lowerOnNextBankUpdate = false;
+            destroyedItemId = NO_ITEM;
         }
     }
 
     public void onGrandExchangeOfferChanged(GrandExchangeOfferChanged event) {
-        // At the LOGGED_IN event all slots are still EMPTY; the real offers follow in the same tick.
+        // At LOGGED_IN all slots are still empty; the real offers follow in the same tick.
         if (client.getGameState() == GameState.LOGGED_IN) {
             geOffersKnown = true;
         }
     }
 
     public void onItemContainerChanged(ItemContainerChanged event) {
-        // Seasonal and other unsupported worlds have a different bank.
+        // Unsupported worlds, such as seasonal ones, have a different bank.
         if (event.getContainerId() != InventoryID.BANK || !isLockingItems()
             || !worldTypeService.isCurrentWorldSupported()) {
             return;
         }
         bankQuantities = countByCanonicalId(event.getItemContainer());
         bankSeenSinceOpen = true;
-        if (lowerOnNextBankUpdate) {
-            lowerOnNextBankUpdate = false;
-            lowerToBank();
+        if (destroyedItemId != NO_ITEM) {
+            lowerDestroyedItem();
         }
     }
 
     public void onMenuOptionClicked(MenuOptionClicked event) {
-        Widget widget = event.getWidget();
-        if (widget != null && WidgetUtil.componentToInterface(widget.getId()) == InterfaceID.BANKMAIN
-            && "Destroy".equalsIgnoreCase(event.getMenuOption())) {
-            lowerOnNextBankUpdate = true;
+        Widget confirm = client.getWidget(InterfaceID.Bankmain.INCINERATOR_CONFIRM);
+        if (confirm == null || confirm.isHidden() || !isLockingItems()) {
+            return;
+        }
+        // The confirmation option is "Destroy ALL".
+        if (!Text.removeTags(event.getMenuOption()).toLowerCase(Locale.ROOT).contains("destroy")) {
+            return;
+        }
+        int itemId = findItemId(confirm);
+        if (itemId > 0) {
+            destroyedItemId = itemManager.canonicalize(itemId);
         }
     }
 
     public void onWidgetClosed(WidgetClosed event) {
         if (event.getGroupId() == InterfaceID.BANKMAIN) {
             bankSeenSinceOpen = false;
-            lowerOnNextBankUpdate = false;
+            destroyedItemId = NO_ITEM;
         }
+    }
+
+    /** The item shown in the incinerator confirmation. */
+    private static int findItemId(Widget widget) {
+        if (widget == null) {
+            return NO_ITEM;
+        }
+        if (widget.getItemId() > 0) {
+            return widget.getItemId();
+        }
+        for (Widget[] children : new Widget[][]{
+            widget.getStaticChildren(), widget.getDynamicChildren(), widget.getNestedChildren()}) {
+            for (Widget child : children == null ? new Widget[0] : children) {
+                int itemId = findItemId(child);
+                if (itemId > 0) {
+                    return itemId;
+                }
+            }
+        }
+        return NO_ITEM;
     }
 
     public void onGameTick() {
@@ -260,8 +254,6 @@ public class ItemLockService implements BUPluginLifecycle {
         checklist.set(computeChecklist());
         sendReminderIfDue();
     }
-
-    // ---- Counting ----
 
     private Checklist computeChecklist() {
         Boolean noGeOffers = null;
@@ -274,30 +266,20 @@ public class ItemLockService implements BUPluginLifecycle {
                 }
             }
         }
+        Widget bankItems = client.getWidget(InterfaceID.Bankmain.ITEMS);
+        boolean isBankOpen = bankSeenSinceOpen && bankItems != null && !bankItems.isHidden();
         return new Checklist(
-            isBankLive() && worldTypeService.isCurrentWorldSupported(),
+            isBankOpen,
             countByCanonicalId(client.getItemContainer(InventoryID.INV)).isEmpty(),
             countByCanonicalId(client.getItemContainer(InventoryID.WORN)).isEmpty(),
-            noGeOffers
+            noGeOffers,
+            bankQuantities.size(),
+            bankQuantities.getOrDefault(ItemID.COINS, 0)
         );
     }
 
-    /** What would be counted now, for the confirmation. */
-    public CompletableFuture<CountSummary> previewCount() {
-        CompletableFuture<CountSummary> future = new CompletableFuture<>();
-        clientThread.invokeLater(() -> {
-            if (!computeChecklist().isComplete()) {
-                future.completeExceptionally(new IllegalStateException("The checklist is not complete."));
-                return;
-            }
-            future.complete(new CountSummary(bankQuantities.size(), bankQuantities.getOrDefault(ItemID.COINS, 0L)));
-        });
-        return future;
-    }
-
-    /** Counts again and saves the starting items. */
-    public CompletableFuture<Integer> confirmCount() {
-        CompletableFuture<Integer> future = new CompletableFuture<>();
+    public CompletableFuture<Void> confirmCount() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
         clientThread.invokeLater(() -> {
             if (computeStatus() != Status.NOT_COUNTED) {
                 future.completeExceptionally(new IllegalStateException("Your items are already counted."));
@@ -307,11 +289,8 @@ public class ItemLockService implements BUPluginLifecycle {
                 future.completeExceptionally(new IllegalStateException("The checklist is not complete."));
                 return;
             }
-            // The checklist makes sure nothing is carried and the bank is open, so the bank holds everything.
-            Map<Integer, Integer> startingQuantities = new HashMap<>();
-            bankQuantities.forEach((itemId, quantity) ->
-                startingQuantities.put(itemId, (int) Math.min(quantity, Integer.MAX_VALUE)));
-            StartingItems startingItems = StartingItems.of(new ISOOffsetDateTime(OffsetDateTime.now()), startingQuantities);
+            // The inventory and equipment are empty, so the bank holds everything.
+            StartingItems startingItems = StartingItems.of(new ISOOffsetDateTime(OffsetDateTime.now()), bankQuantities);
             long accountHash = client.getAccountHash();
 
             startingItemsDataProvider.saveMyStartingItems(startingItems).whenComplete((__, throwable) -> {
@@ -320,31 +299,25 @@ public class ItemLockService implements BUPluginLifecycle {
                     future.completeExceptionally(throwable);
                     return;
                 }
-                // The member record is only a copy (setup reads it after a reinstall), so it does not fail the count.
+                // Setup reads the member record after a reinstall; failing it does not fail the count.
                 updateMyMember(accountHash, StartMode.EXISTING_ACCOUNT).whenComplete((v, memberThrowable) -> {
                     if (memberThrowable != null) {
                         log.warn("Failed to update member record after counting", memberThrowable);
                     }
                 });
                 clientThread.invokeLater(this::recomputeStatus);
-                int count = startingItems.getItems().size();
                 buChatService.sendHighlightedMessage(
                     "Bronzeman is active! ",
-                    NumberFormat.getIntegerInstance().format(count)
+                    NumberFormat.getIntegerInstance().format(startingItems.getItems().size())
                         + " items you already owned are locked in your bank. Everything you get from now on counts."
                 );
-                future.complete(count);
+                future.complete(null);
             });
         });
         return future;
     }
 
-    // ---- Leaving Bronzeman ----
-
-    /**
-     * Ends item locking for this account: deletes its locked items and clears the member copy.
-     * Called when the player leaves Bronzeman, so a new setup starts with a free choice.
-     */
+    /** Called when the player leaves Bronzeman, so a new setup starts with a free choice. */
     public CompletableFuture<Void> endItemLock() {
         CompletableFuture<Void> future = new CompletableFuture<>();
         clientThread.invokeLater(() -> {
@@ -353,8 +326,7 @@ public class ItemLockService implements BUPluginLifecycle {
                 return;
             }
             long accountHash = client.getAccountHash();
-            // Always delete, also when nothing is cached (for example while loading), so an old
-            // record cannot come back after a new setup.
+            // Also delete when nothing is loaded, so an old record cannot come back later.
             startingItemsDataProvider.deleteMyStartingItems()
                 .thenCompose(__ -> updateMyMember(accountHash, null))
                 .whenComplete((__, throwable) -> {
@@ -378,18 +350,16 @@ public class ItemLockService implements BUPluginLifecycle {
         return membersDataProvider.updateMember(member.withStartMode(startMode));
     }
 
-    // ---- Counted ----
-
-    /** After an incinerator destroy, a locked quantity is at most what is left in the bank. */
-    private void lowerToBank() {
+    /** After an incinerator destroy, the locked quantity is at most what is left in the bank. */
+    private void lowerDestroyedItem() {
         StartingItems current = startingItemsDataProvider.getMyStartingItems();
-        if (current == null) {
+        int bankQuantity = bankQuantities.getOrDefault(destroyedItemId, 0);
+        StartingItemsLedger lowered = startingItemsDataProvider.getMyLedger().lower(destroyedItemId, bankQuantity);
+        if (current == null || lowered == null) {
+            // Not destroyed yet: this bank update came first.
             return;
         }
-        StartingItemsLedger lowered = currentLedger().lowerTo(bankQuantities);
-        if (lowered == null) {
-            return;
-        }
+        destroyedItemId = NO_ITEM;
         startingItemsDataProvider.saveMyStartingItems(StartingItems.of(current.getCountedAt(), lowered.getStartingQuantities()))
             .whenComplete((__, throwable) -> {
                 if (throwable != null) {
@@ -410,17 +380,15 @@ public class ItemLockService implements BUPluginLifecycle {
         );
     }
 
-    /** Counts a container by un-noted item ID, without placeholders. */
-    private Map<Integer, Long> countByCanonicalId(ItemContainer container) {
-        Map<Integer, Long> quantities = new HashMap<>();
+    private Map<Integer, Integer> countByCanonicalId(ItemContainer container) {
+        Map<Integer, Integer> quantities = new HashMap<>();
         if (container == null) {
             return quantities;
         }
         for (Item item : container.getItems()) {
-            if (item == null || item.getId() <= 0 || item.getQuantity() <= 0) {
-                continue;
+            if (item != null && item.getId() > 0 && item.getQuantity() > 0) {
+                quantities.merge(itemManager.canonicalize(item.getId()), item.getQuantity(), Integer::sum);
             }
-            quantities.merge(canonicalize(item.getId()), (long) item.getQuantity(), Long::sum);
         }
         return quantities;
     }
@@ -435,23 +403,18 @@ public class ItemLockService implements BUPluginLifecycle {
     @Value
     public static class Checklist {
 
-        static final Checklist EMPTY = new Checklist(false, false, false, null);
+        static final Checklist EMPTY = new Checklist(false, false, false, null, 0, 0);
 
         boolean bankOpen;
         boolean inventoryEmpty;
         boolean equipmentEmpty;
-        // Null while the GE offers are not known yet after login.
+        // Null until the GE offers are known after login.
         Boolean noGeOffers;
+        int bankItems;
+        int coins;
 
         public boolean isComplete() {
             return bankOpen && inventoryEmpty && equipmentEmpty && Boolean.TRUE.equals(noGeOffers);
         }
-    }
-
-    @Value
-    public static class CountSummary {
-
-        int bankItems;
-        long coins;
     }
 }

@@ -241,16 +241,11 @@ public class MemberService implements BUPluginLifecycle {
             ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
 
             MemberRole memberRole = shouldBeOwner ? MemberRole.Owner : MemberRole.Member;
-            // Keep the start mode of an existing member. A new member gets the choice made during setup.
+            // Storage is only open when the account is configured, so the configuration exists.
             Member existingMember = membersMap.get(accountHash);
-            StartMode startMode;
-            if (existingMember != null) {
-                startMode = existingMember.getStartMode();
-            } else {
-                AccountConfiguration accountConfiguration =
-                    accountConfigurationService.getAccountConfiguration(accountHash);
-                startMode = accountConfiguration == null ? null : accountConfiguration.getStartMode();
-            }
+            StartMode startMode = existingMember != null
+                ? existingMember.getStartMode()
+                : accountConfigurationService.getAccountConfiguration(accountHash).getStartMode();
             Member member = new Member(
                 accountHash,
                 name,

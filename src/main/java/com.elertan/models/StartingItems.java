@@ -8,8 +8,8 @@ import java.util.Map;
 import lombok.Value;
 
 /**
- * The items an existing account had when it was counted. They are locked.
- * Stored as a list instead of a map: Firebase turns objects with numeric keys into arrays.
+ * The locked items of an existing account. A list instead of a map, because Firebase turns objects
+ * with numeric keys into arrays.
  */
 @Value
 public class StartingItems {

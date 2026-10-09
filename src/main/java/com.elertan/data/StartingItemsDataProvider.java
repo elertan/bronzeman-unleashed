@@ -2,6 +2,7 @@ package com.elertan.data;
 
 import com.elertan.AccountConfigurationService;
 import com.elertan.models.AccountConfiguration;
+import com.elertan.itemlock.StartingItemsLedger;
 import com.elertan.models.StartingItems;
 import com.elertan.remote.KeyValueStoragePort;
 import com.elertan.remote.StorageService;
@@ -27,6 +28,7 @@ public class StartingItemsDataProvider extends AbstractDataProvider {
 
     private KeyValueStoragePort<Long, StartingItems> keyValueStoragePort;
     private volatile StartingItems myStartingItems;
+    private volatile StartingItemsLedger myLedger = StartingItemsLedger.empty();
 
     @Override
     protected StorageService getStorageService() {
@@ -41,7 +43,7 @@ public class StartingItemsDataProvider extends AbstractDataProvider {
         AccountConfiguration accountConfiguration =
             accountConfigurationService.getAccountConfiguration(accountHash);
         if (accountConfiguration == null || !accountConfiguration.isExistingAccount()) {
-            myStartingItems = null;
+            setMyStartingItems(null);
             setState(State.Ready);
             return;
         }
@@ -52,8 +54,7 @@ public class StartingItemsDataProvider extends AbstractDataProvider {
                 log.error("StartingItemsDataProvider read failed", throwable);
                 return;
             }
-            myStartingItems = startingItems;
-            log.debug("StartingItemsDataProvider initialized, counted: {}", startingItems != null);
+            setMyStartingItems(startingItems);
             setState(State.Ready);
         });
     }
@@ -61,12 +62,22 @@ public class StartingItemsDataProvider extends AbstractDataProvider {
     @Override
     protected void onRemoteStorageNotReady() {
         keyValueStoragePort = null;
-        myStartingItems = null;
+        setMyStartingItems(null);
     }
 
-    /** The local player's starting items, or null when not counted (or not an existing account). */
+    /** Null when not counted, or for a new account. */
     public StartingItems getMyStartingItems() {
         return myStartingItems;
+    }
+
+    /** Empty when not counted, or for a new account. */
+    public StartingItemsLedger getMyLedger() {
+        return myLedger;
+    }
+
+    private void setMyStartingItems(StartingItems startingItems) {
+        myLedger = startingItems == null ? StartingItemsLedger.empty() : new StartingItemsLedger(startingItems.toQuantityMap());
+        myStartingItems = startingItems;
     }
 
     public CompletableFuture<Void> saveMyStartingItems(StartingItems startingItems) {
@@ -75,7 +86,7 @@ public class StartingItemsDataProvider extends AbstractDataProvider {
             return CompletableFuture.failedFuture(new IllegalStateException("storage is not ready"));
         }
         return port.update(client.getAccountHash(), startingItems)
-            .thenRun(() -> myStartingItems = startingItems);
+            .thenRun(() -> setMyStartingItems(startingItems));
     }
 
     public CompletableFuture<Void> deleteMyStartingItems() {
@@ -84,6 +95,6 @@ public class StartingItemsDataProvider extends AbstractDataProvider {
             return CompletableFuture.failedFuture(new IllegalStateException("storage is not ready"));
         }
         return port.delete(client.getAccountHash())
-            .thenRun(() -> myStartingItems = null);
+            .thenRun(() -> setMyStartingItems(null));
     }
 }

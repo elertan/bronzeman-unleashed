@@ -2,11 +2,12 @@ package com.elertan.itemlock;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import lombok.extern.slf4j.Slf4j;
+import java.text.ParseException;
 import net.runelite.api.Client;
 import net.runelite.api.ScriptEvent;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.gameval.VarClientID;
+import net.runelite.client.util.QuantityFormatter;
 
 /**
  * Lowers the Withdraw-X amount to a limit. How the prompt works (found with in-game logging):
@@ -14,7 +15,6 @@ import net.runelite.api.gameval.VarClientID;
  * "600" or "1k") in varc MESLAYERINPUT while MESLAYERMODE is 7; Enter runs script 681 once,
  * which reads that text. Script 681 is shared by other prompts, such as the bank search.
  */
-@Slf4j
 @Singleton
 public class WithdrawAmountLimiter {
 
@@ -26,10 +26,9 @@ public class WithdrawAmountLimiter {
     @Inject
     private Client client;
 
-    private long pendingLimit = -1;
+    private int pendingLimit = -1;
 
-    /** Call after a bank Withdraw-X click. The next amount prompt is limited. */
-    public void limitNextPrompt(long limit) {
+    public void limitNextPrompt(int limit) {
         pendingLimit = limit;
     }
 
@@ -60,17 +59,20 @@ public class WithdrawAmountLimiter {
     }
 
     private void lowerTypedAmount() {
-        // Script 681 is shared by other prompts, such as the bank search.
         if (client.getVarcIntValue(VarClientID.MESLAYERMODE) != AMOUNT_PROMPT_MODE) {
             return;
         }
-        long limit = pendingLimit;
+        int limit = pendingLimit;
         clear();
-        Long typed = StartingItemsLedger.parseAmount(client.getVarcStrValue(VarClientID.MESLAYERINPUT));
-        if (typed == null || typed <= limit) {
+        long typed;
+        try {
+            typed = QuantityFormatter.parseQuantity(client.getVarcStrValue(VarClientID.MESLAYERINPUT));
+        } catch (ParseException e) {
+            // The game rejects it too.
             return;
         }
-        log.debug("Item lock: lowering Withdraw-X amount from {} to {}", typed, limit);
-        client.setVarcStrValue(VarClientID.MESLAYERINPUT, String.valueOf(limit));
+        if (typed > limit) {
+            client.setVarcStrValue(VarClientID.MESLAYERINPUT, String.valueOf(limit));
+        }
     }
 }
