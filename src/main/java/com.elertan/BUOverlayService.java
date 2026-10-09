@@ -22,8 +22,11 @@ public class BUOverlayService implements BUPluginLifecycle {
     private LockedItemsOverlay lockedItemsOverlay;
     @Inject
     private AccountConfigurationService accountConfigurationService;
+    @Inject
+    private ItemLockService itemLockService;
 
     private Subscription accountConfigSubscription;
+    private Subscription itemLockStatusSubscription;
 
     @Override
     public void startUp() throws Exception {
@@ -32,6 +35,8 @@ public class BUOverlayService implements BUPluginLifecycle {
 
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
+        itemLockStatusSubscription = itemLockService.getStatus()
+            .subscribe((status, old) -> lockedItemsOverlay.refreshFade());
     }
 
     @Override
@@ -39,6 +44,10 @@ public class BUOverlayService implements BUPluginLifecycle {
         if (accountConfigSubscription != null) {
             accountConfigSubscription.dispose();
             accountConfigSubscription = null;
+        }
+        if (itemLockStatusSubscription != null) {
+            itemLockStatusSubscription.dispose();
+            itemLockStatusSubscription = null;
         }
 
         itemUnlockOverlay.clear();

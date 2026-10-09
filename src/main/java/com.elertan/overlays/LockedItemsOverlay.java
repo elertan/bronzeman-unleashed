@@ -3,6 +3,7 @@ package com.elertan.overlays;
 import com.elertan.BUPluginConfig;
 import com.elertan.BUResourceService;
 import com.elertan.ItemLockService;
+import com.elertan.utils.TextUtils;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -28,7 +29,6 @@ import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.tooltip.Tooltip;
 import net.runelite.client.ui.overlay.tooltip.TooltipManager;
-import net.runelite.client.util.QuantityFormatter;
 
 /**
  * Marks locked items in the bank: a padlock, a placeholder-like fade when nothing can be withdrawn,
@@ -79,14 +79,15 @@ public class LockedItemsOverlay extends Overlay {
         }
     }
 
+    /** The bank does not rebuild when the item lock status changes, so fade again. */
+    public void refreshFade() {
+        clientThread.invokeLater(() -> applyFade());
+    }
+
     @Override
     public Dimension render(Graphics2D graphics) {
         Widget bankItems = getBankItems();
-        if (bankItems == null) {
-            return null;
-        }
-        applyFade();
-        if (!isActive()) {
+        if (bankItems == null || !isActive()) {
             return null;
         }
 
@@ -98,12 +99,13 @@ public class LockedItemsOverlay extends Overlay {
         Point mouse = client.getMouseCanvasPosition();
 
         for (Widget item : bankItems.getDynamicChildren()) {
-            int starting = startingQuantity(item);
-            if (starting <= 0) {
+            // Check the bounds first: only the visible items need a lookup.
+            Rectangle bounds = item == null ? null : item.getBounds();
+            if (bounds == null || !bounds.intersects(viewport)) {
                 continue;
             }
-            Rectangle bounds = item.getBounds();
-            if (!bounds.intersects(viewport)) {
+            int starting = startingQuantity(item);
+            if (starting <= 0) {
                 continue;
             }
             int itemId = item.getItemId();
@@ -181,7 +183,7 @@ public class LockedItemsOverlay extends Overlay {
     }
 
     private void drawUsableAmount(Graphics2D graphics, int amount, int centerX, int top, int maxRight) {
-        String text = QuantityFormatter.quantityToStackSize(amount);
+        String text = TextUtils.formatStackSize(amount);
         graphics.setFont(amountFont);
         FontMetrics metrics = graphics.getFontMetrics();
         int width = metrics.stringWidth(text);

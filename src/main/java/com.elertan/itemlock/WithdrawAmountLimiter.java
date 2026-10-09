@@ -2,49 +2,58 @@ package com.elertan.itemlock;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import java.awt.event.KeyEvent;
 import java.text.ParseException;
+import java.util.function.LongConsumer;
 import net.runelite.api.Client;
 import net.runelite.api.ScriptEvent;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.gameval.VarClientID;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.input.KeyListener;
 import net.runelite.client.util.QuantityFormatter;
 
 /**
- * Lowers the Withdraw-X amount to a limit. How the prompt works (found with in-game logging):
- * script 108 opens it with the title as argument 1; each key stores the raw text (for example
- * "600" or "1k") in varc MESLAYERINPUT while MESLAYERMODE is 7; Enter runs script 681 once,
- * which reads that text. Script 681 is shared by other prompts, such as the bank search.
+ * Limits the Withdraw-X amount: the prompt shows the limit, and Enter with a higher amount closes
+ * the prompt without withdrawing. How the prompt works (found with in-game logging): script 108
+ * opens it with the title as argument 1; each key stores the raw text (for example "600" or "1k")
+ * in varc MESLAYERINPUT while MESLAYERMODE is 7.
  */
 @Singleton
-public class WithdrawAmountLimiter {
+public class WithdrawAmountLimiter implements KeyListener {
 
     private static final int OPEN_AMOUNT_PROMPT_SCRIPT_ID = 108;
-    private static final int SUBMIT_PROMPT_SCRIPT_ID = 681;
+    private static final int CHATBOX_INPUT_CLOSE_SCRIPT_ID = 138;
     private static final int AMOUNT_PROMPT_MODE = 7;
     private static final String AMOUNT_PROMPT_TITLE = "Enter amount:";
 
     @Inject
     private Client client;
+    @Inject
+    private ClientThread clientThread;
 
-    private int pendingLimit = -1;
+    private volatile int pendingLimit = -1;
+    private volatile LongConsumer onBlocked;
+    // Also consume the typed and released events of the Enter that closed the prompt.
+    private volatile boolean isConsumingEnter;
 
-    public void limitNextPrompt(int limit) {
+    /**
+     * @param onBlocked gets the typed amount, on the client thread, when Enter with a higher amount
+     *     closes the prompt
+     */
+    public void limitNextPrompt(int limit, LongConsumer onBlocked) {
+        this.onBlocked = onBlocked;
         pendingLimit = limit;
     }
 
     public void clear() {
         pendingLimit = -1;
+        onBlocked = null;
     }
 
     public void onScriptPreFired(ScriptPreFired event) {
-        if (pendingLimit < 0) {
-            return;
-        }
-        int scriptId = event.getScriptId();
-        if (scriptId == OPEN_AMOUNT_PROMPT_SCRIPT_ID) {
+        if (pendingLimit >= 0 && event.getScriptId() == OPEN_AMOUNT_PROMPT_SCRIPT_ID) {
             showLimitInTitle(event.getScriptEvent());
-        } else if (scriptId == SUBMIT_PROMPT_SCRIPT_ID) {
-            lowerTypedAmount();
         }
     }
 
@@ -58,21 +67,52 @@ public class WithdrawAmountLimiter {
         }
     }
 
-    private void lowerTypedAmount() {
-        if (client.getVarcIntValue(VarClientID.MESLAYERMODE) != AMOUNT_PROMPT_MODE) {
+    @Override
+    public void keyTyped(KeyEvent e) {
+        if (isConsumingEnter && e.getKeyChar() == '\n') {
+            e.consume();
+        }
+    }
+
+    @Override
+    public void keyPressed(KeyEvent e) {
+        if (e.getKeyCode() != KeyEvent.VK_ENTER) {
             return;
         }
-        int limit = pendingLimit;
+        long typed = typedAmount();
+        if (pendingLimit < 0 || typed <= pendingLimit) {
+            return;
+        }
+        e.consume();
+        isConsumingEnter = true;
+        LongConsumer blocked = onBlocked;
         clear();
-        long typed;
+        clientThread.invoke(() -> {
+            client.runScript(CHATBOX_INPUT_CLOSE_SCRIPT_ID);
+            if (blocked != null) {
+                blocked.accept(typed);
+            }
+        });
+    }
+
+    @Override
+    public void keyReleased(KeyEvent e) {
+        if (isConsumingEnter && e.getKeyCode() == KeyEvent.VK_ENTER) {
+            e.consume();
+            isConsumingEnter = false;
+        }
+    }
+
+    /** The amount in the open amount prompt, or -1. */
+    private long typedAmount() {
+        if (client.getVarcIntValue(VarClientID.MESLAYERMODE) != AMOUNT_PROMPT_MODE) {
+            return -1;
+        }
         try {
-            typed = QuantityFormatter.parseQuantity(client.getVarcStrValue(VarClientID.MESLAYERINPUT));
+            return QuantityFormatter.parseQuantity(client.getVarcStrValue(VarClientID.MESLAYERINPUT));
         } catch (ParseException e) {
             // The game rejects it too.
-            return;
-        }
-        if (typed > limit) {
-            client.setVarcStrValue(VarClientID.MESLAYERINPUT, String.valueOf(limit));
+            return -1;
         }
     }
 }

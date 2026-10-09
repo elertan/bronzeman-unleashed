@@ -10,10 +10,10 @@ import com.elertan.WorldTypeService;
 import com.elertan.itemlock.WithdrawAmounts;
 import com.elertan.itemlock.WithdrawAmountLimiter;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
+import com.elertan.utils.TextUtils;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.text.NumberFormat;
 import java.util.Set;
 import java.util.regex.Pattern;
 import net.runelite.api.Client;
@@ -27,6 +27,7 @@ import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetUtil;
+import net.runelite.client.input.KeyManager;
 
 /**
  * Limits bank withdraws of an existing account to what it got after it was counted, and keeps
@@ -55,6 +56,8 @@ public class ItemLockPolicy extends PolicyBase {
     private BUChatService buChatService;
     @Inject
     private ItemUnlockService itemUnlockService;
+    @Inject
+    private KeyManager keyManager;
 
     @Inject
     public ItemLockPolicy(AccountConfigurationService accountConfigurationService,
@@ -64,7 +67,14 @@ public class ItemLockPolicy extends PolicyBase {
     }
 
     @Override
+    public void startUp() throws Exception {
+        super.startUp();
+        keyManager.registerKeyListener(withdrawAmountLimiter);
+    }
+
+    @Override
     public void shutDown() throws Exception {
+        keyManager.unregisterKeyListener(withdrawAmountLimiter);
         withdrawAmountLimiter.clear();
         super.shutDown();
     }
@@ -108,7 +118,7 @@ public class ItemLockPolicy extends PolicyBase {
                 return;
             }
             if (room < bankQuantity) {
-                withdrawAmountLimiter.limitNextPrompt(room);
+                withdrawAmountLimiter.limitNextPrompt(room, typed -> sendWithdrawXBlockedMessage(itemId, typed, room));
             }
             return;
         }
@@ -118,6 +128,8 @@ public class ItemLockPolicy extends PolicyBase {
         if (actual > room) {
             event.consume();
             sendBlockedMessage(itemId, room);
+        } else if (!event.isConsumed()) {
+            itemLockService.addPendingWithdraw(itemId, actual);
         }
     }
 
@@ -193,11 +205,20 @@ public class ItemLockPolicy extends PolicyBase {
         return !(withdrawsAsNote && canBeNoted);
     }
 
+    private void sendWithdrawXBlockedMessage(int itemId, long typed, int room) {
+        buChatService.sendItemRestrictionMessage(
+            itemId,
+            "You can't withdraw " + TextUtils.formatStackSize(typed) + " ",
+            client.getItemDefinition(itemId).getName(),
+            " because you only have " + TextUtils.formatStackSize(room) + " available. The rest is locked."
+        );
+    }
+
     /** Tells the player why a withdraw is blocked. */
     private void sendBlockedMessage(int itemId, int room) {
         String itemName = client.getItemDefinition(itemId).getName();
         if (room > 0) {
-            String before = "You can withdraw " + NumberFormat.getIntegerInstance().format(room) + " more ";
+            String before = "You can withdraw " + TextUtils.formatStackSize(room) + " more ";
             buChatService.sendItemRestrictionMessage(itemId, before, itemName, ". The rest is locked.");
         } else {
             buChatService.sendItemRestrictionMessage(

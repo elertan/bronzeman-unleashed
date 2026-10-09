@@ -56,6 +56,8 @@ import net.runelite.client.util.Text;
 public class ItemLockService implements BUPluginLifecycle {
 
     private static final int REMINDER_INTERVAL_TICKS = 1000; // about 10 minutes
+    // A withdraw the server did not do (for example a full inventory) stops counting after this.
+    private static final int PENDING_WITHDRAW_TICKS = 3;
 
     @Inject
     private Client client;
@@ -83,6 +85,10 @@ public class ItemLockService implements BUPluginLifecycle {
     // Only used while the bank is open.
     private Map<Integer, Integer> bankQuantities = Collections.emptyMap();
     private boolean bankSeenSinceOpen;
+    // Withdraws sent to the server but not yet in the bank container, so fast clicks in one
+    // tick cannot each use the same room.
+    private final Map<Integer, Integer> pendingWithdraws = new HashMap<>();
+    private int lastWithdrawTick;
     private boolean geOffersKnown;
     private static final int NO_ITEM = -1;
     // The item confirmed in the incinerator; lowered once its bank quantity drops.
@@ -110,8 +116,7 @@ public class ItemLockService implements BUPluginLifecycle {
             accountConfigSubscription = null;
         }
         bankQuantities = Collections.emptyMap();
-        bankSeenSinceOpen = false;
-        destroyedItemId = NO_ITEM;
+        resetBankState();
         status.set(Status.OFF);
     }
 
@@ -167,8 +172,17 @@ public class ItemLockService implements BUPluginLifecycle {
     /** How many of this item may be taken out of the bank. Only valid while the bank is open. */
     public int withdrawRoom(int itemId) {
         int canonicalItemId = itemManager.canonicalize(itemId);
-        return startingItemsDataProvider.getMyLedger()
+        int room = startingItemsDataProvider.getMyLedger()
             .withdrawRoom(canonicalItemId, bankQuantities.getOrDefault(canonicalItemId, 0));
+        return Math.max(0, room - pendingWithdraws.getOrDefault(canonicalItemId, 0));
+    }
+
+    /** Called for a withdraw that was let through, before the server has done it. */
+    public void addPendingWithdraw(int itemId, int quantity) {
+        if (quantity > 0) {
+            pendingWithdraws.merge(itemManager.canonicalize(itemId), quantity, Integer::sum);
+            lastWithdrawTick = client.getTickCount();
+        }
     }
 
     public void onGameStateChanged(GameStateChanged event) {
@@ -179,8 +193,7 @@ public class ItemLockService implements BUPluginLifecycle {
         }
         if (gameState == GameState.LOGIN_SCREEN || gameState == GameState.HOPPING) {
             geOffersKnown = false;
-            bankSeenSinceOpen = false;
-            destroyedItemId = NO_ITEM;
+            resetBankState();
         }
     }
 
@@ -197,7 +210,9 @@ public class ItemLockService implements BUPluginLifecycle {
             || !worldTypeService.isCurrentWorldSupported()) {
             return;
         }
-        bankQuantities = countByCanonicalId(event.getItemContainer());
+        Map<Integer, Integer> newQuantities = countByCanonicalId(event.getItemContainer());
+        settlePendingWithdraws(newQuantities);
+        bankQuantities = newQuantities;
         bankSeenSinceOpen = true;
         if (destroyedItemId != NO_ITEM) {
             lowerDestroyedItem();
@@ -221,9 +236,21 @@ public class ItemLockService implements BUPluginLifecycle {
 
     public void onWidgetClosed(WidgetClosed event) {
         if (event.getGroupId() == InterfaceID.BANKMAIN) {
-            bankSeenSinceOpen = false;
-            destroyedItemId = NO_ITEM;
+            resetBankState();
         }
+    }
+
+    private void resetBankState() {
+        bankSeenSinceOpen = false;
+        destroyedItemId = NO_ITEM;
+        pendingWithdraws.clear();
+    }
+
+    /** A drop in the bank quantity is a pending withdraw that the server has done. */
+    private void settlePendingWithdraws(Map<Integer, Integer> newQuantities) {
+        pendingWithdraws.replaceAll((itemId, pending) -> pending
+            - Math.max(0, bankQuantities.getOrDefault(itemId, 0) - newQuantities.getOrDefault(itemId, 0)));
+        pendingWithdraws.values().removeIf(pending -> pending <= 0);
     }
 
     /** The item shown in the incinerator confirmation. */
@@ -248,6 +275,9 @@ public class ItemLockService implements BUPluginLifecycle {
 
     public void onGameTick() {
         recomputeStatus();
+        if (!pendingWithdraws.isEmpty() && client.getTickCount() - lastWithdrawTick > PENDING_WITHDRAW_TICKS) {
+            pendingWithdraws.clear();
+        }
         if (status.get() != Status.NOT_COUNTED || !worldTypeService.isCurrentWorldSupported()) {
             return;
         }
