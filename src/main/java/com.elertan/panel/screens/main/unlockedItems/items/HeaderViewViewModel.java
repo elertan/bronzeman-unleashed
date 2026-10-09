@@ -1,6 +1,9 @@
 package com.elertan.panel.screens.main.unlockedItems.items;
 
 import com.elertan.AccountConfigurationService;
+import com.elertan.GameRulesService;
+import com.elertan.panel.components.ManualUnlockDialog;
+import com.elertan.ui.Bindings;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.models.AccountConfiguration.StorageMode;
 import com.elertan.data.MembersDataProvider;
@@ -13,6 +16,7 @@ import com.elertan.utils.Subscription;
 import com.google.inject.ImplementedBy;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import java.awt.Window;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,12 +31,16 @@ public class HeaderViewViewModel implements AutoCloseable {
     public final Property<Long> unlockedByAccountHash;
     public final Property<List<UnlockedItemsScreenViewModel.SortedBy>> sortedByOptions;
     public final Property<Boolean> showUnlockedByFilter;
+    public final Property<Boolean> showManualUnlockButton;
     public final Property<List<Long>> accountHashesFromAllUnlockedItems;
     public final Property<Map<Long, String>> accountHashToMemberNameMap;
     private final Runnable navigateToConfiguration;
     private final MembersDataProvider membersDataProvider;
     private final MembersDataProvider.MemberMapListener memberMapListener;
     private final Subscription accountConfigurationSubscription;
+    private final Subscription gameRulesSubscription;
+    private final ManualUnlockDialog.Factory manualUnlockDialogFactory;
+    private ManualUnlockDialog manualUnlockDialog;
 
     private HeaderViewViewModel(
         Property<List<UnlockedItem>> allUnlockedItems,
@@ -41,14 +49,18 @@ public class HeaderViewViewModel implements AutoCloseable {
         Property<Long> unlockedByAccountHash,
         AccountConfigurationService accountConfigurationService,
         MembersDataProvider membersDataProvider,
+        GameRulesService gameRulesService,
+        ManualUnlockDialog.Factory manualUnlockDialogFactory,
         Runnable navigateToConfiguration) {
         this.membersDataProvider = membersDataProvider;
+        this.manualUnlockDialogFactory = manualUnlockDialogFactory;
 
         this.searchText = searchText;
         this.sortedBy = sortedBy;
         this.unlockedByAccountHash = unlockedByAccountHash;
         this.sortedByOptions = new Property<>(buildSortedByOptions(false));
         this.showUnlockedByFilter = new Property<>(true);
+        this.showManualUnlockButton = new Property<>(false);
 
         accountHashesFromAllUnlockedItems = allUnlockedItems.deriveAsync(items -> {
             if (items == null || items.isEmpty()) {
@@ -88,16 +100,42 @@ public class HeaderViewViewModel implements AutoCloseable {
             .subscribeImmediate((accountConfiguration, __) ->
                 onAccountConfigurationChanged(accountConfiguration)
             );
+        gameRulesSubscription = gameRulesService.getGameRules()
+            .subscribeImmediate((gameRules, __) -> {
+                boolean allowManualUnlocks = gameRules != null && gameRules.isAllowManualUnlocks();
+                showManualUnlockButton.set(allowManualUnlocks);
+                if (!allowManualUnlocks) {
+                    Bindings.invokeOnEDT(this::closeManualUnlockDialog);
+                }
+            });
     }
 
     @Override
     public void close() throws Exception {
         accountConfigurationSubscription.dispose();
+        gameRulesSubscription.dispose();
+        Bindings.invokeOnEDT(this::closeManualUnlockDialog);
         membersDataProvider.removeMemberMapListener(memberMapListener);
     }
 
     public void onOpenConfigurationClick() {
         navigateToConfiguration.run();
+    }
+
+    public void onManualUnlockClick(Window owner) {
+        if (manualUnlockDialog != null && manualUnlockDialog.isDisplayable()) {
+            manualUnlockDialog.toFront();
+            return;
+        }
+        manualUnlockDialog = manualUnlockDialogFactory.create(owner);
+        manualUnlockDialog.setVisible(true);
+    }
+
+    private void closeManualUnlockDialog() {
+        if (manualUnlockDialog != null) {
+            manualUnlockDialog.dispose();
+            manualUnlockDialog = null;
+        }
     }
 
     private Map<Long, String> buildAccountHashToMemberNameMap() {
@@ -163,6 +201,10 @@ public class HeaderViewViewModel implements AutoCloseable {
         private AccountConfigurationService accountConfigurationService;
         @Inject
         private MembersDataProvider membersDataProvider;
+        @Inject
+        private GameRulesService gameRulesService;
+        @Inject
+        private ManualUnlockDialog.Factory manualUnlockDialogFactory;
 
         @Override
         public HeaderViewViewModel create(
@@ -179,6 +221,8 @@ public class HeaderViewViewModel implements AutoCloseable {
                 unlockedByAccountHash,
                 accountConfigurationService,
                 membersDataProvider,
+                gameRulesService,
+                manualUnlockDialogFactory,
                 navigateToConfiguration
             );
         }

@@ -22,6 +22,7 @@ import net.runelite.client.events.ServerNpcLoot;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemMapping;
 import net.runelite.client.game.ItemStack;
+import net.runelite.client.util.Text;
 
 import com.elertan.utils.Subscription;
 import java.time.OffsetDateTime;
@@ -220,6 +221,15 @@ public class ItemUnlockService implements BUPluginLifecycle {
                                         buPluginConfig.chatPlayerNameColor(),
                                         member.getName()
                                     );
+                                }
+                                if (unlockedItem.isManual()) {
+                                    builder.append(" (manual");
+                                    String note = unlockedItem.getNote();
+                                    if (note != null && !note.isEmpty()) {
+                                        builder.append(": ");
+                                        builder.append(Text.escapeJagex(note));
+                                    }
+                                    builder.append(")");
                                 }
                                 Integer droppedByNpcId = unlockedItem.getDroppedByNPCId();
                                 if (droppedByNpcId != null) {
@@ -539,14 +549,72 @@ public class ItemUnlockService implements BUPluginLifecycle {
                     fItemName,
                     acquiredByAccountHash,
                     acquiredAt,
-                    droppedByNPCId
+                    droppedByNPCId,
+                    false,
+                    null
                 );
                 log.debug("Unlocked item ({}) '{}'", fItemId, fItemName);
                 return unlockedItemsDataProvider.addUnlockedItem(unlockedItem);
             });
     }
 
-    private int canonicalizeItemId(int initialItemId) {
+    /**
+     * Unlocks an item by hand. Must be called on the client thread.
+     * Skips the automatic-detection checks and the tradeable-only rule, but still
+     * respects excluded items, placeholders and canonicalization.
+     */
+    public CompletableFuture<Void> manualUnlockItem(int initialItemId, String note) {
+        if (initialItemId <= 1) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Item id must be greater than 1"));
+        }
+        if (ExcludedItemIds.IDS.contains(initialItemId)) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Item can not be unlocked"));
+        }
+        if (client.getItemDefinition(initialItemId).getPlaceholderTemplateId() != -1) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Item is a placeholder"));
+        }
+
+        int itemId;
+        try {
+            itemId = canonicalizeItemId(initialItemId);
+            if (hasUnlockedItem(itemId)) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Item is already unlocked"));
+            }
+        } catch (Exception ex) {
+            return CompletableFuture.failedFuture(ex);
+        }
+
+        final String fItemName = client.getItemDefinition(itemId).getName();
+        final int fItemId = itemId;
+        final long acquiredByAccountHash = client.getAccountHash();
+        final String fNote = note == null || note.trim().isEmpty() ? null : note.trim();
+        return gameRulesService
+            .waitUntilGameRulesReady(null)
+            .thenCompose(__ -> {
+                GameRules gameRules = gameRulesService.getGameRules().get();
+                if (!gameRules.isAllowManualUnlocks()) {
+                    return CompletableFuture.failedFuture(
+                        new IllegalStateException("Manual unlocks are disabled in the game rules"));
+                }
+
+                UnlockedItem unlockedItem = new UnlockedItem(
+                    fItemId,
+                    fItemName,
+                    acquiredByAccountHash,
+                    new ISOOffsetDateTime(OffsetDateTime.now()),
+                    null,
+                    true,
+                    fNote
+                );
+                log.debug("Manually unlocked item ({}) '{}'", fItemId, fItemName);
+                return unlockedItemsDataProvider.addUnlockedItem(unlockedItem);
+            });
+    }
+
+    /**
+     * Must be called on the client thread.
+     */
+    public int canonicalizeItemId(int initialItemId) {
         // We want the base item, not a noted item or similar
         int itemId = itemManager.canonicalize(initialItemId);
 
