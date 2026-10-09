@@ -188,10 +188,14 @@ public class MemberService implements BUPluginLifecycle {
     }
 
     private void whenMembersDataProviderReadyAfterAccountConfigurationSet() {
+        // The account can change while we wait, for example after a logout.
+        if (accountConfigurationService.getCurrentAccountConfiguration() == null) {
+            return;
+        }
         Player player = client.getLocalPlayer();
-        String name = player.getName();
+        String name = player == null ? null : player.getName();
         if (name == null) {
-            // Wait till name gets set...
+            // Wait till the player is loaded and its name gets set...
             clientThread.invokeLater(this::whenMembersDataProviderReadyAfterAccountConfigurationSet);
             return;
         }
