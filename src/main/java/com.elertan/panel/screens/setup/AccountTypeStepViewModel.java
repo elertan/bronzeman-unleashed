@@ -13,8 +13,6 @@ public class AccountTypeStepViewModel {
 
     /** This player already chose "Existing account" before, for example before a reinstall. */
     public final Property<Boolean> isExistingAccountSaved;
-    /** The group rule `requireItemLock` applies to this player. */
-    public final Property<Boolean> isItemLockRequired;
     public final Property<StartMode> selectedStartMode = new Property<>(StartMode.NEW_ACCOUNT);
     public final Property<Boolean> isDisclaimerAccepted = new Property<>(false);
     public final Property<Boolean> isSubmitting = new Property<>(false);
@@ -24,11 +22,9 @@ public class AccountTypeStepViewModel {
 
     private AccountTypeStepViewModel(
         Property<Boolean> isExistingAccountSaved,
-        Property<Boolean> isItemLockRequired,
         Listener listener
     ) {
         this.isExistingAccountSaved = isExistingAccountSaved;
-        this.isItemLockRequired = isItemLockRequired;
         this.listener = listener;
 
         // A saved choice was confirmed before, so it needs no disclaimer again.
@@ -39,12 +35,11 @@ public class AccountTypeStepViewModel {
         );
         selectLockedChoice();
         isExistingAccountSaved.addListener(e -> selectLockedChoice());
-        isItemLockRequired.addListener(e -> selectLockedChoice());
     }
 
-    /** A saved choice and the group rule both force "Existing account". */
+    /** A saved choice forces "Existing account". */
     public boolean isLockedToExistingAccount() {
-        return Boolean.TRUE.equals(isExistingAccountSaved.get()) || Boolean.TRUE.equals(isItemLockRequired.get());
+        return Boolean.TRUE.equals(isExistingAccountSaved.get());
     }
 
     private void selectLockedChoice() {
@@ -87,7 +82,6 @@ public class AccountTypeStepViewModel {
 
         AccountTypeStepViewModel create(
             Property<Boolean> isExistingAccountSaved,
-            Property<Boolean> isItemLockRequired,
             Listener listener
         );
     }
@@ -105,10 +99,9 @@ public class AccountTypeStepViewModel {
         @Override
         public AccountTypeStepViewModel create(
             Property<Boolean> isExistingAccountSaved,
-            Property<Boolean> isItemLockRequired,
             Listener listener
         ) {
-            return new AccountTypeStepViewModel(isExistingAccountSaved, isItemLockRequired, listener);
+            return new AccountTypeStepViewModel(isExistingAccountSaved, listener);
         }
     }
 }

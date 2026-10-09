@@ -97,18 +97,6 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
         add(existingAccountCard);
         add(Box.createVerticalStrut(8));
 
-        JTextPane requiredNote = WrappedText.create(
-            "This group requires new members to lock their items.",
-            WARNING,
-            CONTENT_WIDTH,
-            SwingConstants.CENTER
-        );
-        bindings.add(Bindings.bindVisible(requiredNote, Property.deriveMany(
-            Arrays.asList(viewModel.isExistingAccountSaved, viewModel.isItemLockRequired),
-            values -> !Boolean.TRUE.equals(values.get(0)) && Boolean.TRUE.equals(values.get(1))
-        )));
-        add(requiredNote);
-
         JTextPane savedNote = WrappedText.create(
             "You made this choice when you joined. Leave Bronzeman to choose again.",
             WARNING,
@@ -155,7 +143,6 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
 
         viewModel.selectedStartMode.addListener(refreshListener);
         viewModel.isExistingAccountSaved.addListener(refreshListener);
-        viewModel.isItemLockRequired.addListener(refreshListener);
         refreshCards();
     }
 
@@ -163,7 +150,6 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
     public void close() throws Exception {
         viewModel.selectedStartMode.removeListener(refreshListener);
         viewModel.isExistingAccountSaved.removeListener(refreshListener);
-        viewModel.isItemLockRequired.removeListener(refreshListener);
         for (AutoCloseable binding : bindings) {
             binding.close();
         }

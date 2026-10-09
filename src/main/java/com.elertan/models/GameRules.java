@@ -24,8 +24,6 @@ public class GameRules {
     boolean restrictPlayerVersusPlayerLoot;
     boolean restrictFaladorPartyRoomBalloons;
     boolean shareAchievementNotifications;
-    // New members must choose "Existing account", so their items are locked. Current members do not change.
-    boolean requireItemLock;
     Integer valuableLootNotificationThreshold;
     String partyPassword;
 
@@ -43,7 +41,6 @@ public class GameRules {
             .restrictPlayerVersusPlayerLoot(false)
             .restrictFaladorPartyRoomBalloons(true)
             .shareAchievementNotifications(true)
-            .requireItemLock(false)
             .valuableLootNotificationThreshold(100_000)
             .partyPassword(null)
             .build();
