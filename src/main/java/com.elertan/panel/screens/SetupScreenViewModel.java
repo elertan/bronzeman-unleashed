@@ -414,12 +414,14 @@ public final class SetupScreenViewModel implements AutoCloseable {
             }
 
             // Local mode has no member records: saved starting items mean an existing account.
-            isLocalMode.set(true);
-            gameRulesAreViewOnly.set(false);
-            gameRules.set(existingGameRules);
-            isExistingAccountSaved.set(LocalStorageSession.hasStartingItems(accountHash));
-            isItemLockRequired.set(false);
-            step.set(Step.ACCOUNT_TYPE);
+            StartMode startMode = LocalStorageSession.hasStartingItems(accountHash)
+                ? StartMode.EXISTING_ACCOUNT
+                : StartMode.NEW_ACCOUNT;
+            accountConfigurationService.setAccountConfiguration(
+                AccountConfiguration.forLocal(accountHash).withStartMode(startMode),
+                accountHash
+            );
+            resetSetupState();
         });
     }
 

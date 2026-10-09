@@ -355,6 +355,12 @@ public class ItemLockService implements BUPluginLifecycle {
                 future.complete(null);
                 return;
             }
+            if (accountConfigurationService.getCurrentAccountConfiguration().getStorageMode()
+                == AccountConfiguration.StorageMode.LOCAL) {
+                // Local progress stays on disk for "Continue Existing", so its locked items stay too.
+                future.complete(null);
+                return;
+            }
             long accountHash = client.getAccountHash();
             // Also delete when nothing is loaded, so an old record cannot come back later.
             startingItemsDataProvider.deleteMyStartingItems()

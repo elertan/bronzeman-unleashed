@@ -2,6 +2,7 @@ package com.elertan.panel.screens.setup;
 
 import com.elertan.models.StartMode;
 import com.elertan.panel.BUPanel;
+import com.elertan.panel.components.StatusIcon;
 import com.elertan.panel.components.WrappedText;
 import com.elertan.ui.Bindings;
 import com.elertan.ui.Property;
@@ -32,6 +33,7 @@ import javax.swing.JPanel;
 import javax.swing.JTextPane;
 import javax.swing.SwingConstants;
 import javax.swing.border.Border;
+import net.runelite.client.ui.FontManager;
 
 /**
  * Setup step "Your account": new or existing account.
@@ -43,7 +45,6 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
     private static final int CARD_PADDING = 12;
     private static final int CARD_TEXT_WIDTH = CARD_WIDTH - 2 * CARD_PADDING - 4;
     private static final int WARNING_TEXT_WIDTH = CARD_WIDTH - 2 - 2 * 10;
-    private static final int BULLET_TEXT_WIDTH = WARNING_TEXT_WIDTH - 12;
     private static final Color CARD_BACKGROUND = new Color(39, 39, 39);
     private static final Color CARD_BORDER = new Color(58, 58, 58);
     private static final Color SELECTED = new Color(220, 138, 0);
@@ -79,12 +80,14 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
 
         newAccountCard = new OptionCard(
             "New account",
+            "RECOMMENDED",
             "Everything you own counts as unlocked.",
             "Classic Bronzeman, for an account that starts from nothing.",
             () -> viewModel.onStartModeSelected(StartMode.NEW_ACCOUNT)
         );
         existingAccountCard = new OptionCard(
             "Existing account",
+            null,
             "Items you already own are locked in your bank.",
             "Only what you get from now on unlocks and can be used.",
             () -> viewModel.onStartModeSelected(StartMode.EXISTING_ACCOUNT)
@@ -186,31 +189,23 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
 
         JLabel probe = new JLabel();
         box.add(WrappedText.create(
-            "Item locking is not watertight",
+            "Before you choose",
             WARNING,
             WARNING_TEXT_WIDTH,
             SwingConstants.LEFT,
             probe.getFont().deriveFont(Font.BOLD)
         ));
-        box.add(Box.createVerticalStrut(6));
-        box.add(WrappedText.create(
-            "Bronzeman Unleashed only sees your bank, inventory and equipment. It cannot check:",
-            null, WARNING_TEXT_WIDTH, SwingConstants.LEFT
-        ));
-        box.add(Box.createVerticalStrut(4));
-        for (String bullet : new String[]{
-            "Other storage, like the seed vault, POH storage, tool leprechaun and STASH units",
-            "Charges in items",
-            "Rune pouches, containers you fill from the bank, and your POH servant",
+        for (String paragraph : new String[]{
+            "Your bank is counted once, and everything in it stays locked. Only what you get from now on "
+                + "unlocks, and only that part of each stack can be withdrawn.",
+            "Bronzeman Unleashed sees your bank, inventory and equipment, so these work best. It can't fully "
+                + "follow other storage (like the seed vault or POH), charges in items, or containers you fill "
+                + "from the bank, such as rune pouches. Some items may slip through and unlock.",
+            "For the full Bronzeman experience, start a new account.",
         }) {
-            box.add(createBullet(bullet));
-            box.add(Box.createVerticalStrut(3));
+            box.add(Box.createVerticalStrut(6));
+            box.add(WrappedText.create(paragraph, null, WARNING_TEXT_WIDTH, SwingConstants.LEFT));
         }
-        box.add(Box.createVerticalStrut(4));
-        box.add(WrappedText.create(
-            "Some players will find ways around it. Treat it as a helper for honest play, not as anti-cheat.",
-            null, WARNING_TEXT_WIDTH, SwingConstants.LEFT
-        ));
         box.add(Box.createVerticalStrut(8));
 
         JCheckBox understandCheckBox = new JCheckBox("I understand");
@@ -222,45 +217,6 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
 
         box.setMaximumSize(new Dimension(CARD_WIDTH, box.getPreferredSize().height));
         return box;
-    }
-
-    private static JPanel createBullet(String text) {
-        JPanel row = new JPanel();
-        row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
-        row.setOpaque(false);
-        row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JLabel dot = new JLabel(new DotIcon());
-        dot.setAlignmentY(Component.TOP_ALIGNMENT);
-        dot.setBorder(BorderFactory.createEmptyBorder(6, 0, 0, 6));
-        row.add(dot);
-        JTextPane textPane = WrappedText.create(text, MUTED_TEXT, BULLET_TEXT_WIDTH, SwingConstants.LEFT);
-        textPane.setAlignmentY(Component.TOP_ALIGNMENT);
-        row.add(textPane);
-        row.setMaximumSize(new Dimension(WARNING_TEXT_WIDTH, row.getPreferredSize().height));
-        return row;
-    }
-
-    /** The RuneLite font has no bullet character, so we draw one. */
-    private static final class DotIcon implements Icon {
-
-        @Override
-        public void paintIcon(Component c, Graphics g, int x, int y) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(WARNING);
-            g2.fillOval(x, y, 4, 4);
-            g2.dispose();
-        }
-
-        @Override
-        public int getIconWidth() {
-            return 4;
-        }
-
-        @Override
-        public int getIconHeight() {
-            return 4;
-        }
     }
 
     /** A selectable option. The whole card reacts to clicks. */
@@ -279,7 +235,7 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
         private final RadioIcon radioIcon = new RadioIcon();
         private boolean isEnabled = true;
 
-        OptionCard(String title, String description, String detail, Runnable onSelect) {
+        OptionCard(String title, String badge, String description, String detail, Runnable onSelect) {
             setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
             setBackground(CARD_BACKGROUND);
             setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -288,8 +244,16 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
             titleLabel = new JLabel(title, radioIcon, SwingConstants.LEFT);
             titleLabel.setIconTextGap(8);
             titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
-            titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-            add(titleLabel);
+            JPanel titleRow = new JPanel();
+            titleRow.setLayout(new BoxLayout(titleRow, BoxLayout.X_AXIS));
+            titleRow.setOpaque(false);
+            titleRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+            titleRow.add(titleLabel);
+            titleRow.add(Box.createHorizontalGlue());
+            if (badge != null) {
+                titleRow.add(createBadge(badge));
+            }
+            add(titleRow);
             add(Box.createVerticalStrut(6));
             add(WrappedText.create(description, null, CARD_TEXT_WIDTH, SwingConstants.LEFT));
             add(Box.createVerticalStrut(4));
@@ -308,6 +272,13 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
                 }
             };
             addClickListener(this, clickListener);
+        }
+
+        private static JLabel createBadge(String text) {
+            JLabel badge = new JLabel(text);
+            badge.setFont(FontManager.getRunescapeSmallFont());
+            badge.setForeground(StatusIcon.DONE_COLOR);
+            return badge;
         }
 
         private static void addClickListener(Component component, MouseAdapter listener) {

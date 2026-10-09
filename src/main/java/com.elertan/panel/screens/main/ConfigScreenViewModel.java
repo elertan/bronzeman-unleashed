@@ -232,7 +232,7 @@ public class ConfigScreenViewModel implements AutoCloseable {
             messageBuilder.append("Your saved progress will not be deleted.\n");
         }
 
-        if (itemLockService.isLockingItems()) {
+        if (itemLockService.isLockingItems() && storageMode != StorageMode.LOCAL) {
             messageBuilder.append("Your locked items are unlocked for this account.\n");
             messageBuilder.append("When you set up again, you can choose New account or Existing account.\n");
         }

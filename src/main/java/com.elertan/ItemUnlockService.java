@@ -422,19 +422,6 @@ public class ItemUnlockService implements BUPluginLifecycle {
         return map.containsKey(itemId);
     }
 
-    /**
-     * Whether an item can ever unlock under the current rules: excluded items never do, and
-     * neither do untradeable items when only tradeable items unlock.
-     */
-    public boolean canEverUnlock(int itemId) {
-        if (ExcludedItemIds.IDS.contains(itemId)) {
-            return false;
-        }
-        GameRules gameRules = gameRulesService.getGameRules().get();
-        return gameRules == null || !gameRules.isOnlyForTradeableItems()
-            || client.getItemDefinition(canonicalizeItemId(itemId)).isTradeable();
-    }
-
     public CompletableFuture<Void> removeUnlockedItemById(int itemId) {
         boolean hasUnlockedItem;
         try {

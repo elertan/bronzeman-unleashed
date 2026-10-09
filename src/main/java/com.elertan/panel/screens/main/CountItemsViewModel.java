@@ -49,7 +49,7 @@ public class CountItemsViewModel implements AutoCloseable {
             "Your bank holds " + format.format(current.getBankItems()) + " different items"
                 + " and " + format.format(current.getCoins()) + " coins.\n\n"
                 + "All of it gets locked and stays in your bank.\n"
-                + "Only what you get from now on counts. This cannot be undone.",
+                + "Only what you get from now on counts.",
             "Count your items",
             JOptionPane.OK_CANCEL_OPTION,
             JOptionPane.QUESTION_MESSAGE

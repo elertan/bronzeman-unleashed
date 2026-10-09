@@ -4,18 +4,14 @@ import com.elertan.AccountConfigurationService;
 import com.elertan.BUChatService;
 import com.elertan.ItemLockService;
 import com.elertan.GameRulesService;
-import com.elertan.ItemUnlockService;
 import com.elertan.PolicyService;
 import com.elertan.WorldTypeService;
 import com.elertan.itemlock.WithdrawAmounts;
 import com.elertan.itemlock.WithdrawAmountLimiter;
 import com.elertan.chat.ChatMessageProvider.MessageKey;
 import com.elertan.utils.TextUtils;
-import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import java.util.Set;
-import java.util.regex.Pattern;
 import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
@@ -26,25 +22,15 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetUtil;
 import net.runelite.client.input.KeyManager;
 
 /**
- * Limits bank withdraws of an existing account to what it got after it was counted, and keeps
- * locked items in storage that is not counted.
+ * Limits bank withdraws of an existing account to what it got after it was counted.
  */
 @Singleton
 public class ItemLockPolicy extends PolicyBase {
 
     private static final int INVENTORY_SIZE = 28;
-    // Storage that is not counted: it may still hold items from before counting.
-    private static final Set<Integer> UNCOUNTED_STORAGE_INTERFACES = ImmutableSet.of(
-        InterfaceID.SEED_VAULT,
-        InterfaceID.FARMING_TOOLS, // tool leprechaun
-        InterfaceID.POH_COSTUMES // POH costume room storage
-    );
-    private static final Pattern TAKE_OUT_OPTION = Pattern.compile("^(withdraw|remove|take)\\b.*",
-        Pattern.CASE_INSENSITIVE);
 
     @Inject
     private Client client;
@@ -54,8 +40,6 @@ public class ItemLockPolicy extends PolicyBase {
     private WithdrawAmountLimiter withdrawAmountLimiter;
     @Inject
     private BUChatService buChatService;
-    @Inject
-    private ItemUnlockService itemUnlockService;
     @Inject
     private KeyManager keyManager;
 
@@ -95,10 +79,6 @@ public class ItemLockPolicy extends PolicyBase {
             // Before counting, everything is still allowed: it all gets counted.
             return;
         }
-        if (isUncountedStorage(widget)) {
-            blockLockedItemFromUncountedStorage(event);
-            return;
-        }
         if (widget.getId() != InterfaceID.Bankmain.ITEMS) {
             return;
         }
@@ -134,49 +114,16 @@ public class ItemLockPolicy extends PolicyBase {
     }
 
     /**
-     * In storage that is not counted, an item the group has not unlocked can only be from before
-     * counting (anything gained later passes the inventory and unlocks), so it stays there.
-     * Without this, taking it out would unlock it for the whole group.
-     */
-    private void blockLockedItemFromUncountedStorage(MenuOptionClicked event) {
-        int itemId = event.getItemId();
-        if (itemId <= 0 || !TAKE_OUT_OPTION.matcher(event.getMenuOption()).matches()) {
-            return;
-        }
-        if (!itemUnlockService.canEverUnlock(itemId)) {
-            // It can never unlock (excluded or untradeable), so taking it out unlocks nothing.
-            return;
-        }
-        boolean isUnlocked;
-        try {
-            isUnlocked = itemUnlockService.hasUnlockedItem(itemId);
-        } catch (Exception e) {
-            // Unlocks not loaded yet: fail closed.
-            isUnlocked = false;
-        }
-        if (!isUnlocked) {
-            event.consume();
-            sendBlockedMessage(itemId, 0);
-        }
-    }
-
-    /**
      * While the locked items load, bank withdraws wait. Otherwise a locked item could reach the
      * inventory and unlock once loading is done. Usually a second.
      */
     private void blockWhileLoading(MenuOptionClicked event, Widget widget) {
         boolean isWithdraw = widget.getId() == InterfaceID.Bankmain.ITEMS
             && WithdrawAmounts.requested(event.getMenuOption(), 0) != WithdrawAmounts.NOT_A_WITHDRAW;
-        if (isWithdraw || isUncountedStorage(widget) && TAKE_OUT_OPTION.matcher(event.getMenuOption()).matches()) {
+        if (isWithdraw) {
             event.consume();
             buChatService.sendRestrictionMessage(MessageKey.STILL_LOADING_PLEASE_WAIT);
         }
-    }
-
-    private static boolean isUncountedStorage(Widget widget) {
-        int widgetId = widget.getId();
-        return UNCOUNTED_STORAGE_INTERFACES.contains(WidgetUtil.componentToInterface(widgetId))
-            || widgetId == InterfaceID.Bankmain.POTIONSTORE_ITEMS;
     }
 
     public void onScriptPreFired(ScriptPreFired event) {
