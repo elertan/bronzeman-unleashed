@@ -3,6 +3,7 @@ package com.elertan.panel.screens.setup;
 import com.elertan.BUResourceService;
 import com.elertan.resource.BUImageUtil;
 import com.elertan.panel.BUPanel;
+import com.elertan.panel.components.WrappedText;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -18,9 +19,6 @@ import javax.swing.JPanel;
 import javax.swing.JTextPane;
 import javax.swing.border.Border;
 import javax.swing.SwingConstants;
-import javax.swing.text.SimpleAttributeSet;
-import javax.swing.text.StyleConstants;
-import javax.swing.text.StyledDocument;
 
 public class StorageModeStepView extends JPanel implements AutoCloseable {
 
@@ -47,7 +45,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         add(titleLabel);
         add(Box.createVerticalStrut(4));
 
-        add(createWrappedTextPane(
+        add(WrappedText.create(
             "Pick where your progress lives.",
             MUTED_TEXT,
             CONTENT_WIDTH,
@@ -78,7 +76,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         add(Box.createVerticalStrut(16));
         add(onlineCard);
         add(Box.createVerticalStrut(12));
-        add(createWrappedTextPane(
+        add(WrappedText.create(
             "Moving from Local to Online is not available yet. Migration support will come in a future update.",
             MUTED_TEXT,
             CONTENT_WIDTH - 10,
@@ -123,7 +121,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         card.add(titleLabel);
         card.add(Box.createVerticalStrut(8));
 
-        JTextPane descriptionLabel = createWrappedTextPane(
+        JTextPane descriptionLabel = WrappedText.create(
             description,
             null,
             CARD_TEXT_WIDTH,
@@ -132,7 +130,7 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
         card.add(descriptionLabel);
         card.add(Box.createVerticalStrut(8));
 
-        JTextPane detailLabel = createWrappedTextPane(
+        JTextPane detailLabel = WrappedText.create(
             detail,
             MUTED_TEXT,
             CARD_TEXT_WIDTH,
@@ -167,33 +165,5 @@ public class StorageModeStepView extends JPanel implements AutoCloseable {
             card.setPreferredSize(new Dimension(CARD_WIDTH, maxHeight));
             card.setMaximumSize(new Dimension(CARD_WIDTH, maxHeight));
         }
-    }
-
-    private static JTextPane createWrappedTextPane(String text, Color color, int width, int horizontalAlignment) {
-        JTextPane textPane = new JTextPane();
-        textPane.setText(text);
-        textPane.setEditable(false);
-        textPane.setFocusable(false);
-        textPane.setOpaque(false);
-        textPane.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        textPane.setAlignmentX(Component.CENTER_ALIGNMENT);
-        textPane.setFont(new JLabel().getFont());
-
-        StyledDocument document = textPane.getStyledDocument();
-        SimpleAttributeSet attributes = new SimpleAttributeSet();
-        StyleConstants.setAlignment(
-            attributes,
-            horizontalAlignment == SwingConstants.LEFT ? StyleConstants.ALIGN_LEFT : StyleConstants.ALIGN_CENTER
-        );
-        if (color != null) {
-            StyleConstants.setForeground(attributes, color);
-        }
-        document.setParagraphAttributes(0, document.getLength(), attributes, false);
-
-        textPane.setSize(new Dimension(width, Short.MAX_VALUE));
-        Dimension preferredSize = textPane.getPreferredSize();
-        textPane.setPreferredSize(new Dimension(width, preferredSize.height));
-        textPane.setMaximumSize(new Dimension(width, preferredSize.height));
-        return textPane;
     }
 }

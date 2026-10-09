@@ -2,6 +2,7 @@ package com.elertan;
 
 import com.elertan.models.AccountConfiguration;
 import com.elertan.overlays.ItemUnlockOverlay;
+import com.elertan.overlays.LockedItemsOverlay;
 import com.elertan.utils.Subscription;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -18,6 +19,8 @@ public class BUOverlayService implements BUPluginLifecycle {
     @Inject
     private ItemUnlockOverlay itemUnlockOverlay;
     @Inject
+    private LockedItemsOverlay lockedItemsOverlay;
+    @Inject
     private AccountConfigurationService accountConfigurationService;
 
     private Subscription accountConfigSubscription;
@@ -25,6 +28,7 @@ public class BUOverlayService implements BUPluginLifecycle {
     @Override
     public void startUp() throws Exception {
         overlayManager.add(itemUnlockOverlay);
+        overlayManager.add(lockedItemsOverlay);
 
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
@@ -39,6 +43,8 @@ public class BUOverlayService implements BUPluginLifecycle {
 
         itemUnlockOverlay.clear();
         overlayManager.remove(itemUnlockOverlay);
+        overlayManager.remove(lockedItemsOverlay);
+        lockedItemsOverlay.resetFade();
     }
 
     private void currentAccountConfigurationChangeListener(

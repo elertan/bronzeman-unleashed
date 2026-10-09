@@ -5,6 +5,7 @@ import com.elertan.models.GameRules;
 import com.elertan.models.GroundItemOwnedByData;
 import com.elertan.models.GroundItemOwnedByKey;
 import com.elertan.models.Member;
+import com.elertan.models.StartingItems;
 import com.elertan.models.UnlockedItem;
 import com.elertan.remote.KeyListStoragePort;
 import com.elertan.remote.KeyValueStoragePort;
@@ -15,6 +16,7 @@ import com.elertan.remote.firebase.storageAdapters.GameRulesFirebaseObjectStorag
 import com.elertan.remote.firebase.storageAdapters.GroundItemOwnedByKeyListStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.LastEventFirebaseObjectListStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.MembersFirebaseKeyValueStorageAdapter;
+import com.elertan.remote.firebase.storageAdapters.StartingItemsFirebaseKeyValueStorageAdapter;
 import com.elertan.remote.firebase.storageAdapters.UnlockedItemsFirebaseKeyValueStorageAdapter;
 import com.google.gson.Gson;
 import javax.inject.Inject;
@@ -29,6 +31,7 @@ public class FirebaseStorageSession implements StorageSession {
     private final ObjectStoragePort<GameRules> gameRulesStoragePort;
     private final ObjectListStoragePort<BUEvent> lastEventStoragePort;
     private final KeyListStoragePort<GroundItemOwnedByKey, GroundItemOwnedByData> groundItemOwnedByStoragePort;
+    private final KeyValueStoragePort<Long, StartingItems> startingItemsStoragePort;
 
     public FirebaseStorageSession(
         OkHttpClient httpClient,
@@ -54,6 +57,10 @@ public class FirebaseStorageSession implements StorageSession {
             gson
         );
         gameRulesStoragePort = new GameRulesFirebaseObjectStorageAdapter(
+            firebaseRealtimeDatabase,
+            gson
+        );
+        startingItemsStoragePort = new StartingItemsFirebaseKeyValueStorageAdapter(
             firebaseRealtimeDatabase,
             gson
         );
@@ -87,7 +94,13 @@ public class FirebaseStorageSession implements StorageSession {
     }
 
     @Override
+    public KeyValueStoragePort<Long, StartingItems> getStartingItemsStoragePort() {
+        return startingItemsStoragePort;
+    }
+
+    @Override
     public void close() throws Exception {
+        startingItemsStoragePort.close();
         groundItemOwnedByStoragePort.close();
         lastEventStoragePort.close();
         membersStoragePort.close();

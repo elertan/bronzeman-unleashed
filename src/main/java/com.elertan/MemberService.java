@@ -5,6 +5,7 @@ import com.elertan.models.AccountConfiguration;
 import com.elertan.models.ISOOffsetDateTime;
 import com.elertan.models.Member;
 import com.elertan.models.MemberRole;
+import com.elertan.models.StartMode;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import java.time.OffsetDateTime;
@@ -240,11 +241,22 @@ public class MemberService implements BUPluginLifecycle {
             ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
 
             MemberRole memberRole = shouldBeOwner ? MemberRole.Owner : MemberRole.Member;
+            // Keep the start mode of an existing member. A new member gets the choice made during setup.
+            Member existingMember = membersMap.get(accountHash);
+            StartMode startMode;
+            if (existingMember != null) {
+                startMode = existingMember.getStartMode();
+            } else {
+                AccountConfiguration accountConfiguration =
+                    accountConfigurationService.getAccountConfiguration(accountHash);
+                startMode = accountConfiguration == null ? null : accountConfiguration.getStartMode();
+            }
             Member member = new Member(
                 accountHash,
                 name,
                 now,
-                memberRole
+                memberRole,
+                startMode
             );
 
             membersDataProvider.addMember(member).whenComplete((void2, addMemberThrowable) -> {
@@ -280,12 +292,7 @@ public class MemberService implements BUPluginLifecycle {
             .filter(x -> x.getAccountHash() != accountHash && x.getRole() == MemberRole.Owner)
             .collect(Collectors.toList());
 
-        Member newMemberToPromote = new Member(
-            memberToPromote.getAccountHash(),
-            memberToPromote.getName(),
-            memberToPromote.getJoinedAt(),
-            MemberRole.Owner
-        );
+        Member newMemberToPromote = memberToPromote.withRole(MemberRole.Owner);
         membersDataProvider.updateMember(newMemberToPromote).whenComplete((void1, throwable) -> {
             if (throwable != null) {
                 future.completeExceptionally(throwable);
@@ -294,12 +301,7 @@ public class MemberService implements BUPluginLifecycle {
 
             List<CompletableFuture<Void>> demoteFutures = new ArrayList<>();
             for (Member memberToDemote : membersToDemote) {
-                Member newMemberToDemote = new Member(
-                    memberToDemote.getAccountHash(),
-                    memberToDemote.getName(),
-                    memberToDemote.getJoinedAt(),
-                    MemberRole.Member
-                );
+                Member newMemberToDemote = memberToDemote.withRole(MemberRole.Member);
                 CompletableFuture<Void> fut = membersDataProvider.updateMember(newMemberToDemote);
                 demoteFutures.add(fut);
             }

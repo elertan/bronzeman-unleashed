@@ -5,11 +5,13 @@ import com.elertan.BUPanelService;
 import com.elertan.models.AccountConfiguration;
 import com.elertan.models.GameRules;
 import com.elertan.models.ISOOffsetDateTime;
+import com.elertan.models.StartMode;
 import com.elertan.models.AccountConfiguration.StorageMode;
 import com.elertan.remote.local.LocalStorageSession;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabase;
 import com.elertan.remote.firebase.FirebaseRealtimeDatabaseURL;
 import com.elertan.remote.firebase.storageAdapters.GameRulesFirebaseObjectStorageAdapter;
+import com.elertan.remote.firebase.storageAdapters.MembersFirebaseKeyValueStorageAdapter;
 import com.elertan.ui.Property;
 import com.google.gson.Gson;
 import java.io.IOException;
@@ -30,6 +32,10 @@ public final class SetupScreenViewModel implements AutoCloseable {
     public final Property<Boolean> isLocalMode = new Property<>(false);
     public final Property<Boolean> gameRulesAreViewOnly = new Property<>(null);
     public final Property<GameRules> gameRules = new Property<>(null);
+    // The saved "Existing account" choice of a member (locked after a reinstall), and whether
+    // the group requires new members to lock their items.
+    public final Property<Boolean> isExistingAccountSaved = new Property<>(false);
+    public final Property<Boolean> isItemLockRequired = new Property<>(false);
     private final Client client;
     private final BUPanelService buPanelService;
     private final AccountConfigurationService accountConfigurationService;
@@ -106,7 +112,12 @@ public final class SetupScreenViewModel implements AutoCloseable {
             firebaseRealtimeDatabase,
             gson
         );
-        gameRulesStoragePort.read().whenComplete((gameRules, throwable) -> {
+        long accountHash = client.getAccountHash();
+        CompletableFuture<Boolean> isExistingAccountSavedFuture = readIsExistingAccountSaved(accountHash);
+        gameRulesStoragePort.read().thenCombine(isExistingAccountSavedFuture, (gameRules, isSaved) -> {
+            isExistingAccountSaved.set(isSaved);
+            return gameRules;
+        }).whenComplete((gameRules, throwable) -> {
             if (throwable != null) {
                 future.completeExceptionally(throwable);
                 return;
@@ -128,6 +139,26 @@ public final class SetupScreenViewModel implements AutoCloseable {
         return future;
     }
 
+    private CompletableFuture<Boolean> readIsExistingAccountSaved(long accountHash) {
+        MembersFirebaseKeyValueStorageAdapter membersStoragePort =
+            new MembersFirebaseKeyValueStorageAdapter(firebaseRealtimeDatabase, gson);
+        return membersStoragePort.read(accountHash).handle((member, throwable) -> {
+            try {
+                membersStoragePort.close();
+            } catch (Exception e) {
+                log.warn("Failed to close members storage port", e);
+            }
+            if (throwable != null) {
+                // Not critical: without the member record the player just gets a free choice.
+                log.warn("Failed to read member record during setup", throwable);
+                return false;
+            }
+            // Only a saved "Existing account" is locked, so a reinstall cannot skip it. Leaving
+            // Bronzeman clears it, and everyone else may choose freely.
+            return member != null && member.getStartMode() == StartMode.EXISTING_ACCOUNT;
+        });
+    }
+
     public void onRemoteStepBack() {
         chosenStorageMode = null;
         isLocalMode.set(false);
@@ -147,10 +178,26 @@ public final class SetupScreenViewModel implements AutoCloseable {
     }
 
     public CompletableFuture<Void> onGameRulesStepFinish() {
+        GameRules gameRulesValue = gameRules.get();
+        if (gameRulesValue == null) {
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            future.completeExceptionally(new IllegalStateException("Game rules are not set"));
+            return future;
+        }
+        isItemLockRequired.set(chosenStorageMode != StorageMode.LOCAL && gameRulesValue.isRequireItemLock());
+        step.set(Step.ACCOUNT_TYPE);
+        return CompletableFuture.completedFuture(null);
+    }
+
+    public void onAccountTypeStepBack() {
+        step.set(Step.GAME_RULES);
+    }
+
+    public CompletableFuture<Void> onAccountTypeStepFinish(StartMode startMode) {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         if (chosenStorageMode == StorageMode.LOCAL) {
-            return finishLocalMode();
+            return finishLocalMode(startMode);
         }
 
         if (gameRulesStoragePort == null) {
@@ -170,7 +217,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
             long accountHash = client.getAccountHash();
             AccountConfiguration accountConfiguration = AccountConfiguration.forFirebase(
                 firebaseRealtimeDatabase.getDatabaseURL()
-            );
+            ).withStartMode(startMode);
             accountConfigurationService.setAccountConfiguration(accountConfiguration, accountHash);
 
             try {
@@ -217,7 +264,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
         return future;
     }
 
-    private CompletableFuture<Void> finishLocalMode() {
+    private CompletableFuture<Void> finishLocalMode(StartMode startMode) {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         GameRules gameRulesValue = gameRules.get();
@@ -254,7 +301,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 }
 
                 accountConfigurationService.setAccountConfiguration(
-                    AccountConfiguration.forLocal(accountHash),
+                    AccountConfiguration.forLocal(accountHash).withStartMode(startMode),
                     accountHash
                 );
                 resetSetupState();
@@ -278,7 +325,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
             return;
         }
 
-        if (choice == ExistingLocalProgressChoice.START_FRESH) {
+        if (choice == ExistingLocalProgressChoice.START_OVER) {
             startFreshLocalSetup(true);
             return;
         }
@@ -296,7 +343,7 @@ public final class SetupScreenViewModel implements AutoCloseable {
         int selectedOptionIndex = JOptionPane.showOptionDialog(
             null,
             "Local progress already exists for this account.\n"
-                + "Do you want to continue your existing local progress or start fresh and replace it?",
+                + "Do you want to continue your existing local progress or start over and replace it?",
             "Local progress found",
             JOptionPane.DEFAULT_OPTION,
             JOptionPane.QUESTION_MESSAGE,
@@ -336,6 +383,8 @@ public final class SetupScreenViewModel implements AutoCloseable {
         isLocalMode.set(false);
         gameRulesAreViewOnly.set(null);
         gameRules.set(null);
+        isExistingAccountSaved.set(false);
+        isItemLockRequired.set(false);
         chosenStorageMode = null;
         shouldDeleteExistingLocalProgressOnFinish = false;
     }
@@ -369,11 +418,14 @@ public final class SetupScreenViewModel implements AutoCloseable {
                 return;
             }
 
-            accountConfigurationService.setAccountConfiguration(
-                AccountConfiguration.forLocal(accountHash),
-                accountHash
-            );
-            resetSetupState();
+            // Continue with the existing rules, but still ask how the items count. Local mode has
+            // no member records: saved starting items mean this is an existing account.
+            isLocalMode.set(true);
+            gameRulesAreViewOnly.set(false);
+            gameRules.set(existingGameRules);
+            isExistingAccountSaved.set(LocalStorageSession.hasStartingItems(accountHash));
+            isItemLockRequired.set(false);
+            step.set(Step.ACCOUNT_TYPE);
         });
     }
 
@@ -381,11 +433,12 @@ public final class SetupScreenViewModel implements AutoCloseable {
         STORAGE_MODE_CHOICE,
         ONLINE_CONFIG,
         GAME_RULES,
+        ACCOUNT_TYPE,
     }
 
     private enum ExistingLocalProgressChoice {
         CONTINUE_EXISTING("Continue Existing"),
-        START_FRESH("Start Fresh"),
+        START_OVER("Start Over"),
         CANCEL("Cancel");
 
         private final String label;
