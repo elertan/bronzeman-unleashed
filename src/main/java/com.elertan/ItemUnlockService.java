@@ -457,8 +457,8 @@ public class ItemUnlockService implements BUPluginLifecycle {
             return CompletableFuture.completedFuture(null);
         }
 
-        // Disable LMS and Pete Kayer's Challenges unlocks
-        if (minigameService.isPlayingLastManStanding() || minigameService.isPlayingPeteKayerChallenge()) {
+        // Disable LMS unlocks
+        if (minigameService.isPlayingLastManStanding()) {
             return CompletableFuture.completedFuture(null);
         }
         if (ExcludedItemIds.IDS.contains(initialItemId)) {
