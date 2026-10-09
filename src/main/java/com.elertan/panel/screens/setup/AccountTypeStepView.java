@@ -237,6 +237,7 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
             titleRow.add(titleLabel);
             titleRow.add(Box.createHorizontalGlue());
             if (badge != null) {
+                titleRow.add(Box.createHorizontalStrut(4));
                 titleRow.add(createBadge(badge));
             }
             add(titleRow);
@@ -262,7 +263,8 @@ public class AccountTypeStepView extends JPanel implements AutoCloseable {
 
         private static JLabel createBadge(String text) {
             JLabel badge = new JLabel(text);
-            badge.setFont(FontManager.getRunescapeSmallFont());
+            // Smaller than the small font, so it fits next to the title when a scrollbar shows.
+            badge.setFont(FontManager.getRunescapeSmallFont().deriveFont(13f));
             badge.setForeground(StatusIcon.DONE_COLOR);
             return badge;
         }
