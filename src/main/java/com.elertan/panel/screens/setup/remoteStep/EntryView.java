@@ -3,7 +3,6 @@ package com.elertan.panel.screens.setup.remoteStep;
 import com.elertan.ui.Bindings;
 import com.elertan.ui.Property;
 import java.awt.Component;
-import java.awt.Desktop;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -14,11 +13,11 @@ import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.event.HyperlinkEvent;
 import lombok.Getter;
+import net.runelite.client.util.LinkBrowser;
 
 public class EntryView extends JPanel implements AutoCloseable {
 
@@ -181,18 +180,7 @@ public class EntryView extends JPanel implements AutoCloseable {
         pane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
         pane.addHyperlinkListener(e -> {
             if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
-                if (Desktop.isDesktopSupported()) {
-                    try {
-                        Desktop.getDesktop().browse(e.getURL().toURI());
-                    } catch (Exception ex) {
-                        JOptionPane.showMessageDialog(
-                            this,
-                            "Could not open link: " + e.getURL(),
-                            "Error opening link",
-                            JOptionPane.ERROR_MESSAGE
-                        );
-                    }
-                }
+                LinkBrowser.browse(e.getURL().toString());
             }
         });
         return pane;
