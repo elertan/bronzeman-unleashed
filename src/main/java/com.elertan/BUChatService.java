@@ -34,6 +34,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.util.ColorUtil;
 
 import static com.elertan.utils.AsyncUtils.withErrorLogging;
@@ -114,7 +115,9 @@ public class BUChatService implements BUPluginLifecycle {
                 return;
             }
 
-            addIconToChatMessage(chatMessage);
+            if (config.useBronzemanIconOnNames()) {
+                addIconToChatMessage(chatMessage);
+            }
         }
 
         // Mirror the same check that PetDropService does to ensure we process all messages
@@ -217,6 +220,14 @@ public class BUChatService implements BUPluginLifecycle {
         clientThread.invokeLater(this::drainPendingMessages);
     }
 
+    public void onConfigChanged(ConfigChanged event) {
+        if (!BUPluginConfig.GROUP.equals(event.getGroup())
+            || !BUPluginConfig.USE_BRONZEMAN_ICON_ON_NAMES_KEY.equals(event.getKey())) {
+            return;
+        }
+        clientThread.invokeLater(() -> manageIconOnChatbox(false));
+    }
+
     private void currentAccountConfigurationChangeListener(
         AccountConfiguration accountConfiguration) {
         manageIconOnChatbox(false);
@@ -253,7 +264,7 @@ public class BUChatService implements BUPluginLifecycle {
             return;
         }
 
-        if (isShuttingDown || accountConfiguration == null) {
+        if (isShuttingDown || accountConfiguration == null || !config.useBronzemanIconOnNames()) {
             // Remove
             if (!currentText.contains(messageChatIcon)) {
                 return;
@@ -320,8 +331,10 @@ public class BUChatService implements BUPluginLifecycle {
         Color chatColor = resolveCurrentChatColor();
 
         ChatMessageBuilder builder = new ChatMessageBuilder();
-        // We need to supply a color here, otherwise the image does not work...
-        builder.append(chatColor, messageChatIcon + " ");
+        if (config.useBronzemanIconOnMessages()) {
+            // We need to supply a color here, otherwise the image does not work...
+            builder.append(chatColor, messageChatIcon + " ");
+        }
         // Replacing all closing cols with our chat color to reset it back to our default
         if (config.useChatColor()) {
             String pluginChatColorTag = ColorUtil.colorTag(chatColor);

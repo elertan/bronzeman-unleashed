@@ -24,10 +24,17 @@ dependencies {
 }
 
 group = 'com.elertan'
-version = '0.3.0'
+version = '0.4.0'
 
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs << '-Xlint:unchecked' << '-Xlint:deprecation'
     options.encoding = 'UTF-8'
     options.release.set(11)
+}
+
+tasks.register('run', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.elertan.BronzemanUnleashedPluginTest'
+    jvmArgs '-ea'
+    args '--developer-mode'
 }

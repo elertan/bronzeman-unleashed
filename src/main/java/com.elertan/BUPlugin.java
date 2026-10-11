@@ -293,6 +293,7 @@ public final class BUPlugin extends Plugin {
     @Subscribe
     public void onConfigChanged(ConfigChanged event) {
         accountConfigurationService.onConfigChanged(event);
+        buChatService.onConfigChanged(event);
     }
 
     @Subscribe

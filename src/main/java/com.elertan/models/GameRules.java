@@ -16,6 +16,7 @@ public class GameRules {
     Long lastUpdatedByAccountHash;
     ISOOffsetDateTime lastUpdatedAt;
     boolean onlyForTradeableItems;
+    boolean allowManualUnlocks;
     boolean restrictGroundItems;
     boolean preventTradeOutsideGroup;
     boolean preventTradeLockedItems;
@@ -33,6 +34,7 @@ public class GameRules {
             .lastUpdatedByAccountHash(lastUpdatedByAccountHash)
             .lastUpdatedAt(lastUpdatedAt)
             .onlyForTradeableItems(true)
+            .allowManualUnlocks(false)
             .restrictGroundItems(true)
             .preventTradeOutsideGroup(true)
             .preventTradeLockedItems(true)

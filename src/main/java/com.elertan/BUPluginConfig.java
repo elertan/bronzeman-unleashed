@@ -19,6 +19,7 @@ public interface BUPluginConfig extends Config {
     String SHOW_UNLOCKED_ITEMS_INDICATOR_IN_SHOPS_KEY_NAME = "showUnlockedItemsIndicatorInShops";
     @ConfigSection(name = "Chat", description = "Controls the chat window settings", position = 3)
     String chatSection = "chatSection";
+    String USE_BRONZEMAN_ICON_ON_NAMES_KEY = "useBronzemanIconOnNames";
     @ConfigSection(name = "Party", description = "Controls the party settings", position = 4)
     String partySection = "partySection";
     @ConfigSection(name = "Minigames", description = "Controls minigame behavior", position = 5)
@@ -138,6 +139,16 @@ public interface BUPluginConfig extends Config {
     @ConfigItem(keyName = "useItemIconsInChat", name = "Use item icons", description = "Whether to prepend item icons before the item name in the chat", section = chatSection)
     default boolean useItemIconsInChat() {
         return true;
+    }
+
+    @ConfigItem(keyName = USE_BRONZEMAN_ICON_ON_NAMES_KEY, name = "Icon next to names", description = "Whether to show the Bronzeman helmet icon next to your name and the names of group members in the chat", section = chatSection)
+    default boolean useBronzemanIconOnNames() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "useBronzemanIconOnMessages", name = "Icon on plugin messages", description = "Whether to show the Bronzeman helmet icon in front of the messages of this plugin in the chat", section = chatSection)
+    default boolean useBronzemanIconOnMessages() {
+        return false;
     }
 
     @ConfigItem(keyName = "hideUnlockOverlayInMinigames", name = "Hide unlock overlay", description = "Hides the item unlock overlay in minigames/instances (Inferno, Gauntlet, raids, etc.)", section = minigameSection)
