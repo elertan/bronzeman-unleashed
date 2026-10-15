@@ -242,21 +242,19 @@ public class MemberService implements BUPluginLifecycle {
 
         if (shouldUpdateMember) {
             log.debug("adding member...");
-            ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
-
-            MemberRole memberRole = shouldBeOwner ? MemberRole.Owner : MemberRole.Member;
-            // Storage is only open when the account is configured, so the configuration exists.
             Member existingMember = membersMap.get(accountHash);
-            StartMode startMode = existingMember != null
-                ? existingMember.getStartMode()
-                : accountConfigurationService.getAccountConfiguration(accountHash).getStartMode();
-            Member member = new Member(
-                accountHash,
-                name,
-                now,
-                memberRole,
-                startMode
-            );
+            Member member;
+            if (existingMember != null) {
+                // A name change keeps the role, join date and start mode.
+                member = existingMember.withName(name);
+            } else {
+                ISOOffsetDateTime now = new ISOOffsetDateTime(OffsetDateTime.now());
+                MemberRole memberRole = shouldBeOwner ? MemberRole.Owner : MemberRole.Member;
+                // Storage is only open when the account is configured, so the configuration exists.
+                StartMode startMode = accountConfigurationService.getAccountConfiguration(accountHash)
+                    .getStartMode();
+                member = new Member(accountHash, name, now, memberRole, startMode);
+            }
 
             membersDataProvider.addMember(member).whenComplete((void2, addMemberThrowable) -> {
                 if (addMemberThrowable != null) {
