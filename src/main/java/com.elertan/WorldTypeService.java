@@ -17,7 +17,8 @@ public class WorldTypeService implements BUPluginLifecycle {
         WorldType.SKILL_TOTAL,
         WorldType.HIGH_RISK,
         WorldType.FRESH_START_WORLD,
-        WorldType.LAST_MAN_STANDING
+        WorldType.LAST_MAN_STANDING,
+        WorldType.HARDCORE_MAIN
     );
 
     @Inject
@@ -41,5 +42,13 @@ public class WorldTypeService implements BUPluginLifecycle {
         EnumSet<WorldType> worldTypes = client.getWorldType();
         // Empty set returns true (vacuous truth via allMatch), which is expected
         return worldTypes.stream().allMatch(SUPPORTED_WORLD_TYPES::contains);
+    }
+
+    /**
+     * Checks if the current world is a Hardcore World.
+     * Must be called from client thread.
+     */
+    public boolean isCurrentWorldHardcoreMain() {
+        return client.getWorldType().contains(WorldType.HARDCORE_MAIN);
     }
 }
