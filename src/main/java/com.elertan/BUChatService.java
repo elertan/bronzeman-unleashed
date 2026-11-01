@@ -72,6 +72,8 @@ public class BUChatService implements BUPluginLifecycle {
     private BUSoundHelper buSoundHelper;
     @Inject
     private CollectionLogService collectionLogService;
+    @Inject
+    private WorldTypeService worldTypeService;
     private final ConcurrentLinkedQueue<String> pendingMessages = new ConcurrentLinkedQueue<>();
     // Chatbox varbits are only reliable after the first post-login tick.
     private volatile boolean awaitingFirstTickAfterLogin = false;
@@ -82,7 +84,7 @@ public class BUChatService implements BUPluginLifecycle {
         accountConfigSubscription = accountConfigurationService.currentAccountConfiguration()
             .subscribe(this::currentAccountConfigurationChangeListener);
 
-        manageIconOnChatbox(false);
+        clientThread.invokeLater(() -> manageIconOnChatbox(false));
         if (client.getGameState() == GameState.LOGGED_IN) {
             awaitingFirstTickAfterLogin = true;
         }
@@ -90,7 +92,7 @@ public class BUChatService implements BUPluginLifecycle {
 
     @Override
     public void shutDown() throws Exception {
-        manageIconOnChatbox(true);
+        clientThread.invokeLater(() -> manageIconOnChatbox(true));
         if (accountConfigSubscription != null) {
             accountConfigSubscription.dispose();
             accountConfigSubscription = null;
@@ -230,7 +232,8 @@ public class BUChatService implements BUPluginLifecycle {
 
     private void currentAccountConfigurationChangeListener(
         AccountConfiguration accountConfiguration) {
-        manageIconOnChatbox(false);
+        // Can fire from the panel or async threads, but widgets must be touched on the client thread
+        clientThread.invokeLater(() -> manageIconOnChatbox(false));
     }
 
     private void addIconToChatMessage(ChatMessage chatMessage) {
@@ -252,8 +255,6 @@ public class BUChatService implements BUPluginLifecycle {
             return;
         }
 
-        AccountConfiguration accountConfiguration = accountConfigurationService.getCurrentAccountConfiguration();
-
         Widget chatboxInput = client.getWidget(InterfaceID.Chatbox.INPUT);
         if (chatboxInput == null) {
             return;
@@ -264,19 +265,20 @@ public class BUChatService implements BUPluginLifecycle {
             return;
         }
 
-        if (isShuttingDown || accountConfiguration == null || !config.useBronzemanIconOnNames()) {
-            // Remove
-            if (!currentText.contains(messageChatIcon)) {
-                return;
-            }
-            String newText = currentText.replace(messageChatIcon, "");
+        // The tag differs per world type, so strip both tags to avoid a stale icon after a world hop
+        BUResourceService.BUModIcons buModIcons = buResourceService.getBuModIcons();
+        String strippedText = currentText
+            .replace(toImageTag(buModIcons.getChatIconId()), "")
+            .replace(toImageTag(buModIcons.getHardcoreChatIconId()), "");
+
+        // isBronzemanEnabled() is safe after AccountConfigurationService shut down, which matters
+        // because the shutdown call runs later on the client thread
+        boolean shouldShowIcon = !isShuttingDown
+            && config.useBronzemanIconOnNames()
+            && accountConfigurationService.isBronzemanEnabled();
+        String newText = shouldShowIcon ? messageChatIcon + strippedText : strippedText;
+        if (!newText.equals(currentText)) {
             chatboxInput.setText(newText);
-        } else {
-            // Add
-            if (currentText.contains(messageChatIcon)) {
-                return;
-            }
-            chatboxInput.setText(messageChatIcon + currentText);
         }
     }
 
@@ -286,8 +288,14 @@ public class BUChatService implements BUPluginLifecycle {
             log.error("buModIcons is null, can't get chatIconId");
             return null;
         }
-        int chatIconId = buModIcons.getChatIconId();
-        return "<img=" + chatIconId + ">";
+        int chatIconId = worldTypeService.isCurrentWorldHardcoreMain()
+            ? buModIcons.getHardcoreChatIconId()
+            : buModIcons.getChatIconId();
+        return toImageTag(chatIconId);
+    }
+
+    private static String toImageTag(int modIconId) {
+        return "<img=" + modIconId + ">";
     }
 
     public CompletableFuture<String> getItemIconTag(int itemId) {
