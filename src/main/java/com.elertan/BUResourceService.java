@@ -30,6 +30,7 @@ public class BUResourceService implements BUPluginLifecycle {
     private static final String CLOUD_SYNC_ICON_FILE_PATH = "/icons/bu-cloud-sync-icon.png";
     private static final String PADLOCK_ICON_FILE_PATH = "/icons/bu-padlock-icon.png";
     private static final String LOADING_SPINNER_FILE_PATH = "/icons/bu-loading-spinner.gif";
+    private static final String HARDCORE_ICON_FILE_PATH = "/icons/bu-hardcore-icon.png";
 
 //    static {
 //        URL u1 = BUPlugin.class.getResource(ICON_FILE_PATH);
@@ -74,6 +75,11 @@ public class BUResourceService implements BUPluginLifecycle {
         PADLOCK_ICON_FILE_PATH
     );
     @Getter
+    private final BufferedImage hardcoreIconBufferedImage = ImageUtil.loadImageResource(
+        BUPlugin.class,
+        HARDCORE_ICON_FILE_PATH
+    );
+    @Getter
     private final ImageIcon loadingSpinnerImageIcon = new ImageIcon(Objects.requireNonNull(
         BUPlugin.class.getResource(
             LOADING_SPINNER_FILE_PATH)));
@@ -109,13 +115,20 @@ public class BUResourceService implements BUPluginLifecycle {
         BufferedImage chatIcon = BUImageUtil.resizeNearest(iconBufferedImage, 13, 13, 0, 0);
         IndexedSprite chatIconSprite = ImageUtil.getImageIndexedSprite(chatIcon, client);
 
-        int chatIconId = modIcons.length;
+        BufferedImage hardcoreChatIcon =
+            BUImageUtil.resizeNearest(hardcoreIconBufferedImage, 13, 13, 0, 0);
+        IndexedSprite hardcoreChatIconSprite =
+            ImageUtil.getImageIndexedSprite(hardcoreChatIcon, client);
 
-        IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + 1);
+        int chatIconId = modIcons.length;
+        int hardcoreChatIconId = modIcons.length + 1;
+
+        IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + 2);
         newModIcons[chatIconId] = chatIconSprite;
+        newModIcons[hardcoreChatIconId] = hardcoreChatIconSprite;
         client.setModIcons(newModIcons);
 
-        this.buModIcons = new BUModIcons(chatIconId);
+        this.buModIcons = new BUModIcons(chatIconId, hardcoreChatIconId);
         log.debug("BUResourceService: mod icons and sprites initialized");
     }
 
@@ -165,5 +178,6 @@ public class BUResourceService implements BUPluginLifecycle {
     public static class BUModIcons {
 
         int chatIconId;
+        int hardcoreChatIconId;
     }
 }
